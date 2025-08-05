@@ -1,0 +1,16 @@
+{
+    "recommendations": [
+        "IronGeek.vscode-env",
+        "mhutchie.git-graph",
+        "eamodio.gitlens",
+        "bierner.markdown-preview-github-styles",
+        "robole.marky-dynamic",
+
+        "oven.bun-vscode",
+        "ecmel.vscode-html-css",
+        "svelte.svelte-vscode",
+        "bradlc.vscode-tailwindcss",
+
+        "golang.go"
+    ]
+}
