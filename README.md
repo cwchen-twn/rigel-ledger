@@ -11,7 +11,11 @@
 # Ensure the deps are installed
 go mod tidy
 
-# Either the two to run the server
-go run ./cmd/web
+# Use any of the followings to run the server
+go run ./cmd/rigelledger
 make run
+make run/live
+
+# See all other commands
+make help
 ```
