@@ -42,7 +42,7 @@ tidy:
 ##build: Build the application
 .PHONY: build
 build:
-	go build -o=/tmp/bin/rigelledger ./cmd/rigelledger
+	go build -ldflags "-s -w" -o=/tmp/bin/rigelledger ./cmd/rigelledger
 
 ##run: Build and run the application
 .PHONY: run

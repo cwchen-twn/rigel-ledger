@@ -4,7 +4,9 @@ go 1.24.5
 
 require (
 	github.com/go-chi/chi/v5 v5.2.2
+	github.com/go-chi/httplog/v3 v3.2.2
 	github.com/jackc/pgx/v5 v5.7.5
+	github.com/spf13/viper v1.20.1
 	github.com/swaggo/http-swagger/v2 v2.0.2
 	github.com/swaggo/swag v1.16.6
 )
@@ -28,7 +30,6 @@ require (
 	github.com/spf13/afero v1.12.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
-	github.com/spf13/viper v1.20.1 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/swaggo/files/v2 v2.0.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect

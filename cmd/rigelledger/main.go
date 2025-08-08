@@ -14,6 +14,7 @@ import (
 
 	_ "github.com/cwc1222/rigelledger/docs"
 	"github.com/cwc1222/rigelledger/internal"
+	"github.com/go-chi/httplog/v3"
 )
 
 const (
@@ -34,7 +35,7 @@ func (app *application) serve() error {
 	server := &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", app.cfg.AppUrl, app.cfg.AppPort),
 		Handler:      app.router,
-		ErrorLog:     slog.NewLogLogger(app.logger.Handler(), slog.LevelWarn),
+		ErrorLog:     slog.NewLogLogger(app.logger.Handler(), app.cfg.GetLogLevel()),
 		IdleTimeout:  defaultIdleTimeout,
 		ReadTimeout:  defaultReadTimeout,
 		WriteTimeout: defaultWriteTimeout,
@@ -45,46 +46,45 @@ func (app *application) serve() error {
 	go func() {
 		quitChan := make(chan os.Signal, 1)
 		signal.Notify(quitChan, syscall.SIGINT, syscall.SIGTERM)
-		sig := <-quitChan
-		app.logger.Info("Shutting down server", "signal", sig)
+		<-quitChan
 
 		ctx, cancel := context.WithTimeout(context.Background(), defaultShutdownPeriod)
 		defer cancel()
 
-		if err := server.Shutdown(ctx); err != nil {
-			shutdownErrorChan <- err
-		}
-
-		app.logger.Info("Completing background tasks", "error", <-shutdownErrorChan)
-		close(shutdownErrorChan)
+		shutdownErrorChan <- server.Shutdown(ctx)
 	}()
 
 	app.logger.Info("Starting server", "addr", server.Addr)
 
-	err := server.ListenAndServe()
-	if !errors.Is(err, http.ErrServerClosed) {
+	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 
-	err = <-shutdownErrorChan
-	if err != nil {
+	if err := <-shutdownErrorChan; err != nil {
 		return err
 	}
 
-	app.logger.Info("stopped server", slog.Group("server", "addr", server.Addr))
+	app.logger.Info("Stopped server", slog.Group("server", "addr", server.Addr))
 
 	app.wg.Wait()
 	return nil
 }
 
 func main() {
-	logger := internal.NewLogger()
 
 	cfg, err := internal.LoadConfig()
 	if err != nil {
-		logger.Error("Failed to load config", "error", err)
+		fmt.Println("Failed to load config", err)
 		os.Exit(1)
 	}
+
+	logger := internal.NewLogger(internal.LoggerConfig{
+		AppName:    cfg.AppName,
+		AppVersion: cfg.AppVersion,
+		AppEnv:     cfg.AppEnv,
+		LogLevel:   cfg.GetLogLevel(),
+		Handler:    slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.GetLogLevel()}),
+	})
 
 	logger.Info("Initializing database connection pool", "host", cfg.PgHost, "port", cfg.PgPort, "dbname", cfg.PgDbname)
 	db, err := internal.NewPgPool(cfg)
@@ -95,7 +95,25 @@ func main() {
 	defer db.Close()
 
 	logger.Info("Initializing router")
-	router := internal.NewRouter(cfg.AppUrl, cfg.AppPort)
+	isLocalhost := cfg.AppUrl == "localhost"
+	logger.Info("Creating router access logger", "isLocalhost", isLocalhost)
+	logFormat := httplog.SchemaECS.Concise(isLocalhost)
+	accessLogger := internal.NewLogger(internal.LoggerConfig{
+		AppName:    cfg.AppName,
+		AppVersion: cfg.AppVersion,
+		AppEnv:     cfg.AppEnv,
+		LogLevel:   cfg.GetLogLevel(),
+		Handler: slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level:       cfg.GetLogLevel(),
+			ReplaceAttr: logFormat.ReplaceAttr,
+		}),
+	})
+	router := internal.NewRouter(internal.RouterConfig{
+		AppUrl:       cfg.AppUrl,
+		AppPort:      cfg.AppPort,
+		AccessLogger: accessLogger,
+		LogLevel:     cfg.GetLogLevel(),
+	})
 
 	logger.Info("Initializing application")
 	app := &application{

@@ -2,13 +2,13 @@ package internal
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	_ "github.com/cwc1222/rigelledger/docs"
-	httpSwagger "github.com/swaggo/http-swagger/v2"
-
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/httplog/v3"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
 // @Summary		Get home page
@@ -22,15 +22,26 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Hello, World!"))
 }
 
+type RouterConfig struct {
+	AppUrl       string
+	AppPort      int
+	AccessLogger *slog.Logger
+	LogLevel     slog.Level
+}
+
 // @title    Rigel Ledger OpenAPI Specification
 // @version	 1.0.0.beta
-func NewRouter(appUrl string, appPort int) http.Handler {
+func NewRouter(config RouterConfig) http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
+
+	r.Use(httplog.RequestLogger(config.AccessLogger, &httplog.Options{
+		Level:         config.LogLevel,
+		Schema:        httplog.SchemaECS,
+		RecoverPanics: true,
+	}))
 
 	r.Get("/swagger/*", httpSwagger.Handler(
-		httpSwagger.URL(fmt.Sprintf("%s:%d/swagger/doc.json", appUrl, appPort)), //The url pointing to API definition
+		httpSwagger.URL(fmt.Sprintf("http://%s:%d/swagger/doc.json", config.AppUrl, config.AppPort)), //The url pointing to API definition
 	))
 
 	r.Get("/", homeHandler)
