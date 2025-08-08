@@ -46,7 +46,8 @@ build:
 
 ##run: Build and run the application
 .PHONY: run
-run: build
+run: 
+	go build -o=/tmp/bin/rigelledger ./cmd/rigelledger
 	/tmp/bin/rigelledger
 
 ##run/live: Run with live reload using Air
