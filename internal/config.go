@@ -10,7 +10,7 @@ type Config struct {
 	AppName    string `mapstructure:"APP_NAME"`
 	AppVersion string `mapstructure:"APP_VERSION"`
 	AppEnv     string `mapstructure:"APP_ENV"`
-	AppUrl     string `mapstructure:"APP_URL"`
+	AppURL     string `mapstructure:"APP_URL"`
 	AppPort    int    `mapstructure:"APP_PORT"`
 	LogLevel   string `mapstructure:"LOG_LEVEL"`
 

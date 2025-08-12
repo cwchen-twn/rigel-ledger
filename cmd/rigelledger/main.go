@@ -33,7 +33,7 @@ type application struct {
 
 func (app *application) serve() error {
 	server := &http.Server{
-		Addr:         fmt.Sprintf("%s:%d", app.cfg.AppUrl, app.cfg.AppPort),
+		Addr:         fmt.Sprintf("%s:%d", app.cfg.AppURL, app.cfg.AppPort),
 		Handler:      app.router,
 		ErrorLog:     slog.NewLogLogger(app.logger.Handler(), app.cfg.GetLogLevel()),
 		IdleTimeout:  defaultIdleTimeout,
@@ -95,7 +95,7 @@ func main() {
 	defer db.Close()
 
 	logger.Info("Initializing router")
-	isLocalhost := cfg.AppUrl == "localhost"
+	isLocalhost := cfg.AppURL == "localhost"
 	logger.Info("Creating router access logger", "isLocalhost", isLocalhost)
 	logFormat := httplog.SchemaECS.Concise(isLocalhost)
 	accessLogger := internal.NewLogger(internal.LoggerConfig{
@@ -109,7 +109,7 @@ func main() {
 		}),
 	})
 	router := internal.NewRouter(internal.RouterConfig{
-		AppUrl:       cfg.AppUrl,
+		AppURL:       cfg.AppURL,
 		AppPort:      cfg.AppPort,
 		AccessLogger: accessLogger,
 		LogLevel:     cfg.GetLogLevel(),

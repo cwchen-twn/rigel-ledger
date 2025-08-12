@@ -23,12 +23,13 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 type RouterConfig struct {
-	AppUrl       string
+	AppURL       string
 	AppPort      int
 	AccessLogger *slog.Logger
 	LogLevel     slog.Level
 }
 
+// NewRouter creates a new router with the given configuration
 // @title    Rigel Ledger OpenAPI Specification
 // @version	 1.0.0.beta
 func NewRouter(config RouterConfig) http.Handler {
@@ -41,7 +42,7 @@ func NewRouter(config RouterConfig) http.Handler {
 	}))
 
 	r.Get("/swagger/*", httpSwagger.Handler(
-		httpSwagger.URL(fmt.Sprintf("http://%s:%d/swagger/doc.json", config.AppUrl, config.AppPort)), //The url pointing to API definition
+		httpSwagger.URL(fmt.Sprintf("http://%s:%d/swagger/doc.json", config.AppURL, config.AppPort)), //The url pointing to API definition
 	))
 
 	r.Get("/", homeHandler)

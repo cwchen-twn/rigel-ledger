@@ -32,7 +32,7 @@ repos:
         name: Make Audit
         entry: make audit
         language: system
-        stages: [commit]
+        stages: [pre-commit]
         pass_filenames: true
         always_run: true
         verbose: true
