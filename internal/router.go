@@ -5,22 +5,12 @@ import (
 	"log/slog"
 	"net/http"
 
-	_ "github.com/cwc1222/rigelledger/docs"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/httplog/v3"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
-)
 
-// @Summary		Get home page
-// @Description	Returns a simple hello world message
-// @Tags		root
-// @Accept		json
-// @Produce		plain
-// @Success		200	{string}	string	"Hello, World!"
-// @Router		/ [get]
-func homeHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Hello, World!"))
-}
+	"github.com/cwc1222/rigelledger/internal/routes"
+)
 
 type RouterConfig struct {
 	AppURL       string
@@ -42,10 +32,12 @@ func NewRouter(config RouterConfig) http.Handler {
 	}))
 
 	r.Get("/swagger/*", httpSwagger.Handler(
-		httpSwagger.URL(fmt.Sprintf("http://%s:%d/swagger/doc.json", config.AppURL, config.AppPort)), //The url pointing to API definition
+		//The url pointing to API definition
+		httpSwagger.URL(fmt.Sprintf("http://%s:%d/swagger/doc.json", config.AppURL, config.AppPort)),
 	))
 
-	r.Get("/", homeHandler)
+	r.Get("/", routes.LoginHandler)
+	r.Get("/home", routes.HomeHandler)
 
 	return r
 }

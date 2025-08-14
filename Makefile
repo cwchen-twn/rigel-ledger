@@ -62,7 +62,7 @@ run/live:
 ##swag: generate swagger documentation
 .PHONY: swag
 swag:
-	go run github.com/swaggo/swag/cmd/swag@latest init -g internal/router.go
+	go run github.com/swaggo/swag/cmd/swag@latest init -g internal/router.go -o ./api
 
 ##migrations/new: create a new database migration (e.g. $ make migrations/new name=init_database)
 .PHONY: migrations/new

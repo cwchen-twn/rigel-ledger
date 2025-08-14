@@ -36,3 +36,4 @@ repos:
         pass_filenames: true
         always_run: true
         verbose: true
+        description: "Run code quality checks and security audits via make audit"
