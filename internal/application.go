@@ -14,11 +14,15 @@ import (
 
 	"github.com/go-chi/httplog/v3"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/cwc1222/rigelledger/internal/response"
+	"github.com/cwc1222/rigelledger/internal/routes"
+	"github.com/cwc1222/rigelledger/web"
 )
 
 type App struct {
 	cfg    *Config
-	router http.Handler
+	router *routes.Router
 	db     *pgxpool.Pool
 	logger *slog.Logger
 	wg     sync.WaitGroup
@@ -47,12 +51,13 @@ func NewApp(cfg *Config, logger *slog.Logger) (*App, error) {
 			ReplaceAttr: logFormat.ReplaceAttr,
 		}),
 	})
-	router := NewRouter(RouterConfig{
+	te := response.NewTemplateEngine(cfg.AppVersion, web.TemplateFiles)
+	router := routes.NewRouter(&routes.RouterConfig{
 		AppURL:       cfg.AppURL,
 		AppPort:      cfg.AppPort,
 		AccessLogger: accessLogger,
 		LogLevel:     cfg.GetLogLevel(),
-	})
+	}, te)
 
 	logger.Info("Initializing postgres connection pool", "host", cfg.PgHost, "port", cfg.PgPort, "dbname", cfg.PgDbname)
 	db, err := NewPgPool(cfg)
@@ -72,7 +77,7 @@ func NewApp(cfg *Config, logger *slog.Logger) (*App, error) {
 func (app *App) Serve() error {
 	server := &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", app.cfg.AppURL, app.cfg.AppPort),
-		Handler:      app.router,
+		Handler:      app.router.Handler,
 		ErrorLog:     slog.NewLogLogger(app.logger.Handler(), app.cfg.GetLogLevel()),
 		IdleTimeout:  defaultIdleTimeout,
 		ReadTimeout:  defaultReadTimeout,

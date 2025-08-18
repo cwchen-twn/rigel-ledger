@@ -2,8 +2,6 @@ package routes
 
 import (
 	"net/http"
-
-	"github.com/cwc1222/rigelledger/internal/response"
 )
 
 // LoginHandler is the handler for the login page
@@ -14,8 +12,8 @@ import (
 // @Produce		plain
 // @Success		200	{string}	string	"Hello, World!"
 // @Router		/ [get]
-func LoginHandler(w http.ResponseWriter, r *http.Request) {
-	err := response.NamedTemplateWithHeaders(w, http.StatusOK, nil, nil, "login")
+func (rt *Router) LoginHandler(w http.ResponseWriter, r *http.Request) {
+	err := rt.te.NamedTemplateWithHeaders(w, http.StatusOK, nil, nil, "login")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -23,8 +21,8 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // HomeHandler is the handler for the home page
-func HomeHandler(w http.ResponseWriter, r *http.Request) {
-	err := response.NamedTemplateWithHeaders(w, http.StatusOK, nil, nil, "home")
+func (rt *Router) HomeHandler(w http.ResponseWriter, r *http.Request) {
+	err := rt.te.NamedTemplateWithHeaders(w, http.StatusOK, nil, nil, "home")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

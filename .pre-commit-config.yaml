@@ -16,13 +16,13 @@ repos:
       - id: forbid-submodules
 
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.27.1
+    rev: 0.33.3
     hooks:
       - id: check-gitlab-ci
         args: ["--verbose"]
 
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.16.1
+    rev: v8.28.0
     hooks:
       - id: gitleaks
 

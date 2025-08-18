@@ -2,6 +2,7 @@ package response
 
 import (
 	"bytes"
+	"embed"
 	"fmt"
 	"html/template"
 	"maps"
@@ -15,13 +16,11 @@ import (
 
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
-
-	"github.com/cwc1222/rigelledger/web"
 )
 
 var printer = message.NewPrinter(language.English)
 
-var TemplateFuncs = template.FuncMap{
+var templateFuncs = template.FuncMap{
 	// Time functions
 	"now":            time.Now,
 	"timeSince":      time.Since,
@@ -212,12 +211,31 @@ func toInt64(i any) (int64, error) {
 	return 0, fmt.Errorf("unable to convert type %T to int", i)
 }
 
-func NamedTemplateWithHeaders(w http.ResponseWriter, status int, data any, headers http.Header, templateName string) error {
+type TemplateEngine struct {
+	appVersion    string
+	templateFs    embed.FS
+	templateFuncs template.FuncMap
+}
+
+type TemplateData struct {
+	Version string
+	Data    any
+}
+
+func NewTemplateEngine(appVersion string, templateFs embed.FS) *TemplateEngine {
+	return &TemplateEngine{
+		appVersion:    appVersion,
+		templateFs:    templateFs,
+		templateFuncs: templateFuncs,
+	}
+}
+
+func (te *TemplateEngine) NamedTemplateWithHeaders(w http.ResponseWriter, status int, data any, headers http.Header, templateName string) error {
 	patterns := []string{"templates/partials/*.tmpl", "templates/" + templateName + ".tmpl"}
 
 	// patterns := []string{"templates/" + templateName}
 
-	ts, err := template.New("").Funcs(TemplateFuncs).ParseFS(web.TemplateFiles, patterns...)
+	ts, err := template.New("").Funcs(te.templateFuncs).ParseFS(te.templateFs, patterns...)
 	if err != nil {
 		return err
 	}
@@ -231,7 +249,12 @@ func NamedTemplateWithHeaders(w http.ResponseWriter, status int, data any, heade
 	// 	templateFileName = templateName[idx+1:]
 	// }
 
-	err = ts.ExecuteTemplate(buf, templateName, data)
+	td := TemplateData{
+		Version: te.appVersion,
+		Data:    data,
+	}
+
+	err = ts.ExecuteTemplate(buf, templateName, td)
 	if err != nil {
 		return err
 	}
