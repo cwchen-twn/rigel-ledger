@@ -7,6 +7,42 @@ help:
 	@echo 'Usage:'
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' |  sed -e 's/^/ /'
 
+##init: Initialize the project
+.PHONY: init
+init:
+	@if [ ! -f go.mod ]; then go mod init github.com/cwc1222/rigelledger; else echo "Project exists, skipping go mod init"; fi
+	@go mod tidy
+	@go mod verify
+	@go mod download
+	@command -v uv >/dev/null 2>&1 || curl -LsSf https://astral.sh/uv/install.sh | sh
+	@uv sync --dev
+	@pre-commit install
+
+##updatedep: Update dependencies
+.PHONY: updatedep
+updatedep:
+	go get -u ./...
+	go mod tidy
+	uv sync --upgrade-package pre-commit
+	pre-commit autoupdate
+	pre-commit install
+
+##updatego: Update go version (e.g. $ make updatego version=1.24.6), remember to have $(go env GOPATH) in your PATH
+.PHONY: updatego
+updatego:
+	@if [ -z "$(version)" ]; then \
+		echo "Error: Please specify a version. Usage: make updatego version=1.24.6"; \
+		exit 1; \
+	fi
+	go install golang.org/dl/go$(version)@latest
+	go$(version) download
+	@echo "Go $(version) downloaded successfully in $(shell go env GOPATH)/bin/go$(version). Use 'go$(version)' to run commands with this version."
+	cp $(shell go env GOPATH)/bin/go$(version) $(shell go env GOPATH)/bin/go
+	go$(version) mod edit -go=$(version)
+	go$(version) mod tidy
+	go$(version) mod verify
+	go$(version) mod download
+
 ##audit: Run code quality checks and security audits
 .PHONY: audit
 audit: test
