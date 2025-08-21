@@ -2,6 +2,10 @@
 
 <!-- TOC -->
 - [Getting started](#getting-started)
+- [References](#references)
+    - [Project Layout](#project-layout)
+    - [Dependencies](#dependencies)
+    - [Others](#others)
 <!-- /TOC -->
 
 

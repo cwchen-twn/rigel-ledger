@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/go-chi/httplog/v3"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/cwc1222/rigelledger/internal/response"
 	"github.com/cwc1222/rigelledger/internal/routes"
@@ -23,7 +22,7 @@ import (
 type App struct {
 	cfg    *Config
 	router *routes.Router
-	db     *pgxpool.Pool
+	db     *Postgres
 	logger *slog.Logger
 	wg     sync.WaitGroup
 }
@@ -59,8 +58,7 @@ func NewApp(cfg *Config, logger *slog.Logger) (*App, error) {
 		LogLevel:     cfg.GetLogLevel(),
 	}, te)
 
-	logger.Info("Initializing postgres connection pool", "host", cfg.PgHost, "port", cfg.PgPort, "dbname", cfg.PgDbname)
-	db, err := NewPgPool(cfg)
+	db, err := NewPostgres(cfg, logger)
 	if err != nil {
 		logger.Error("Failed to connect to postgres", "error", err)
 		return nil, err

@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"os"
 
-	_ "github.com/cwc1222/rigelledger/api"
 	"github.com/cwc1222/rigelledger/internal"
 )
 

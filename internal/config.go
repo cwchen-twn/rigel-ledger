@@ -2,6 +2,7 @@ package internal
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -14,17 +15,19 @@ type Config struct {
 	AppPort    int    `mapstructure:"APP_PORT"`
 	LogLevel   string `mapstructure:"LOG_LEVEL"`
 
-	PgHost                  string `mapstructure:"PG_HOST"`
-	PgPort                  int    `mapstructure:"PG_PORT"`
-	PgUser                  string `mapstructure:"PG_USER"`
-	PgPassword              string `mapstructure:"PG_PASS"`
-	PgDbname                string `mapstructure:"APP_DBNAME"`
-	PgMaxConns              int    `mapstructure:"PG_MAX_CONN"`
-	PgMinConns              int    `mapstructure:"PG_MIN_CONN"`
-	PgMaxConnLifetime       string `mapstructure:"PG_MAX_CONN_LIFE"`
-	PgMaxConnIdleTime       string `mapstructure:"PG_CONN_IDLE_TIME"`
-	PgMaxConnLifetimeJitter string `mapstructure:"PG_MAX_CONN_LIFE_JITTER"`
-	PgHealthCheckPeriod     string `mapstructure:"PG_HEALTH_CHECK_PERIOD"`
+	PgHost            string        `mapstructure:"PG_HOST"`
+	PgPort            int           `mapstructure:"PG_PORT"`
+	PgUser            string        `mapstructure:"PG_USER"`
+	PgPassword        string        `mapstructure:"PG_PASS"`
+	PgDbname          string        `mapstructure:"APP_DBNAME"`
+	PgMaxOpenConns    int           `mapstructure:"PG_MAX_OPEN_CONN"`
+	PgMaxIdleConns    int           `mapstructure:"PG_MAX_IDLE_CONNS"`
+	PgMaxConnLifetime time.Duration `mapstructure:"PG_MAX_CONN_LIFETIME"`
+	PgMaxConnIdleTime time.Duration `mapstructure:"PG_MAX_CONN_IDLE_TIME"`
+
+	// PgMinConns        int           `mapstructure:"PG_MIN_CONN"`
+	// PgMaxConnLifetimeJitter string        `mapstructure:"PG_MAX_CONN_LIFE_JITTER"`
+	// PgHealthCheckPeriod     string        `mapstructure:"PG_HEALTH_CHECK_PERIOD"`
 }
 
 // GetLogLevel returns the slog.Level based on the configured LogLevel string

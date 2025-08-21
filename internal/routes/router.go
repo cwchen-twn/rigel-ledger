@@ -1,13 +1,11 @@
 package routes
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/httplog/v3"
-	httpSwagger "github.com/swaggo/http-swagger/v2"
 
 	"github.com/cwc1222/rigelledger/internal/response"
 	"github.com/cwc1222/rigelledger/web"
@@ -37,17 +35,15 @@ func NewRouter(rc *RouterConfig, te *response.TemplateEngine) *Router {
 		RecoverPanics: true,
 	}))
 
-	r.Get("/swagger/*", httpSwagger.Handler(
-		//The url pointing to API definition
-		httpSwagger.URL(fmt.Sprintf("http://%s:%d/swagger/doc.json", rc.AppURL, rc.AppPort)),
-	))
-
-	r.Handle("/static/*", http.FileServer(http.FS(web.StaticFiles)))
-
 	rt := &Router{
 		Handler: r,
 		te:      te,
 	}
+
+	// Setup Swagger conditionally based on build tags
+	rt.setupSwagger(rc.AppURL, rc.AppPort)
+
+	r.Handle("/static/*", http.FileServer(http.FS(web.StaticFiles)))
 
 	r.Get("/", rt.LoginHandler)
 	r.Get("/home", rt.HomeHandler)
