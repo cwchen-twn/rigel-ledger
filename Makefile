@@ -38,6 +38,7 @@ updatego:
 	go$(version) download
 	@echo "Go $(version) downloaded successfully in $(shell go env GOPATH)/bin/go$(version). Use 'go$(version)' to run commands with this version."
 	cp $(shell go env GOPATH)/bin/go$(version) $(shell go env GOPATH)/bin/go
+	@echo "You should add '$(shell go env GOPATH)/bin' to your PATH before '/usr/local/go/bin'"
 	go$(version) mod edit -go=$(version)
 	go$(version) mod tidy
 	go$(version) mod verify

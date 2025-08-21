@@ -21,6 +21,12 @@ repos:
       - id: check-gitlab-ci
         args: ["--verbose"]
 
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.33.3
+    hooks:
+      - id: check-github-workflows
+        args: ["--verbose"]
+
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.28.0
     hooks:
