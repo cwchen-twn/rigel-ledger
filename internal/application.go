@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/httplog/v3"
 
+	"github.com/cwc1222/rigelledger/internal/auth"
 	"github.com/cwc1222/rigelledger/internal/response"
 	"github.com/cwc1222/rigelledger/internal/routes"
 	"github.com/cwc1222/rigelledger/web"
@@ -51,12 +52,13 @@ func NewApp(cfg *Config, logger *slog.Logger) (*App, error) {
 		}),
 	})
 	te := response.NewTemplateEngine(cfg.AppVersion, web.TemplateFiles)
+	jwt := auth.New(cfg.AppURL, []string{cfg.AppName}, cfg.JWTSecret)
 	router := routes.NewRouter(&routes.RouterConfig{
 		AppURL:       cfg.AppURL,
 		AppPort:      cfg.AppPort,
 		AccessLogger: accessLogger,
 		LogLevel:     cfg.GetLogLevel(),
-	}, te)
+	}, te, jwt, logger)
 
 	db, err := NewPostgres(cfg, logger)
 	if err != nil {

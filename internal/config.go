@@ -14,6 +14,7 @@ type Config struct {
 	AppURL     string `mapstructure:"APP_URL"`
 	AppPort    int    `mapstructure:"APP_PORT"`
 	LogLevel   string `mapstructure:"LOG_LEVEL"`
+	JWTSecret  string `mapstructure:"JWT_SECRET"`
 
 	PgHost            string        `mapstructure:"PG_HOST"`
 	PgPort            int           `mapstructure:"PG_PORT"`

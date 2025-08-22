@@ -39,8 +39,9 @@ make help
 
 ### Dependencies
 - [github.com/go-chi/chi](https://github.com/go-chi/chi)
-- [github.com/jackc/pgx](https://github.com/jackc/pgx)
-- [github.com/georgysavva/scany](https://github.com/georgysavva/scany)
+- [github.com/jmoiron/sqlx](https://github.com/jmoiron/sqlx)
+- [github.com/lib/pq](https://github.com/lib/pq)
+- [github.com/golang-migrate/migrate](https://github.com/golang-migrate/migrate)
 - [github.com/swaggo/swag](https://github.com/swaggo/swag)
 
 ### Others
