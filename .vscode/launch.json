@@ -13,7 +13,16 @@
                 "GO_ENV": "development"
             },
             "args": [],
-            "showLog": true
+            "showLog": true,
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Attach to Air",
+            "type": "go",
+            "mode": "remote",
+            "request": "attach",
+            "host": "127.0.0.1",
+            "port": 2345
         }
     ]
 }

@@ -42,8 +42,15 @@ make help
 - [github.com/go-chi/chi](https://github.com/go-chi/chi)
 - [github.com/jmoiron/sqlx](https://github.com/jmoiron/sqlx)
 - [github.com/lib/pq](https://github.com/lib/pq)
+
+### Go Tools
 - [github.com/golang-migrate/migrate](https://github.com/golang-migrate/migrate)
 - [github.com/swaggo/swag](https://github.com/swaggo/swag)
+- [github.com/go-delve/delve](https://github.com/go-delve/delve)
+- [github.com/air-verse/air](https://github.com/air-verse/air)
+- [github.com/oligot/go-mod-upgrade](https://github.com/oligot/go-mod-upgrade)
+- [github.com/Zxilly/go-size-analyzer](https://github.com/Zxilly/go-size-analyzer)
 
 ### Others
+- [www.arhea.net/posts/2023-08-25-golang-debugging-with-air-and-vscode](https://www.arhea.net/posts/2023-08-25-golang-debugging-with-air-and-vscode/)
 - [github.com/pre-commit/pre-commit-hooks](https://github.com/pre-commit/pre-commit-hooks)

@@ -1,12 +1,12 @@
 include .env
 
-DB_DSN := ${PG_USER}:${PG_PASS}@${PG_HOST}:${PG_PORT}/${APP_DBNAME}?sslmode=disable
+DB_DSN := $(PG_USER):$(PG_PASS)@$(PG_HOST):$(PG_PORT)/$(APP_DBNAME)?sslmode=disable
 BUILD_DIR := /tmp/bin
 
 .PHONY: help
 help:
 	@echo 'Usage:'
-	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' |  sed -e 's/^/ /'
+	@sed -n 's/^##//p' $(MAKEFILE_LIST) | column -t -s ':' |  sed -e 's/^/ /'
 
 ##init: Initialize the project, including go modules and uv packages
 .PHONY: init
@@ -94,7 +94,7 @@ test/cover:
 ##build/dev: Build the application for development
 .PHONY: build/dev
 build/dev:
-	@go build -tags "dev" -o=$(BUILD_DIR)/rigelledger ./cmd/rigelledger
+	@CGO_ENABLED=0 go build -tags "dev" -gcflags=all="-N -l" -o=$(BUILD_DIR)/rigelledger ./cmd/rigelledger
 	@echo "Development build finished"
 	du -sh $(BUILD_DIR)/rigelledger
 
@@ -158,6 +158,16 @@ run/live:
 		--build.cmd "make build/dev" --build.bin "$(BUILD_DIR)/rigelledger" --build.delay "100" \
 		--build.exclude_dir "" \
 		--build.include_ext "go, tpl, tmpl, html, css, scss, js, ts, sql, jpeg, jpg, gif, png, bmp, svg, webp, ico" \
+		--misc.clean_on_exit "true"
+
+##run/livedebug: Run with live reload using Air, and debug with delve for development
+.PHONY: run/livedebug
+run/livedebug:
+	go run github.com/air-verse/air@latest \
+		--build.cmd "make build/dev" --build.bin "$(BUILD_DIR)/rigelledger" --build.delay "100" \
+		--build.exclude_dir "" \
+		--build.include_ext "go, tpl, tmpl, html, css, scss, js, ts, sql, jpeg, jpg, gif, png, bmp, svg, webp, ico" \
+		--build.full_bin "dlv exec $(BUILD_DIR)/rigelledger --listen=127.0.0.1:2345 --headless=true --api-version=2 --accept-multiclient --continue --log -- " \
 		--misc.clean_on_exit "true"
 
 ##swag: Generate swagger documentation
