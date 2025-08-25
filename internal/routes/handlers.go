@@ -37,12 +37,28 @@ func (rt *Router) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	formData := make(map[string]any)
+	for key, values := range r.PostForm {
+		if len(values) > 0 {
+			formData[key] = values[0] // Take the first value for each key
+		}
+	}
+
 	var req LoginRequest
-	if err := mapstructure.Decode(r.PostForm, &req); err != nil {
+	if err := mapstructure.Decode(formData, &req); err != nil {
 		rt.logger.Error("Failed to decode form", "error", err)
 		http.Error(w, "Failed to decode form", http.StatusBadRequest)
 		return
 	}
+
+	// Validate that we got the required fields
+	if req.Username == "" || req.Password == "" {
+		rt.logger.Error("Missing required fields", "username", req.Username, "password", req.Password)
+		http.Error(w, "Username and password are required", http.StatusBadRequest)
+		return
+	}
+
+	rt.logger.Info("Form decoded successfully", "username", req.Username)
 
 	token, err := rt.jwt.Sign(req.Username, nil, auth.AccessTokenLifetime)
 	if err != nil {
@@ -55,13 +71,13 @@ func (rt *Router) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		Name:     "rigel_jwt_access",
 		Value:    string(token),
 		HttpOnly: true,
-		Secure:   true,
+		//Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int(auth.AccessTokenLifetime.Seconds()),
 		Expires:  time.Now().Add(auth.AccessTokenLifetime),
 	})
 
-	http.Redirect(w, r, "/home", http.StatusSeeOther)
+	// http.Redirect(w, r, "/home", http.StatusSeeOther)
 }
 
 func (rt *Router) LogoutHandler(w http.ResponseWriter, r *http.Request) {}

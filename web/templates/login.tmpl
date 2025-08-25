@@ -5,10 +5,98 @@
 {{define "title"}}Rigelledger Login{{end}}
 
 {{define "meta"}}
-<meta name="description" content="Rigelledger Login">
+<meta name="description" content="Rigelledger Login Page">
+{{end}}
+
+{{define "protected:scripts"}}
+<script type="text/javascript">
+
+function addEventListeners() {
+
+    const form = document.getElementById('login-form');
+
+    const validateField = (ele) => {
+        if (!ele.checkValidity()) {
+            ele.classList.add('is-invalid');
+            ele.classList.remove('is-valid');
+        } else {
+            ele.classList.add('is-valid');
+            ele.classList.remove('is-invalid');
+        }
+    };
+
+    document.querySelectorAll('#login-form input').forEach(function(ele) {
+        ele.addEventListener('input', function(event) {
+            validateField(ele);
+        });
+    });
+
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();
+        if (!form.checkValidity()) {
+            document.querySelectorAll('#login-form input').forEach(function(ele) {
+                validateField(ele);
+            });
+            return;
+        }
+        form.classList.add('was-validated');
+
+        const formData = new URLSearchParams(new FormData(form));
+        fetch('/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: formData,
+        }).then(function(response) {
+            if (response.ok) {
+                window.location.href = '/home';
+            }
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    addEventListeners();
+});
+</script>
 {{end}}
 
 {{define "main"}}
-<p>This is an login page hahaha.</p>
-<a href="/home">Home</a>
+<div class="row text-center">
+    <h1>Rigel Ledger</h1>
+</div>
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                Log in or create a new account to access your ledger
+            </div>
+            <div class="card-body">
+                <form
+                    id="login-form"
+                    action="/login"
+                    method="post"
+                    enctype="application/x-www-form-urlencoded"
+                    class="row g-3 needs-validation"
+                    novalidate
+                >
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" class="form-control" id="username" name="username" autocomplete="off" required>
+                        <div class="invalid-feedback">Please enter a username</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" class="form-control" id="password" name="password" autocomplete="off" required>
+                        <div class="invalid-feedback">Please enter a password</div>
+                    </div>
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary">Login</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 {{end}}

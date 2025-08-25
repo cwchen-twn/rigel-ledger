@@ -35,6 +35,7 @@ make help
 - [github.com/golang-standards/project-layout](https://github.com/golang-standards/project-layout)
 - [github.com/evrone/go-clean-template](https://github.com/evrone/go-clean-template)
 - [github.com/eminetto/post-sqlc](https://github.com/eminetto/post-sqlc)
+- [github.com/avelino/awesome-go](https://github.com/avelino/awesome-go)
 - [autostrada.dev](https://autostrada.dev/)
 
 ### Dependencies

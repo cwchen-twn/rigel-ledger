@@ -1,23 +1,21 @@
 {{define "partials:base"}}
 <!doctype html>
-<html lang='en'>
+<html lang='en' data-bs-theme="dark">
     <head>
         <meta charset='utf-8'>
         <title>{{block "title" .}}Rigelledger{{end}}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         {{block "meta" .}}{{end}}
 
-        <!-- <link rel='stylesheet' href='/static/css/main.css?version={{.Version}}'> -->
-        <script src='/static/main.js?version={{.Version}}'></script>
+        <script src='/static/bootstrap.min.js?version={{.Version}}'></script>
+        <link rel="stylesheet" href="/static/bootstrap.min.css?version={{.Version}}">
+        {{block "protected:scripts" .}}{{end}}
     </head>
-    <body>
-        <header>
-            <h1><a href="/">Default header</a></h1>
-            {{template "partials:nav" .}}
-        </header>
+    <body class="container-md">
+        {{template "partials:nav" .}}
         {{block "protected:menu" .}}{{end}}
         <main>
-            {{block "main" .}}Default content for the page.{{end}}
+        {{block "main" .}}Default content for the page.{{end}}
         </main>
         {{template "partials:footer" .}}
     </body>

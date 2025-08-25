@@ -154,7 +154,7 @@ run: build/dev
 ##run/live: Run with live reload using Air for development
 .PHONY: run/live
 run/live:
-	go run github.com/cosmtrek/air@v1.43.0 \
+	go run github.com/air-verse/air@latest \
 		--build.cmd "make build/dev" --build.bin "$(BUILD_DIR)/rigelledger" --build.delay "100" \
 		--build.exclude_dir "" \
 		--build.include_ext "go, tpl, tmpl, html, css, scss, js, ts, sql, jpeg, jpg, gif, png, bmp, svg, webp, ico" \

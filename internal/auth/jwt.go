@@ -68,7 +68,7 @@ var (
 	ErrNoTokenFound = errors.New("no token found")
 )
 
-func New(issuer string, audience []string, privKey any, options ...jwt.Option) *JWT {
+func New(issuer string, audience []string, privKey []byte, options ...jwt.Option) *JWT {
 	alg := jwa.HS256()
 
 	return &JWT{
@@ -193,6 +193,14 @@ func (j *JWT) getTokenFromRequest(r *http.Request) (string, error) {
 	return parts[1], nil
 }
 
+func (j *JWT) getTokenFromCookie(r *http.Request) (string, error) {
+	cookie, err := r.Cookie("rigel_jwt_access")
+	if err != nil {
+		return "", err
+	}
+	return cookie.Value, nil
+}
+
 func (j *JWT) errorMapper(err error) error {
 	switch {
 	case errors.Is(err, jwt.TokenExpiredError()), err == ErrExpired:
@@ -209,17 +217,33 @@ func (j *JWT) errorMapper(err error) error {
 func JWTMiddleware(j *JWT) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 
+		findTokenFns := []func(r *http.Request) (string, error){
+			j.getTokenFromRequest,
+			j.getTokenFromCookie,
+		}
+
 		handler := func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
-			token, err := j.getTokenFromRequest(r)
+
+			var token string
+			var err error
+			for _, fn := range findTokenFns {
+				token, err = fn(r)
+				if err == nil {
+					break
+				}
+			}
+
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusUnauthorized)
+				//http.Error(w, err.Error(), http.StatusUnauthorized)
+				http.Redirect(w, r, "/", http.StatusSeeOther)
 				return
 			}
 
 			tokenData, err := j.Verify([]byte(token))
 			if err != nil {
-				http.Error(w, j.errorMapper(err).Error(), http.StatusUnauthorized)
+				//http.Error(w, j.errorMapper(err).Error(), http.StatusUnauthorized)
+				http.Redirect(w, r, "/", http.StatusSeeOther)
 				return
 			}
 

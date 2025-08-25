@@ -52,7 +52,7 @@ func NewApp(cfg *Config, logger *slog.Logger) (*App, error) {
 		}),
 	})
 	te := response.NewTemplateEngine(cfg.AppVersion, web.TemplateFiles)
-	jwt := auth.New(cfg.AppURL, []string{cfg.AppName}, cfg.JWTSecret)
+	jwt := auth.New(cfg.AppURL, []string{cfg.AppName}, []byte(cfg.JWTSecret))
 	router := routes.NewRouter(&routes.RouterConfig{
 		AppURL:       cfg.AppURL,
 		AppPort:      cfg.AppPort,
