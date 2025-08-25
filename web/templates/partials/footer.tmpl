@@ -1,7 +1,10 @@
 {{define "partials:footer"}}
-<footer>
-    Copyright &copy; {{now | formatTime "2006"}} Catopia de Chen Antúnez
-    <br>
-    Version: {{.Version}}
+<footer class="text-center py-4 mt-auto">
+    <p class="fs-6 text-muted mb-1">
+        RigelLedger Web, Version: {{.Version}}
+    </p>
+    <p class="fs-6 text-muted mb-0">
+        Copyright &copy; {{now | formatTime "2006"}} Catopia de Chen Antúnez
+    </p>
 </footer>
 {{end}}

@@ -1,20 +1,23 @@
 {{define "partials:base"}}
 <!doctype html>
-<html lang='en' data-bs-theme="dark">
+<html lang='en' data-bs-theme="{{.ColorScheme}}">
     <head>
-        <meta charset='utf-8'>
         <title>{{block "title" .}}Rigelledger{{end}}</title>
+        <meta charset='utf-8'>
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="robots" content="noindex, nofollow">
+        <meta name="author" content="cwchen.twn">
         {{block "meta" .}}{{end}}
 
-        <script src='/static/bootstrap.min.js?version={{.Version}}'></script>
+        <link rel="icon" type="image/x-icon" href="/static/favicon.ico?version={{.Version}}">
         <link rel="stylesheet" href="/static/bootstrap.min.css?version={{.Version}}">
+        <script src='/static/bootstrap.min.js?version={{.Version}}'></script>
         {{block "protected:scripts" .}}{{end}}
     </head>
-    <body class="container-md">
+    <body class="container-md d-flex flex-column min-vh-100">
         {{template "partials:nav" .}}
         {{block "protected:menu" .}}{{end}}
-        <main>
+        <main class="mt-auto">
         {{block "main" .}}Default content for the page.{{end}}
         </main>
         {{template "partials:footer" .}}

@@ -23,7 +23,7 @@ type LoginRequest struct {
 // @Success		200	{string}	string	"Hello, World!"
 // @Router		/ [get]
 func (rt *Router) LoginViewHandler(w http.ResponseWriter, r *http.Request) {
-	err := rt.te.NamedTemplateWithHeaders(w, http.StatusOK, nil, nil, "login")
+	err := rt.te.RenderResponse(w, r, nil, "login")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -84,7 +84,7 @@ func (rt *Router) LogoutHandler(w http.ResponseWriter, r *http.Request) {}
 
 // HomeHandler is the handler for the home page
 func (rt *Router) HomeHandler(w http.ResponseWriter, r *http.Request) {
-	err := rt.te.NamedTemplateWithHeaders(w, http.StatusOK, nil, nil, "home")
+	err := rt.te.RenderResponse(w, r, nil, "home")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

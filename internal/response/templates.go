@@ -5,7 +5,6 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
-	"maps"
 	"math"
 	"net/http"
 	"net/url"
@@ -217,9 +216,17 @@ type TemplateEngine struct {
 	templateFuncs template.FuncMap
 }
 
+type ColorScheme string
+
+const (
+	Light ColorScheme = "light"
+	Dark  ColorScheme = "dark"
+)
+
 type TemplateData struct {
-	Version string
-	Data    any
+	Version     string
+	ColorScheme ColorScheme
+	Data        any
 }
 
 func NewTemplateEngine(appVersion string, templateFs embed.FS) *TemplateEngine {
@@ -230,7 +237,28 @@ func NewTemplateEngine(appVersion string, templateFs embed.FS) *TemplateEngine {
 	}
 }
 
-func (te *TemplateEngine) NamedTemplateWithHeaders(w http.ResponseWriter, status int, data any, headers http.Header, templateName string) error {
+func (te *TemplateEngine) addDefaultHeaders(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
+	w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
+	w.Header().Set("Cross-Origin-Embedder-Policy", "require-corp")
+	w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
+
+	w.Header().Set("Cache-Control", "no-store")
+
+	w.Header().Set("X-Frame-Options", "deny")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+	w.Header().Set("X-Powered-By", "RigelLedger")
+
+	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+
+	w.Header().Set("Accept-CH", "Sec-CH-Prefers-Color-Scheme")
+	w.Header().Set("Critical-CH", "Sec-CH-Prefers-Color-Scheme")
+}
+
+func (te *TemplateEngine) RenderResponse(w http.ResponseWriter, r *http.Request, data any, templateName string) error {
 	patterns := []string{"templates/partials/*.tmpl", "templates/" + templateName + ".tmpl"}
 
 	// patterns := []string{"templates/" + templateName}
@@ -249,9 +277,15 @@ func (te *TemplateEngine) NamedTemplateWithHeaders(w http.ResponseWriter, status
 	// 	templateFileName = templateName[idx+1:]
 	// }
 
+	preferredColorScheme := Dark
+	if strings.Contains(r.Header.Get("Sec-CH-Prefers-Color-Scheme"), "light") {
+		preferredColorScheme = Light
+	}
+
 	td := TemplateData{
-		Version: te.appVersion,
-		Data:    data,
+		Version:     te.appVersion,
+		ColorScheme: preferredColorScheme,
+		Data:        data,
 	}
 
 	err = ts.ExecuteTemplate(buf, templateName, td)
@@ -259,9 +293,10 @@ func (te *TemplateEngine) NamedTemplateWithHeaders(w http.ResponseWriter, status
 		return err
 	}
 
-	maps.Copy(w.Header(), headers)
+	// maps.Copy(w.Header(), headers)
+	te.addDefaultHeaders(w)
 
-	w.WriteHeader(status)
+	// w.WriteHeader(status)
 	buf.WriteTo(w)
 
 	return nil

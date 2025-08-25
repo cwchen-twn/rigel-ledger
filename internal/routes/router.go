@@ -33,7 +33,7 @@ type Router struct {
 func NewRouter(rc *RouterConfig, te *response.TemplateEngine, jwt *auth.JWT, logger *slog.Logger) *Router {
 	r := chi.NewRouter()
 
-	r.Use(middleware.Compress(6, "text/*", "application/json"))
+	r.Use(middleware.Compress(6, "text/*", "image/*", "application/*"))
 	r.Use(httplog.RequestLogger(rc.AccessLogger, &httplog.Options{
 		Level:         rc.LogLevel,
 		Schema:        httplog.SchemaECS,
