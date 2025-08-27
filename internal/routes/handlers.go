@@ -7,6 +7,7 @@ import (
 	"github.com/go-viper/mapstructure/v2"
 
 	"github.com/cwc1222/rigelledger/internal/auth"
+	"github.com/cwc1222/rigelledger/internal/models"
 )
 
 type LoginRequest struct {
@@ -52,29 +53,57 @@ func (rt *Router) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate that we got the required fields
-	if req.Username == "" || req.Password == "" {
-		rt.logger.Error("Missing required fields", "username", req.Username, "password", req.Password)
-		http.Error(w, "Username and password are required", http.StatusBadRequest)
+	user, err := models.FindByUserName(req.Username, rt.db)
+	if err == models.ErrUserNotFound {
+		rt.logger.Error("User not found", "username", req.Username)
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		rt.logger.Error("Error occurred while finding user", "error", err)
+		http.Error(w, "Error occurred while finding user", http.StatusInternalServerError)
+		return
+	}
+	if err := user.ValidatePassword(req.Password); err != nil {
+		rt.logger.Error("Invalid password", "username", req.Username)
+		http.Error(w, "Invalid password", http.StatusUnauthorized)
 		return
 	}
 
 	rt.logger.Info("Form decoded successfully", "username", req.Username)
 
-	token, err := rt.jwt.Sign(req.Username, nil, auth.AccessTokenLifetime)
+	accessToken, err := rt.jwt.Sign(req.Username, nil, auth.AccessTokenLifetime)
 	if err != nil {
-		rt.logger.Error("Failed to generate token", "error", err)
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		rt.logger.Error("Failed to generate access token", "error", err)
+		http.Error(w, "Failed to generate access token", http.StatusInternalServerError)
+		return
+	}
+
+	refreshToken, err := rt.jwt.Sign(req.Username, nil, auth.RefreshTokenLifetime)
+	if err != nil {
+		rt.logger.Error("Failed to generate refresh token", "error", err)
+		http.Error(w, "Failed to generate refresh token", http.StatusInternalServerError)
 		return
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "rigel_jwt_access",
-		Value:    string(token),
+		Name:     auth.AccessTokenCookieName,
+		Value:    string(accessToken),
 		HttpOnly: true,
 		//Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int(auth.AccessTokenLifetime.Seconds()),
 		Expires:  time.Now().Add(auth.AccessTokenLifetime),
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     auth.RefreshTokenCookieName,
+		Value:    string(refreshToken),
+		HttpOnly: true,
+		//Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   int(auth.RefreshTokenLifetime.Seconds()),
+		Expires:  time.Now().Add(auth.RefreshTokenLifetime),
 	})
 
 	// http.Redirect(w, r, "/home", http.StatusSeeOther)

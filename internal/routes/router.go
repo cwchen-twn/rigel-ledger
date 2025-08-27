@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httplog/v3"
+	"github.com/jmoiron/sqlx"
 
 	"github.com/cwc1222/rigelledger/internal/auth"
 	"github.com/cwc1222/rigelledger/internal/response"
@@ -25,15 +26,16 @@ type Router struct {
 	te      *response.TemplateEngine
 	jwt     *auth.JWT
 	logger  *slog.Logger
+	db      *sqlx.DB
 }
 
 // NewRouter creates a new router with the given configuration
 // @title    Rigel Ledger OpenAPI Specification
 // @version	 1.0.0.beta
-func NewRouter(rc *RouterConfig, te *response.TemplateEngine, jwt *auth.JWT, logger *slog.Logger) *Router {
+func NewRouter(rc *RouterConfig, te *response.TemplateEngine, jwt *auth.JWT, logger *slog.Logger, db *sqlx.DB) *Router {
 	r := chi.NewRouter()
 
-	r.Use(middleware.Compress(6, "text/*", "image/*", "application/*"))
+	r.Use(middleware.Compress(6, "text/*", "application/*"))
 	r.Use(httplog.RequestLogger(rc.AccessLogger, &httplog.Options{
 		Level:         rc.LogLevel,
 		Schema:        httplog.SchemaECS,
@@ -45,6 +47,7 @@ func NewRouter(rc *RouterConfig, te *response.TemplateEngine, jwt *auth.JWT, log
 		te:      te,
 		jwt:     jwt,
 		logger:  logger,
+		db:      db,
 	}
 
 	// Setup Swagger conditionally based on build tags

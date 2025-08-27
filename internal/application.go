@@ -37,6 +37,13 @@ const (
 
 func NewApp(cfg *Config, logger *slog.Logger) (*App, error) {
 
+	logger.Info("Initializing postgres")
+	db, err := NewPostgres(cfg, logger)
+	if err != nil {
+		logger.Error("Failed to connect to postgres", "error", err)
+		return nil, err
+	}
+
 	logger.Info("Initializing router")
 	isLocalhost := cfg.AppURL == "localhost"
 	logger.Info("Creating router access logger", "isLocalhost", isLocalhost)
@@ -58,13 +65,7 @@ func NewApp(cfg *Config, logger *slog.Logger) (*App, error) {
 		AppPort:      cfg.AppPort,
 		AccessLogger: accessLogger,
 		LogLevel:     cfg.GetLogLevel(),
-	}, te, jwt, logger)
-
-	db, err := NewPostgres(cfg, logger)
-	if err != nil {
-		logger.Error("Failed to connect to postgres", "error", err)
-		return nil, err
-	}
+	}, te, jwt, logger, db.GetDB())
 
 	return &App{
 		cfg:    cfg,

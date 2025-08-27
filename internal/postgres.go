@@ -95,6 +95,10 @@ func (p *Postgres) Migrate(fsys fs.FS) error {
 	return nil
 }
 
+func (p *Postgres) GetDB() *sqlx.DB {
+	return p.db
+}
+
 /*
 func NewPgPool(cfg *Config) (*pgxpool.Pool, error) {
 	connString := fmt.Sprintf(

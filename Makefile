@@ -1,6 +1,9 @@
 include .env
 
+APP_VERSION := $(shell git describe --exact-match --tags HEAD 2>/dev/null || git rev-parse --short HEAD)
 DB_DSN := $(PG_USER):$(PG_PASS)@$(PG_HOST):$(PG_PORT)/$(APP_DBNAME)?sslmode=disable
+
+DATE := $(shell date -u +%Y%m%d)
 BUILD_DIR := /tmp/bin
 
 .PHONY: help
@@ -101,27 +104,25 @@ build/dev:
 ##build/prod: Build the application for production
 .PHONY: build/prod
 build/prod:
-	$(eval VERSION := $(shell git describe --exact-match --tags HEAD 2>/dev/null || git rev-parse --short HEAD))
-	@echo "Building production version... $(VERSION)"
+	@echo "Building production version... $(APP_VERSION)"
 	@CGO_ENABLED=0 GOOS=linux go build -tags "prod" -a -installsuffix cgo \
 		-ldflags "-s -w -extldflags '-static'" \
-		-o=$(BUILD_DIR)/rigelledger.$(VERSION) ./cmd/rigelledger
+		-o=$(BUILD_DIR)/rigelledger.$(APP_VERSION) ./cmd/rigelledger
 	@echo "Production build finished"
-	@du -sh $(BUILD_DIR)/rigelledger.$(VERSION)
+	@du -sh $(BUILD_DIR)/rigelledger.$(APP_VERSION)
 
 ##build/compare: Compare development vs production build sizes
 .PHONY: build/compare
 build/compare:
-	$(eval VERSION := $(shell git describe --exact-match --tags HEAD 2>/dev/null || git rev-parse --short HEAD))
 	@echo "Building development version..."
 	@make build/dev > /dev/null 2>&1
-	@echo "Building production version... $(VERSION)"
+	@echo "Building production version... $(APP_VERSION)"
 	@make build/prod > /dev/null 2>&1
 	@echo "\nSize comparison:"
 	@echo "Development build, with default go build flags and swagger enabled:"
 	@du -sh $(BUILD_DIR)/rigelledger
 	@echo "Minimized build for production, including build tags and static linking:"
-	@du -sh $(BUILD_DIR)/rigelledger.$(VERSION)
+	@du -sh $(BUILD_DIR)/rigelledger.$(APP_VERSION)
 
 ##checkbuilt: Analyze the built binary using go-size-analyzer
 .PHONY: checkbuilt
@@ -137,11 +138,10 @@ checkbuilt:
 ##checkbuilt/prod: Analyze the built binary using go-size-analyzer
 .PHONY: checkbuilt/prod
 checkbuilt/prod:
-	$(eval VERSION := $(shell git describe --exact-match --tags HEAD 2>/dev/null || git rev-parse --short HEAD))
-	@if [ -f $(BUILD_DIR)/rigelledger.$(VERSION) ]; then \
-		go run github.com/Zxilly/go-size-analyzer/cmd/gsa@latest $(BUILD_DIR)/rigelledger.$(VERSION); \
+	@if [ -f $(BUILD_DIR)/rigelledger.$(APP_VERSION) ]; then \
+		go run github.com/Zxilly/go-size-analyzer/cmd/gsa@latest $(BUILD_DIR)/rigelledger.$(APP_VERSION); \
 	else \
-		echo "Error: $(BUILD_DIR)/rigelledger.$(VERSION) not found, please build the production binary first"; \
+		echo "Error: $(BUILD_DIR)/rigelledger.$(APP_VERSION) not found, please build the production binary first"; \
 		echo "To build the production binary, run: make build/prod"; \
 		exit 1; \
 	fi

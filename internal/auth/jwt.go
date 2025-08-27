@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"strings"
 	"time"
@@ -42,11 +43,11 @@ type contextKey string
 
 const (
 	tokenDataKey contextKey = "tokenData"
-)
 
-var (
-	AccessTokenLifetime  = 15 * time.Minute
-	RefreshTokenLifetime = 24 * time.Hour
+	AccessTokenCookieName  = "rigel_jwt_access"
+	RefreshTokenCookieName = "rigel_jwt_refresh"
+	AccessTokenLifetime    = 15 * time.Minute
+	RefreshTokenLifetime   = 24 * time.Hour
 )
 
 var (
@@ -92,9 +93,7 @@ func (j *JWT) Sign(subject string, claims map[string]any, lifetime time.Duration
 		"exp": time.Now().Add(lifetime).Unix(), // ExpirationTime
 	}
 
-	for k, v := range claims {
-		mc[k] = v
-	}
+	maps.Copy(mc, claims)
 
 	token := jwt.NewWithClaims(j.alg, mc)
 	signed, err := token.SignedString(j.privKey)
@@ -190,7 +189,7 @@ func (j *JWT) getTokenFromRequest(r *http.Request) (string, error) {
 }
 
 func (j *JWT) getTokenFromCookie(r *http.Request) (string, error) {
-	cookie, err := r.Cookie("rigel_jwt_access")
+	cookie, err := r.Cookie(AccessTokenCookieName)
 	if err != nil {
 		return "", err
 	}
