@@ -7,7 +7,7 @@ import (
 
 func TestJWT(t *testing.T) {
 	privKey := []byte("secret")
-	jwt := New("https://ledger.chenantunez.com", []string{"rigelledger.user.web"}, privKey)
+	jwt := New("https://ledger.chenantunez.com", []string{"rigelledger.web", "rigelledger.ios"}, privKey)
 	claims := map[string]any{
 		"name": "John Doe",
 		"role": "admin",

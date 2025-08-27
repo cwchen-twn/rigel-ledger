@@ -8,18 +8,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-
-	"github.com/lestrrat-go/jwx/v3/jwa"
-	"github.com/lestrrat-go/jwx/v3/jwt"
 )
 
 type JWT struct {
 	issuer   string
 	audience []string
-	alg      jwa.SignatureAlgorithm
-	privKey  any
-	verifier jwt.SignEncryptParseOption
+	alg      jwt.SigningMethod
+	privKey  []byte
 }
 
 type TokenData struct {
@@ -68,15 +65,14 @@ var (
 	ErrNoTokenFound = errors.New("no token found")
 )
 
-func New(issuer string, audience []string, privKey []byte, options ...jwt.Option) *JWT {
-	alg := jwa.HS256()
+func New(issuer string, audience []string, privKey []byte) *JWT {
+	alg := jwt.SigningMethodHS256
 
 	return &JWT{
 		issuer:   issuer,
 		audience: audience,
 		alg:      alg,
 		privKey:  privKey,
-		verifier: jwt.WithKey(alg, privKey, options...),
 	}
 }
 
@@ -85,81 +81,81 @@ func New(issuer string, audience []string, privKey []byte, options ...jwt.Option
 // claims is the claims of the token, any additional data to be added to the token.
 // lifetime is the lifetime of the token, i.e. how long the token is valid for.
 func (j *JWT) Sign(subject string, claims map[string]any, lifetime time.Duration) ([]byte, error) {
-	jwtID := uuid.New().String()
 
-	token, err := jwt.NewBuilder().
-		Issuer(j.issuer).
-		JwtID(jwtID).
-		Subject(subject).
-		Audience(j.audience).
-		IssuedAt(time.Now()).
-		NotBefore(time.Now()).
-		Expiration(time.Now().Add(lifetime)).
-		Build()
-	if err != nil {
-		return nil, err
+	mc := jwt.MapClaims{
+		"jti": uuid.New().String(), // JWT ID
+		"iss": j.issuer,
+		"aud": j.audience,
+		"sub": subject,
+		"iat": time.Now().Unix(),               // IssuedAt
+		"nbf": time.Now().Unix(),               // NotBefore
+		"exp": time.Now().Add(lifetime).Unix(), // ExpirationTime
 	}
 
 	for k, v := range claims {
-		if err := token.Set(k, v); err != nil {
-			return nil, err
-		}
+		mc[k] = v
 	}
 
-	signed, err := jwt.Sign(token, j.verifier)
+	token := jwt.NewWithClaims(j.alg, mc)
+	signed, err := token.SignedString(j.privKey)
+
 	if err != nil {
 		return nil, err
 	}
-	return signed, nil
+
+	return []byte(signed), nil
 }
 
 func (j *JWT) Verify(token []byte) (*TokenData, error) {
-	parsed, err := jwt.Parse(token, j.verifier, jwt.WithValidate(true))
+	parsed, err := jwt.Parse(string(token), func(token *jwt.Token) (any, error) {
+		return j.privKey, nil
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	jwtID, ok := parsed.JwtID()
+	mc, ok := parsed.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, ErrInvalidTokenFormat
+	}
+
+	jwtID, ok := mc["jti"].(string)
 	if !ok {
 		return nil, ErrJwtIDIsNil
 	}
 
-	issuer, ok := parsed.Issuer()
-	if !ok {
+	issuer, err := mc.GetIssuer()
+	if err != nil {
 		return nil, ErrIssuerIsNil
 	}
 
-	audience, ok := parsed.Audience()
-	if !ok {
+	audience, err := mc.GetAudience()
+	if err != nil {
 		return nil, ErrAudienceIsNil
 	}
 
-	subject, ok := parsed.Subject()
-	if !ok {
+	subject, err := mc.GetSubject()
+	if err != nil {
 		return nil, ErrSubjectIsNil
 	}
 
 	claims := make(map[string]any)
-	for _, k := range parsed.Keys() {
-		var v any
-		if err := parsed.Get(k, &v); err != nil {
-			return nil, err
-		}
+	for k, v := range mc {
 		claims[k] = v
 	}
 
-	expiry, ok := parsed.Expiration()
-	if !ok {
+	expiry, err := mc.GetExpirationTime()
+	if err != nil {
 		return nil, ErrExpiryIsNil
 	}
 
-	issuedAt, ok := parsed.IssuedAt()
-	if !ok {
+	issuedAt, err := mc.GetIssuedAt()
+	if err != nil {
 		return nil, ErrIssuedAtIsNil
 	}
 
-	notBefore, ok := parsed.NotBefore()
-	if !ok {
+	notBefore, err := mc.GetNotBefore()
+	if err != nil {
 		return nil, ErrNotBeforeIsNil
 	}
 
@@ -169,9 +165,9 @@ func (j *JWT) Verify(token []byte) (*TokenData, error) {
 		Audience:  audience,
 		Subject:   subject,
 		Claims:    claims,
-		Expiry:    expiry,
-		IssuedAt:  issuedAt,
-		NotBefore: notBefore,
+		Expiry:    expiry.Time,
+		IssuedAt:  issuedAt.Time,
+		NotBefore: notBefore.Time,
 	}, nil
 }
 
@@ -199,19 +195,6 @@ func (j *JWT) getTokenFromCookie(r *http.Request) (string, error) {
 		return "", err
 	}
 	return cookie.Value, nil
-}
-
-func (j *JWT) errorMapper(err error) error {
-	switch {
-	case errors.Is(err, jwt.TokenExpiredError()), err == ErrExpired:
-		return ErrExpired
-	case errors.Is(err, jwt.InvalidIssuedAtError()), err == ErrIATInvalid:
-		return ErrIATInvalid
-	case errors.Is(err, jwt.TokenNotYetValidError()), err == ErrNBFInvalid:
-		return ErrNBFInvalid
-	default:
-		return err
-	}
 }
 
 func JWTMiddleware(j *JWT) func(http.Handler) http.Handler {
