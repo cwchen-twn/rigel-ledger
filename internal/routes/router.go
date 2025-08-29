@@ -41,6 +41,7 @@ func NewRouter(rc *RouterConfig, te *response.TemplateEngine, jwt *auth.JWT, log
 		Schema:        httplog.SchemaECS,
 		RecoverPanics: true,
 	}))
+	r.Use(auth.JWTExtractTokenMiddleware(jwt))
 
 	rt := &Router{
 		Handler: r,
@@ -54,11 +55,12 @@ func NewRouter(rc *RouterConfig, te *response.TemplateEngine, jwt *auth.JWT, log
 	rt.setupSwagger(rc.AppURL, rc.AppPort)
 	r.Handle("/static/*", http.FileServer(http.FS(web.StaticFiles)))
 	r.Get("/", rt.LoginViewHandler)
+	r.Get("/login", rt.LoginViewHandler)
 	r.Post("/login", rt.LoginHandler)
 	r.Get("/logout", rt.LogoutHandler)
 
 	r.Group(func(r chi.Router) {
-		r.Use(auth.JWTMiddleware(jwt))
+		r.Use(auth.JWTValidateTokenMiddleware(jwt))
 		r.Get("/home", rt.HomeHandler)
 	})
 

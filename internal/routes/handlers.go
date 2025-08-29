@@ -24,6 +24,18 @@ type LoginRequest struct {
 // @Success		200	{string}	string	"Hello, World!"
 // @Router		/ [get]
 func (rt *Router) LoginViewHandler(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+	accessToken, ok := ctx.Value(auth.AccessTokenKey).(string)
+	if ok {
+		_, err := rt.jwt.Verify([]byte(accessToken))
+		if err == nil {
+			rt.logger.Info("Access token verified")
+			http.Redirect(w, r, "/home", http.StatusSeeOther)
+			return
+		}
+	}
+
 	err := rt.te.RenderResponse(w, r, nil, "login")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -83,6 +95,12 @@ func (rt *Router) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		rt.logger.Error("Failed to generate refresh token", "error", err)
 		http.Error(w, "Failed to generate refresh token", http.StatusInternalServerError)
+		return
+	}
+
+	if err := user.UpdateLastLogin(rt.db); err != nil {
+		rt.logger.Error("Error occurred while updating last login", "error", err)
+		http.Error(w, "Error occurred while updating last login", http.StatusInternalServerError)
 		return
 	}
 

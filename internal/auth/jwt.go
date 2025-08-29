@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
 	"net/http"
 	"strings"
@@ -42,7 +43,8 @@ func (td *TokenData) ToJSONString() (string, error) {
 type contextKey string
 
 const (
-	tokenDataKey contextKey = "tokenData"
+	tokenDataKey   contextKey = "tokenData"
+	AccessTokenKey contextKey = "accessToken"
 
 	AccessTokenCookieName  = "rigel_jwt_access"
 	RefreshTokenCookieName = "rigel_jwt_refresh"
@@ -196,7 +198,7 @@ func (j *JWT) getTokenFromCookie(r *http.Request) (string, error) {
 	return cookie.Value, nil
 }
 
-func JWTMiddleware(j *JWT) func(http.Handler) http.Handler {
+func JWTExtractTokenMiddleware(j *JWT) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 
 		findTokenFns := []func(r *http.Request) (string, error){
@@ -216,16 +218,33 @@ func JWTMiddleware(j *JWT) func(http.Handler) http.Handler {
 				}
 			}
 
-			if err != nil {
-				//http.Error(w, err.Error(), http.StatusUnauthorized)
-				http.Redirect(w, r, "/", http.StatusSeeOther)
+			ctx = context.WithValue(ctx, AccessTokenKey, token)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		}
+
+		return http.HandlerFunc(handler)
+	}
+}
+
+func JWTValidateTokenMiddleware(j *JWT) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+
+		handler := func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			accessToken, ok := ctx.Value(AccessTokenKey).(string)
+			if !ok {
+				// http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				errMessage := "Session expired. Please login again."
+				http.Redirect(w, r, fmt.Sprintf("/login?error=%s", errMessage), http.StatusSeeOther)
 				return
 			}
 
-			tokenData, err := j.Verify([]byte(token))
+			tokenData, err := j.Verify([]byte(accessToken))
+
 			if err != nil {
-				//http.Error(w, j.errorMapper(err).Error(), http.StatusUnauthorized)
-				http.Redirect(w, r, "/", http.StatusSeeOther)
+				// http.Error(w, err.Error(), http.StatusUnauthorized)
+				errMessage := "Unauthorized. Please login again."
+				http.Redirect(w, r, fmt.Sprintf("/login?error=%s", errMessage), http.StatusSeeOther)
 				return
 			}
 

@@ -90,6 +90,24 @@ func (u *User) validateBeforeCreate() error {
 	return nil
 }
 
+func (u *User) UpdateLastLogin(conn *sqlx.DB) error {
+	query := `
+		UPDATE
+			users
+		SET
+			last_login = CURRENT_TIMESTAMP
+		WHERE
+			username = $1
+	`
+
+	_, err := conn.Exec(query, u.Username)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (u *User) Create(conn *sqlx.DB) error {
 	if err := u.validateBeforeCreate(); err != nil {
 		return err
