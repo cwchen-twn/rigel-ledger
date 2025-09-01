@@ -36,7 +36,8 @@ func (rt *Router) LoginViewHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err := rt.te.RenderResponse(w, r, nil, "login")
+	errorMessage := r.URL.Query().Get("error")
+	err := rt.te.RenderResponse(w, r, map[string]any{"Error": errorMessage}, "login")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -108,7 +109,7 @@ func (rt *Router) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		Name:     auth.AccessTokenCookieName,
 		Value:    string(accessToken),
 		HttpOnly: true,
-		//Secure:   true,
+		Secure:   !rt.IsLocalhost,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int(auth.AccessTokenLifetime.Seconds()),
 		Expires:  time.Now().Add(auth.AccessTokenLifetime),
@@ -118,7 +119,7 @@ func (rt *Router) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		Name:     auth.RefreshTokenCookieName,
 		Value:    string(refreshToken),
 		HttpOnly: true,
-		//Secure:   true,
+		Secure:   !rt.IsLocalhost,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int(auth.RefreshTokenLifetime.Seconds()),
 		Expires:  time.Now().Add(auth.RefreshTokenLifetime),

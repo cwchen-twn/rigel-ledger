@@ -48,10 +48,14 @@ function addEventListeners() {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
             body: formData,
-        }).then(function(response) {
+        }).then(async function(response) {
             if (response.ok) {
                 window.location.href = '/home';
             }
+            const errElement = document.getElementById('error-message');
+            const responseText = await response.text();
+            errElement.classList.remove('d-none');
+            errElement.textContent = responseText;
         });
     });
 }
@@ -97,6 +101,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 </form>
             </div>
         </div>
+        {{ if .Data.Error }}
+        <div class="mt-1 p-1 text-danger" id="error-message">{{ .Data.Error }}</div>
+        {{ else }}
+        <div class="mt-1 p-1 text-danger d-none" id="error-message"></div>
+        {{ end }}
     </div>
 </div>
 {{end}}

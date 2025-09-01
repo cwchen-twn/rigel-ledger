@@ -45,7 +45,7 @@ func NewApp(cfg *Config, logger *slog.Logger) (*App, error) {
 	}
 
 	logger.Info("Initializing router")
-	isLocalhost := cfg.AppURL == "localhost"
+	isLocalhost := cfg.IsLocalhost()
 	logger.Info("Creating router access logger", "isLocalhost", isLocalhost)
 	logFormat := httplog.SchemaECS.Concise(isLocalhost)
 	accessLogger := NewLogger(LoggerConfig{
@@ -65,6 +65,7 @@ func NewApp(cfg *Config, logger *slog.Logger) (*App, error) {
 		AppPort:      cfg.AppPort,
 		AccessLogger: accessLogger,
 		LogLevel:     cfg.GetLogLevel(),
+		IsLocalhost:  cfg.IsLocalhost(),
 	}, te, jwt, logger, db.GetDB())
 
 	return &App{

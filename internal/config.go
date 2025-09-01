@@ -47,6 +47,10 @@ func (c *Config) GetLogLevel() slog.Level {
 	}
 }
 
+func (c *Config) IsLocalhost() bool {
+	return c.AppURL == "localhost"
+}
+
 func LoadConfig() (*Config, error) {
 	var cfg Config
 

@@ -19,14 +19,16 @@ type RouterConfig struct {
 	AppPort      int
 	AccessLogger *slog.Logger
 	LogLevel     slog.Level
+	IsLocalhost  bool
 }
 
 type Router struct {
-	Handler *chi.Mux
-	te      *response.TemplateEngine
-	jwt     *auth.JWT
-	logger  *slog.Logger
-	db      *sqlx.DB
+	Handler     *chi.Mux
+	te          *response.TemplateEngine
+	jwt         *auth.JWT
+	logger      *slog.Logger
+	db          *sqlx.DB
+	IsLocalhost bool
 }
 
 // NewRouter creates a new router with the given configuration
@@ -44,11 +46,12 @@ func NewRouter(rc *RouterConfig, te *response.TemplateEngine, jwt *auth.JWT, log
 	r.Use(auth.JWTExtractTokenMiddleware(jwt))
 
 	rt := &Router{
-		Handler: r,
-		te:      te,
-		jwt:     jwt,
-		logger:  logger,
-		db:      db,
+		Handler:     r,
+		te:          te,
+		jwt:         jwt,
+		logger:      logger,
+		db:          db,
+		IsLocalhost: rc.IsLocalhost,
 	}
 
 	// Setup Swagger conditionally based on build tags
