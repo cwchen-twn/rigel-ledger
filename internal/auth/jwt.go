@@ -43,7 +43,7 @@ func (td *TokenData) ToJSONString() (string, error) {
 type contextKey string
 
 const (
-	tokenDataKey   contextKey = "tokenData"
+	TokenDataKey   contextKey = "tokenData"
 	AccessTokenKey contextKey = "accessToken"
 
 	AccessTokenCookieName  = "rigel_jwt_access"
@@ -248,7 +248,7 @@ func JWTValidateTokenMiddleware(j *JWT) func(http.Handler) http.Handler {
 				return
 			}
 
-			ctx = context.WithValue(ctx, tokenDataKey, tokenData)
+			ctx = context.WithValue(ctx, TokenDataKey, tokenData)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		}
 

@@ -211,6 +211,7 @@ func toInt64(i any) (int64, error) {
 }
 
 type TemplateEngine struct {
+	isLocalhost   bool
 	appVersion    string
 	templateFs    embed.FS
 	templateFuncs template.FuncMap
@@ -229,11 +230,12 @@ type TemplateData struct {
 	Data        any
 }
 
-func NewTemplateEngine(appVersion string, templateFs embed.FS) *TemplateEngine {
+func NewTemplateEngine(appVersion string, templateFs embed.FS, isLocalhost bool) *TemplateEngine {
 	return &TemplateEngine{
 		appVersion:    appVersion,
 		templateFs:    templateFs,
 		templateFuncs: templateFuncs,
+		isLocalhost:   isLocalhost,
 	}
 }
 
@@ -256,6 +258,10 @@ func (te *TemplateEngine) addDefaultHeaders(w http.ResponseWriter) {
 
 	w.Header().Set("Accept-CH", "Sec-CH-Prefers-Color-Scheme")
 	w.Header().Set("Critical-CH", "Sec-CH-Prefers-Color-Scheme")
+
+	if !te.isLocalhost {
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload") // HSTS
+	}
 }
 
 func (te *TemplateEngine) RenderResponse(w http.ResponseWriter, r *http.Request, data any, templateName string) error {

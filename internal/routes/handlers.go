@@ -15,14 +15,6 @@ type LoginRequest struct {
 	Password string `mapstructure:"password"`
 }
 
-// LoginViewHandler is the handler for the login page
-// @Summary		Get home page
-// @Description	Returns a simple hello world message
-// @Tags		root
-// @Accept		json
-// @Produce		plain
-// @Success		200	{string}	string	"Hello, World!"
-// @Router		/ [get]
 func (rt *Router) LoginViewHandler(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
@@ -44,6 +36,20 @@ func (rt *Router) LoginViewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// LoginHandler is the handler for the login page
+// @Summary		Post login page
+// @Description	Returns a JWT token for the user
+// @Tags		root
+// @Accept		application/x-www-form-urlencoded
+// @Produce		plain
+// @Success		200	{string}	string	"JWT token"
+// @Failure		400	{string}	string	"Failed to parse form"
+// @Failure		401	{string}	string	"Invalid password"
+// @Failure		404	{string}	string	"User not found"
+// @Failure		500	{string}	string	"Error occurred while finding user"
+// @Failure		500	{string}	string	"Error occurred while updating last login"
+// @Failure		500	{string}	string	"Failed to generate access token"
+// @Router		/login [post]
 func (rt *Router) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		rt.logger.Error("Failed to parse form", "error", err)
@@ -134,6 +140,35 @@ func (rt *Router) LogoutHandler(w http.ResponseWriter, r *http.Request) {}
 func (rt *Router) HomeHandler(w http.ResponseWriter, r *http.Request) {
 	err := rt.te.RenderResponse(w, r, nil, "home")
 	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+// ListTransactionsHandler is the handler for the list transactions page
+// @Summary		Get list transactions page
+// @Description	Returns the list transactions page
+// @Tags		transactions
+// @Accept		html
+// @Produce		html
+// @Success		200	{string}	string	"List transactions page"
+// @Failure		500	{string}	string	"Error occurred while rendering template"
+// @Router		/transactions [get]
+func (rt *Router) ListTransactionsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tokenData, ok := ctx.Value(auth.TokenDataKey).(*auth.TokenData)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	journals, err := models.FindByUserID(tokenData.Subject, 100, rt.db)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := rt.je.RenderResponse(w, r, models.Journals(journals)); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

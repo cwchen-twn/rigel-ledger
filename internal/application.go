@@ -58,7 +58,8 @@ func NewApp(cfg *Config, logger *slog.Logger) (*App, error) {
 			ReplaceAttr: logFormat.ReplaceAttr,
 		}),
 	})
-	te := response.NewTemplateEngine(cfg.AppVersion, web.TemplateFiles)
+	te := response.NewTemplateEngine(cfg.AppVersion, web.TemplateFiles, cfg.IsLocalhost())
+	je := response.NewJSONEngine(cfg.AppURL, cfg.AppPort, cfg.IsLocalhost(), []string{cfg.AppURL})
 	jwt := auth.New(cfg.AppURL, []string{cfg.AppName}, []byte(cfg.JWTSecret))
 	router := routes.NewRouter(&routes.RouterConfig{
 		AppURL:       cfg.AppURL,
@@ -66,7 +67,7 @@ func NewApp(cfg *Config, logger *slog.Logger) (*App, error) {
 		AccessLogger: accessLogger,
 		LogLevel:     cfg.GetLogLevel(),
 		IsLocalhost:  cfg.IsLocalhost(),
-	}, te, jwt, logger, db.GetDB())
+	}, te, je, jwt, logger, db.GetDB())
 
 	return &App{
 		cfg:    cfg,

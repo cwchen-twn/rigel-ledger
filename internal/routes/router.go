@@ -25,6 +25,7 @@ type RouterConfig struct {
 type Router struct {
 	Handler     *chi.Mux
 	te          *response.TemplateEngine
+	je          *response.JSONEngine
 	jwt         *auth.JWT
 	logger      *slog.Logger
 	db          *sqlx.DB
@@ -34,7 +35,7 @@ type Router struct {
 // NewRouter creates a new router with the given configuration
 // @title    Rigel Ledger OpenAPI Specification
 // @version	 1.0.0.beta
-func NewRouter(rc *RouterConfig, te *response.TemplateEngine, jwt *auth.JWT, logger *slog.Logger, db *sqlx.DB) *Router {
+func NewRouter(rc *RouterConfig, te *response.TemplateEngine, je *response.JSONEngine, jwt *auth.JWT, logger *slog.Logger, db *sqlx.DB) *Router {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Compress(6, "text/*", "application/*"))
@@ -48,6 +49,7 @@ func NewRouter(rc *RouterConfig, te *response.TemplateEngine, jwt *auth.JWT, log
 	rt := &Router{
 		Handler:     r,
 		te:          te,
+		je:          je,
 		jwt:         jwt,
 		logger:      logger,
 		db:          db,
@@ -65,6 +67,7 @@ func NewRouter(rc *RouterConfig, te *response.TemplateEngine, jwt *auth.JWT, log
 	r.Group(func(r chi.Router) {
 		r.Use(auth.JWTValidateTokenMiddleware(jwt))
 		r.Get("/home", rt.HomeHandler)
+		r.Get("/transactions", rt.ListTransactionsHandler)
 	})
 
 	return rt
