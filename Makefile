@@ -3,6 +3,7 @@ include .env
 APP_VERSION := $(shell git describe --exact-match --tags HEAD 2>/dev/null || git rev-parse --short HEAD)
 DB_DSN := $(PG_USER):$(PG_PASS)@$(PG_HOST):$(PG_PORT)/$(APP_DBNAME)?sslmode=disable
 
+CURRENT_BRANCH := $(shell git branch --show-current)
 DATE := $(shell date -u +%Y%m%d)
 BUILD_DIR := /tmp/bin
 
@@ -174,6 +175,24 @@ run/livedebug:
 .PHONY: swag
 swag:
 	go run github.com/swaggo/swag/cmd/swag@latest init -g internal/routes/router.go -o ./api
+
+##git/analyze: Analyze the git repository using git-of-theseus
+.PHONY: git/analyze
+git/analyze:
+	@uv sync --dev
+	@.venv/bin/git-of-theseus-analyze --procs 10 --branch $(CURRENT_BRANCH) --outdir ./git-of-theseus ./
+	@.venv/bin/git-of-theseus-line-plot --outfile ./git-of-theseus/line_plot_author.png ./git-of-theseus/authors.json
+	@.venv/bin/git-of-theseus-line-plot --normalize --outfile ./git-of-theseus/line_plot_author_n.png ./git-of-theseus/authors.json
+	@.venv/bin/git-of-theseus-stack-plot --normalize --outfile ./git-of-theseus/stack_plot_author_n.png ./git-of-theseus/authors.json
+	@.venv/bin/git-of-theseus-survival-plot --outfile ./git-of-theseus/survival_plot.png ./git-of-theseus/survival.json
+	@.venv/bin/git-of-theseus-line-plot --outfile ./git-of-theseus/line_plot_ext.png ./git-of-theseus/exts.json
+	@.venv/bin/git-of-theseus-line-plot --normalize --outfile ./git-of-theseus/line_plot_ext_n.png ./git-of-theseus/exts.json
+	@.venv/bin/git-of-theseus-stack-plot --normalize --outfile ./git-of-theseus/stack_plot_ext_n.png ./git-of-theseus/exts.json
+	@.venv/bin/git-of-theseus-stack-plot --outfile ./git-of-theseus/stack_plot_ext.png ./git-of-theseus/exts.json
+	@.venv/bin/git-of-theseus-line-plot --outfile ./git-of-theseus/line_plot_cohorts.png ./git-of-theseus/cohorts.json
+	@.venv/bin/git-of-theseus-line-plot --normalize --outfile ./git-of-theseus/line_plot_cohorts_n.png ./git-of-theseus/cohorts.json
+	@.venv/bin/git-of-theseus-stack-plot --normalize --outfile ./git-of-theseus/stack_plot_cohorts_n.png ./git-of-theseus/cohorts.json
+	@.venv/bin/git-of-theseus-stack-plot --outfile ./git-of-theseus/stack_plot_cohorts.png ./git-of-theseus/cohorts.json
 
 ##migrations/new: create a new database migration (e.g. $ make migrations/new name=init_database)
 .PHONY: migrations/new

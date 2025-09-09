@@ -8,5 +8,6 @@ dependencies = []
 
 [dependency-groups]
 dev = [
+    "git-of-theseus>=0.3.4",
     "pre-commit>=4.3.0",
 ]
