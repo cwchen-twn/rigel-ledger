@@ -64,10 +64,15 @@ func NewRouter(rc *RouterConfig, te *response.TemplateEngine, je *response.JSONE
 	r.Post("/login", rt.LoginHandler)
 	r.Get("/logout", rt.LogoutHandler)
 
-	r.Group(func(r chi.Router) {
+	r.Route("/{username}", func(r chi.Router) {
 		r.Use(auth.JWTValidateTokenMiddleware(jwt))
-		r.Get("/home", rt.HomeHandler)
-		r.Get("/transactions", rt.ListTransactionsHandler)
+
+		r.Get("/", rt.HomeHandler)
+		r.Get("/reports", rt.ReportsHandler)
+
+		r.Route("/api", func(r chi.Router) {
+			r.Post("/transactions", rt.ListTransactionsHandler)
+		})
 	})
 
 	return rt

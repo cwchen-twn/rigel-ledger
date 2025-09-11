@@ -1,6 +1,92 @@
-{{define "partials:menu"}}
-<nav>
-    <a href="#">Menu link 1</a>
-    <a href="#">Menu link 2</a>
-</nav>
+{{define "protected:menu"}}
+<div x-data="{
+    isLargeScreen: false,
+    init() {
+        // Initialize screen size state without causing flash
+        this.isLargeScreen = window.innerWidth >= 768;
+
+        // Update display state on window resize
+        window.addEventListener('resize', () => {
+            this.isLargeScreen = window.innerWidth >= 768;
+        });
+    }
+}">
+    <!-- Mobile/Tablet Offcanvas Toggle Button -->
+    <button
+        class="btn btn-secondary d-md-none"
+        type="button"
+        data-bs-toggle="offcanvas"
+        data-bs-target="#sidebarOffcanvas"
+        aria-controls="sidebarOffcanvas"
+        aria-label="Toggle sidebar"
+    >
+        <i class="bi bi-layout-sidebar-inset"></i>
+    </button>
+
+    <!-- Desktop Sidebar (visible on md+ screens) -->
+    <div
+        class="d-none d-md-flex flex-column flex-shrink-0"
+        x-show="isLargeScreen"
+        x-transition:enter="transition ease-out duration-300"
+        x-transition:enter-start="opacity-0 transform -translate-x-4"
+        x-transition:enter-end="opacity-100 transform translate-x-0"
+        x-transition:leave="transition ease-in duration-200"
+        x-transition:leave-start="opacity-100 transform translate-x-0"
+        x-transition:leave-end="opacity-0 transform -translate-x-4"
+    >
+        {{template "menu-content" .}}
+    </div>
+
+    <!-- Mobile/Tablet Offcanvas -->
+    <div
+        class="offcanvas offcanvas-start d-md-none"
+        tabindex="-1"
+        id="sidebarOffcanvas"
+        aria-labelledby="sidebarOffcanvasLabel"
+        data-bs-backdrop="true"
+        data-bs-scroll="true"
+    >
+        <div class="offcanvas-header flex-row-reverse">
+            <button
+                type="button"
+                class="btn btn-secondary"
+                data-bs-dismiss="offcanvas"
+                aria-label="Close"
+            ><i class="bi bi-layout-sidebar-inset"></i></button>
+        </div>
+        <div class="offcanvas-body">
+            {{template "menu-content" .}}
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{define "menu-content"}}
+<div class="d-flex justify-content-center align-items-center flex-wrap gap-2 mb-4">
+    <img
+        class="img-thumbnail rounded-circle"
+        width="48"
+        height="48"
+        src="/static/android-chrome-192x192.png"
+        alt="Rigel Ledger"
+    >
+    <h1 class="fs-5 mb-0">Rigel Ledger</h1>
+</div>
+<hr class="my-4">
+<ul class="nav nav-pills flex-column mb-auto">
+    <li class="nav-item">
+        {{ $activated := "" }}
+        {{ if eq .Page "home" }}
+            {{ $activated = "active" }}
+        {{ end }}
+        <a href="/{{.Username}}" class="nav-link {{ $activated }}" >Home</a>
+    </li>
+    <li class="nav-item">
+        {{ $activated := "" }}
+        {{ if eq .Page "reports" }}
+            {{ $activated = "active" }}
+        {{ end }}
+        <a href="/{{.Username}}/reports" class="nav-link {{ $activated }}" >Reports</a>
+    </li>
+</ul>
 {{end}}

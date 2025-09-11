@@ -1,5 +1,5 @@
 {{define "home"}}
-    {{template "partials:base" .}}
+    {{template "protected:base" .}}
 {{end}}
 
 {{define "title"}}Rigelledger Home{{end}}
@@ -8,11 +8,138 @@
 <meta name="description" content="Rigelledger Home Page">
 {{end}}
 
-{{define "protected:menu"}}
-    {{template "partials:menu" .}}
+{{define "scripts"}}
+<link rel="stylesheet" href="/static/datatables.min.css?version={{.Version}}">
+<script src="/static/datatables.min.js?version={{.Version}}" defer></script>
+<script src="/static/dayjs.min.js?version={{.Version}}" defer></script>
+
+<script type="text/javascript" nonce="{{.Nonce}}">
+document.addEventListener('DOMContentLoaded', async function() {
+    const table = new DataTable('#transactions-table', {
+        pageLength: 10,
+        responsive: true,
+        ajax: {
+            url: '/{{.Username}}/api/transactions',
+            dataSrc: {
+                data: 'data',
+                draw: 'draw', // sequence counter sent from DataTables to the server with each Ajax request
+                recordsTotal: 'total', // Total records, before filtering (i.e. the total number of records in the database)
+                recordsFiltered: 'filtered' // Total records, after filtering (i.e. the total number of records after filtering has been applied
+            },
+            method: 'POST',
+            accepts: 'application/json',
+            enctype: "application/x-www-form-urlencoded",
+            timeout: 5000,
+            error: function (jqXHR, textStatus, errorThrown) {
+                const status = jqXHR.status;
+                const responseText = jqXHR.responseText;
+                console.log(jqXHR, textStatus, errorThrown, status, responseText);
+            },
+        },
+        serverSide: true,
+        processing: true,
+        columns: [
+            {
+                defaultContent: '<button class="btn btn-primary" group="viewtx">View</button>',
+                orderable: false,
+                searchable: false,
+            },
+            {
+                title: 'Transaction ID',
+                data: 'transaction_id',
+                visible: false,
+                searchable: false,
+            },
+            {
+                title: 'Transaction Date',
+                data: function(row, type, set, meta) {
+                    if (type === 'set') {
+                        row.transac_date = set;
+                        return;
+                    }
+                    if (type === 'display') {
+                        return row.transac_date;
+                    }
+                    if (type === 'filter') {
+                        return row.transac_date;
+                    }
+                    return dayjs(row.transac_date).unix();
+                }
+            },
+            {
+                title: 'Description',
+                data: 'description',
+            },
+            {
+                title: 'Amount',
+                data: 'amount',
+            },
+            {
+                title: 'Exchange Rate',
+                data: 'exchange_rate',
+                orderable: false,
+                searchable: false,
+            },
+        ],
+        order: [[ 0, 'desc' ]],
+    });
+    table.on('click', 'button[group="viewtx"]', function() {
+        const tr = $(this).parents('tr').hasClass('child')
+            ? $(this).parents('tr').prev()
+            : $(this).parents('tr');
+        const row = table.row(tr);
+        if ( row.child.isShown() ) {
+            row.child.hide();
+            return;
+        }
+        const rowData = row.data();
+        const childView = `
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered">
+                <thead>
+                    <tr>
+                        <th>Ledger</th>
+                        <th>Credit</th>
+                        <th>Debit</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                ${rowData.postings.map(posting => `
+                    <tr>
+                        <td>${posting.ledger}</td>
+                        <td>${posting.credit}</td>
+                        <td>${posting.debit}</td>
+                        <td>${posting.amount}</td>
+                    </tr>
+                `).join('')}
+                </tbody>
+            </table>
+        </div>
+        `;
+        row.child(childView).show();
+    });
+});
+</script>
 {{end}}
 
-{{define "main"}}
-<p>Welcome to Rigelledger!</p>
-<a href="/">Login</a>
+{{define "protected:main"}}
+<div class="card">
+    <div class="card-header">
+        Recent Transactions
+    </div>
+    <div class="card-body">
+        <table class="table table-striped table-bordered" id="transactions-table">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Transaction Date</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                    <th>Exchange Rate</th>
+                </tr>
+            </thead>
+        </table>
+    </div>
+</div>
 {{end}}

@@ -1,4 +1,4 @@
-{{define "partials:base"}}
+{{define "public:base"}}
 <!doctype html>
 <html lang='en' data-bs-theme="{{.ColorScheme}}">
     <head>
@@ -10,17 +10,16 @@
         {{block "meta" .}}{{end}}
 
         <link rel="icon" type="image/x-icon" href="/static/favicon.ico?version={{.Version}}">
+        <link rel="stylesheet" href="/static/bootstrap-icons/bootstrap-icons.min.css">
         <link rel="stylesheet" href="/static/bootstrap.min.css?version={{.Version}}">
         <script src='/static/bootstrap.min.js?version={{.Version}}'></script>
-        {{block "protected:scripts" .}}{{end}}
+        <script src="/static/alpine.min.js?version={{.Version}}" defer></script>
+        {{block "scripts" .}}{{end}}
     </head>
-    <body class="container-md d-flex flex-column min-vh-100">
-        {{template "partials:nav" .}}
-        {{block "protected:menu" .}}{{end}}
-        <main class="mt-auto">
+    <body>
+        <main>
         {{block "main" .}}Default content for the page.{{end}}
         </main>
-        {{template "partials:footer" .}}
     </body>
 </html>
 {{end}}

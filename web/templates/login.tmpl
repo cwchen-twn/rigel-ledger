@@ -1,5 +1,5 @@
 {{define "login"}}
-    {{template "partials:base" .}}
+    {{template "public:base" .}}
 {{end}}
 
 {{define "title"}}Rigelledger Login{{end}}
@@ -8,104 +8,141 @@
 <meta name="description" content="Rigelledger Login Page">
 {{end}}
 
-{{define "protected:scripts"}}
-<script type="text/javascript">
+{{define "scripts"}}
+<script type="text/javascript" nonce="{{.Nonce}}">
+function loginForm() {
+    return {
+        username: '',
+        password: '',
+        isSubmitting: false,
 
-function addEventListeners() {
-
-    const form = document.getElementById('login-form');
-
-    const validateField = (ele) => {
-        if (!ele.checkValidity()) {
-            ele.classList.add('is-invalid');
-            ele.classList.remove('is-valid');
-        } else {
-            ele.classList.add('is-valid');
-            ele.classList.remove('is-invalid');
-        }
-    };
-
-    document.querySelectorAll('#login-form input').forEach(function(ele) {
-        ele.addEventListener('input', function(event) {
-            validateField(ele);
-        });
-    });
-
-    form.addEventListener('submit', function(event) {
-        event.preventDefault();
-        if (!form.checkValidity()) {
-            document.querySelectorAll('#login-form input').forEach(function(ele) {
-                validateField(ele);
-            });
-            return;
-        }
-        form.classList.add('was-validated');
-
-        const formData = new URLSearchParams(new FormData(form));
-        fetch('/login', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: formData,
-        }).then(async function(response) {
-            if (response.ok) {
-                window.location.href = '/home';
+        validateField(element) {
+            if (!element.checkValidity()) {
+                element.classList.add('is-invalid');
+                element.classList.remove('is-valid');
+            } else {
+                element.classList.add('is-valid');
+                element.classList.remove('is-invalid');
             }
-            const errElement = document.getElementById('error-message');
-            const responseText = await response.text();
-            errElement.classList.remove('d-none');
-            errElement.textContent = responseText;
-        });
-    });
-}
+        },
 
-document.addEventListener('DOMContentLoaded', function() {
-    addEventListeners();
-});
+        async handleSubmit() {
+            const form = document.getElementById('login-form');
+
+            // Validate all fields
+            if (!form.checkValidity()) {
+                document.querySelectorAll('#login-form input').forEach((element) => {
+                    this.validateField(element);
+                });
+                return;
+            }
+
+            form.classList.add('was-validated');
+            this.isSubmitting = true;
+
+            try {
+                const formData = new URLSearchParams(new FormData(form));
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData,
+                });
+
+                if (response.ok) {
+                    const username = this.username;
+                    window.location.href = `/${username}`;
+                } else {
+                    const errorElement = document.getElementById('error-message');
+                    const responseText = await response.text();
+                    errorElement.classList.remove('d-none');
+                    errorElement.textContent = responseText;
+                }
+            } catch (error) {
+                const errorElement = document.getElementById('error-message');
+                errorElement.classList.remove('d-none');
+                errorElement.textContent = 'An error occurred during login. Please try again.';
+            } finally {
+                this.isSubmitting = false;
+            }
+        }
+    }
+}
 </script>
 {{end}}
 
 {{define "main"}}
-<div class="row text-center mb-4">
-    <h1>Rigel Ledger</h1>
-</div>
-<div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                Log in or create a new account to access your ledger
-            </div>
-            <div class="card-body">
-                <form
-                    id="login-form"
-                    action="/login"
-                    method="post"
-                    enctype="application/x-www-form-urlencoded"
-                    class="row g-3 needs-validation"
-                    novalidate
-                >
-                    <div class="form-group">
-                        <label for="username">Username</label>
-                        <input type="text" class="form-control" id="username" name="username" autocomplete="off" required>
-                        <div class="invalid-feedback">Please enter a username</div>
-                    </div>
-                    <div class="form-group">
-                        <label for="password">Password</label>
-                        <input type="password" class="form-control" id="password" name="password" autocomplete="off" required>
-                        <div class="invalid-feedback">Please enter a password</div>
-                    </div>
-                    <div class="form-group">
-                        <button type="submit" class="btn btn-primary">Login</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-        {{ if .Data.Error }}
-        <div class="mt-1 p-1 text-danger" id="error-message">{{ .Data.Error }}</div>
-        {{ else }}
-        <div class="mt-1 p-1 text-danger d-none" id="error-message"></div>
-        {{ end }}
+<div class="d-flex flex-column min-vh-100 justify-content-center container-md">
+    <div class="row text-center mb-4">
+        <h1>Rigel Ledger</h1>
     </div>
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    Log in or create a new account to access your ledger
+                </div>
+                <div class="card-body" x-data="loginForm()">
+                    <form
+                        id="login-form"
+                        action="/login"
+                        method="post"
+                        class="row g-3 needs-validation"
+                        novalidate
+                        x-on:submit.prevent="handleSubmit"
+                    >
+                        <div class="form-group">
+                            <label for="username">Username</label>
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="username"
+                                name="username"
+                                autocomplete="off"
+                                required
+                                x-model="username"
+                                x-on:input="validateField($event.target)"
+                            >
+                            <div class="invalid-feedback">Please enter a username</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Password</label>
+                            <input
+                                type="password"
+                                class="form-control"
+                                id="password"
+                                name="password"
+                                autocomplete="off"
+                                required
+                                x-model="password"
+                                x-on:input="validateField($event.target)"
+                            >
+                            <div class="invalid-feedback">Please enter a password</div>
+                        </div>
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary" :disabled="isSubmitting">
+                                <span x-show="!isSubmitting">Login</span>
+                                <span x-show="isSubmitting">Logging in...</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {{ if .Data.Error }}
+            <div class="mt-1 p-1 text-danger" id="error-message">{{ .Data.Error }}</div>
+            {{ else }}
+            <div class="mt-1 p-1 text-danger d-none" id="error-message"></div>
+            {{ end }}
+        </div>
+    </div>
+    <footer class="text-center py-4">
+        <p class="fs-6 text-muted mb-1">
+            RigelLedger Web, Version: {{.Version}}
+        </p>
+        <p class="fs-6 text-muted mb-0">
+            Copyright &copy; {{now | formatTime "2006"}} Catopia de Chen Antúnez E.A.S. Paraguay
+        </p>
+    </footer>
 </div>
 {{end}}

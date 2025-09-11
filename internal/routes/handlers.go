@@ -1,7 +1,9 @@
 package routes
 
 import (
+	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-viper/mapstructure/v2"
@@ -20,10 +22,10 @@ func (rt *Router) LoginViewHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	accessToken, ok := ctx.Value(auth.AccessTokenKey).(string)
 	if ok {
-		_, err := rt.jwt.Verify([]byte(accessToken))
+		tokenData, err := rt.jwt.Verify([]byte(accessToken))
 		if err == nil {
 			rt.logger.Info("Access token verified")
-			http.Redirect(w, r, "/home", http.StatusSeeOther)
+			http.Redirect(w, r, fmt.Sprintf("/%s", tokenData.Subject), http.StatusSeeOther)
 			return
 		}
 	}
@@ -162,13 +164,60 @@ func (rt *Router) ListTransactionsHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	journals, err := models.FindByUserID(tokenData.Subject, 100, rt.db)
+	if err := r.ParseForm(); err != nil {
+		rt.logger.Error("Failed to parse form", "error", err)
+		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		return
+	}
+
+	req := models.DataTableRequest{
+		Search: struct {
+			Value string
+			Regex bool
+		}{
+			Value: r.FormValue("search[value]"),
+			Regex: r.FormValue("search[regex]") == "true",
+		},
+	}
+	if draw, err := strconv.Atoi(r.FormValue("draw")); err != nil {
+		rt.logger.Error("Failed to parse draw", "error", err)
+		http.Error(w, "Failed to parse draw", http.StatusBadRequest)
+		return
+	} else {
+		req.Draw = draw
+	}
+
+	if start, err := strconv.Atoi(r.FormValue("start")); err != nil {
+		rt.logger.Error("Failed to parse start", "error", err)
+		http.Error(w, "Failed to parse start", http.StatusBadRequest)
+		return
+	} else {
+		req.Start = start
+	}
+
+	if length, err := strconv.Atoi(r.FormValue("length")); err != nil {
+		rt.logger.Error("Failed to parse length", "error", err)
+		http.Error(w, "Failed to parse length", http.StatusBadRequest)
+		return
+	} else {
+		req.Length = length
+	}
+
+	journals, err := models.FindTransactionsByUserID(tokenData.Subject, req, rt.db)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	if err := rt.je.RenderResponse(w, r, models.Journals(journals)); err != nil {
+	if err := rt.je.RenderResponse(w, r, journals); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (rt *Router) ReportsHandler(w http.ResponseWriter, r *http.Request) {
+	err := rt.te.RenderResponse(w, r, nil, "reports")
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

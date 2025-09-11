@@ -2,7 +2,9 @@ package response
 
 import (
 	"bytes"
+	"crypto/rand"
 	"embed"
+	"encoding/base64"
 	"fmt"
 	"html/template"
 	"math"
@@ -13,11 +15,19 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/go-chi/chi/v5"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 )
 
 var printer = message.NewPrinter(language.English)
+
+// generateNonce creates a cryptographically secure random nonce
+func generateNonce() string {
+	bytes := make([]byte, 16)
+	rand.Read(bytes)
+	return base64.StdEncoding.EncodeToString(bytes)
+}
 
 var templateFuncs = template.FuncMap{
 	// Time functions
@@ -226,8 +236,11 @@ const (
 
 type TemplateData struct {
 	Version     string
+	Username    string
 	ColorScheme ColorScheme
+	Page        string
 	Data        any
+	Nonce       string
 }
 
 func NewTemplateEngine(appVersion string, templateFs embed.FS, isLocalhost bool) *TemplateEngine {
@@ -239,10 +252,10 @@ func NewTemplateEngine(appVersion string, templateFs embed.FS, isLocalhost bool)
 	}
 }
 
-func (te *TemplateEngine) addDefaultHeaders(w http.ResponseWriter) {
+func (te *TemplateEngine) addDefaultHeaders(w http.ResponseWriter, nonce string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;")
+	w.Header().Set("Content-Security-Policy", fmt.Sprintf("default-src 'self'; script-src 'self' 'nonce-%s' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;", nonce))
 	w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
 	w.Header().Set("Cross-Origin-Embedder-Policy", "require-corp")
 	w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
@@ -288,10 +301,18 @@ func (te *TemplateEngine) RenderResponse(w http.ResponseWriter, r *http.Request,
 		preferredColorScheme = Light
 	}
 
+	username := chi.URLParam(r, "username")
+
+	// Generate nonce for this request
+	nonce := generateNonce()
+
 	td := TemplateData{
 		Version:     te.appVersion,
+		Username:    username,
 		ColorScheme: preferredColorScheme,
+		Page:        templateName,
 		Data:        data,
+		Nonce:       nonce,
 	}
 
 	err = ts.ExecuteTemplate(buf, templateName, td)
@@ -300,7 +321,7 @@ func (te *TemplateEngine) RenderResponse(w http.ResponseWriter, r *http.Request,
 	}
 
 	// maps.Copy(w.Header(), headers)
-	te.addDefaultHeaders(w)
+	te.addDefaultHeaders(w, nonce)
 
 	// w.WriteHeader(status)
 	buf.WriteTo(w)

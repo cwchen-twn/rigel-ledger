@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
@@ -243,6 +244,14 @@ func JWTValidateTokenMiddleware(j *JWT) func(http.Handler) http.Handler {
 
 			if err != nil {
 				// http.Error(w, err.Error(), http.StatusUnauthorized)
+				errMessage := "Unauthorized. Please login again."
+				http.Redirect(w, r, fmt.Sprintf("/login?error=%s", errMessage), http.StatusSeeOther)
+				return
+			}
+
+			username := chi.URLParam(r, "username")
+			if username != tokenData.Subject {
+				// http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				errMessage := "Unauthorized. Please login again."
 				http.Redirect(w, r, fmt.Sprintf("/login?error=%s", errMessage), http.StatusSeeOther)
 				return
