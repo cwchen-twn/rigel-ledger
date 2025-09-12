@@ -9,10 +9,6 @@
 {{end}}
 
 {{define "protected:scripts"}}
-<link rel="stylesheet" href="/static/datatables.min.css?version={{.Version}}">
-<script src="/static/datatables.min.js?version={{.Version}}" defer></script>
-<script src="/static/dayjs.min.js?version={{.Version}}" defer></script>
-
 <script type="text/javascript" nonce="{{.Nonce}}">
 document.addEventListener('DOMContentLoaded', async function() {
     const table = new DataTable('#transactions-table', {
@@ -140,6 +136,39 @@ document.addEventListener('DOMContentLoaded', async function() {
                 </tr>
             </thead>
         </table>
+    </div>
+</div>
+<nav class="navbar fixed-bottom col-12 col-md-10 offset-md-2 bg-body-tertiary">
+    <div class="container-fluid d-flex justify-content-end">
+        <button
+            type="button"
+            class="btn btn-primary"
+            data-bs-toggle="modal"
+            data-bs-target="#new-transaction-modal"
+        ><i class="bi bi-clipboard2-plus"></i> New Transaction</button>
+    </div>
+</nav>
+<div
+    class="modal fade"
+    id="new-transaction-modal"
+    tabindex="-1"
+    aria-labelledby="new-transaction-modal-label"
+    aria-hidden="true"
+>
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">New Transaction</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>New transaction form goes here.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary">Save</button>
+            </div>
+        </div>
     </div>
 </div>
 {{end}}

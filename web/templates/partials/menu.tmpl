@@ -80,14 +80,21 @@
             {{ if eq .Page "home" }}
                 {{ $activated = "active" }}
             {{ end }}
-            <a href="/{{.Username}}" class="nav-link {{ $activated }}" >Home</a>
+            <a href="/{{.Username}}" class="nav-link {{ $activated }}" ><i class="bi bi-house-door"></i> Home</a>
+        </li>
+        <li class="nav-item">
+            {{ $activated := "" }}
+            {{ if eq .Page "ledgers" }}
+                {{ $activated = "active" }}
+            {{ end }}
+            <a href="/{{.Username}}/ledgers" class="nav-link {{ $activated }}" ><i class="bi bi-journal-bookmark"></i> Ledgers</a>
         </li>
         <li class="nav-item">
             {{ $activated := "" }}
             {{ if eq .Page "reports" }}
                 {{ $activated = "active" }}
             {{ end }}
-            <a href="/{{.Username}}/reports" class="nav-link {{ $activated }}" >Reports</a>
+            <a href="/{{.Username}}/reports" class="nav-link {{ $activated }}" ><i class="bi bi-clipboard-data"></i> Reports</a>
         </li>
     </ul>
 </div>

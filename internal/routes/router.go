@@ -69,6 +69,7 @@ func NewRouter(rc *RouterConfig, te *response.TemplateEngine, je *response.JSONE
 		r.Use(auth.JWTValidateTokenMiddleware(jwt))
 
 		r.Get("/", rt.HomeHandler)
+		r.Get("/ledgers", rt.LedgersHandler)
 		r.Get("/reports", rt.ReportsHandler)
 
 		r.Route("/api", func(r chi.Router) {

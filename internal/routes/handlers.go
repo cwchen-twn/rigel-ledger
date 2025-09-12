@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -161,6 +162,18 @@ func (rt *Router) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
+type RefreshTokenResponse struct {
+	AccessTokenLeftTime int `json:"access_token_left_time"`
+}
+
+func (rtr RefreshTokenResponse) ToJSONString() (string, error) {
+	json, err := json.Marshal(rtr)
+	if err != nil {
+		return "", err
+	}
+	return string(json), nil
+}
+
 // RefreshTokenHandler handles token refresh using refresh token
 func (rt *Router) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 	// Get refresh token from cookie
@@ -216,6 +229,17 @@ func (rt *Router) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 			Expires:  time.Now().Add(auth.RefreshTokenLifetime),
 		})
 	}
+
+	accessTokenLeftTime := time.Until(tokenData.Expiry).Seconds()
+	rtr := RefreshTokenResponse{
+		AccessTokenLeftTime: int(accessTokenLeftTime),
+	}
+
+	if err := rt.je.RenderResponse(w, r, rtr); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 }
 
 // HomeHandler is the handler for the home page
@@ -290,6 +314,59 @@ func (rt *Router) ListTransactionsHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	if err := rt.je.RenderResponse(w, r, journals); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (rt *Router) LedgersHandler(w http.ResponseWriter, r *http.Request) {
+	err := rt.te.RenderResponse(w, r, nil, "ledgers")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (rt *Router) LedgersGetHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tokenData, ok := ctx.Value(auth.TokenDataKey).(*auth.TokenData)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	ledgers, err := models.FindLedgersByUserID(tokenData.Subject, rt.db)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := rt.je.RenderResponse(w, r, ledgers); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (rt *Router) LedgersSaveHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tokenData, ok := ctx.Value(auth.TokenDataKey).(*auth.TokenData)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	defer r.Body.Close()
+	var ledgers models.Ledgers
+	if err := json.NewDecoder(r.Body).Decode(&ledgers); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	for i := range ledgers {
+		ledgers[i].LedgerOwner = tokenData.Subject
+	}
+
+	if err := ledgers.Save(rt.db); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
