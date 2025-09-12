@@ -136,7 +136,87 @@ func (rt *Router) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// http.Redirect(w, r, "/home", http.StatusSeeOther)
 }
 
-func (rt *Router) LogoutHandler(w http.ResponseWriter, r *http.Request) {}
+func (rt *Router) LogoutHandler(w http.ResponseWriter, r *http.Request) {
+	// Clear both access and refresh token cookies
+	http.SetCookie(w, &http.Cookie{
+		Name:     auth.AccessTokenCookieName,
+		Value:    "",
+		HttpOnly: true,
+		Secure:   !rt.IsLocalhost,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+		Expires:  time.Now().Add(-1 * time.Hour),
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     auth.RefreshTokenCookieName,
+		Value:    "",
+		HttpOnly: true,
+		Secure:   !rt.IsLocalhost,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+		Expires:  time.Now().Add(-1 * time.Hour),
+	})
+
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+// RefreshTokenHandler handles token refresh using refresh token
+func (rt *Router) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
+	// Get refresh token from cookie
+	refreshTokenCookie, err := r.Cookie(auth.RefreshTokenCookieName)
+	if err != nil {
+		rt.logger.Error("No refresh token found", "error", err)
+		http.Error(w, "No refresh token", http.StatusUnauthorized)
+		return
+	}
+
+	// Verify refresh token
+	tokenData, err := rt.jwt.Verify([]byte(refreshTokenCookie.Value))
+	if err != nil {
+		rt.logger.Error("Invalid refresh token", "error", err)
+		http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
+		return
+	}
+
+	// Generate new access token
+	newAccessToken, err := rt.jwt.Sign(tokenData.Subject, nil, auth.AccessTokenLifetime)
+	if err != nil {
+		rt.logger.Error("Failed to generate new access token", "error", err)
+		http.Error(w, "Failed to generate new access token", http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     auth.AccessTokenCookieName,
+		Value:    string(newAccessToken),
+		HttpOnly: true,
+		Secure:   !rt.IsLocalhost,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   int(auth.AccessTokenLifetime.Seconds()),
+		Expires:  time.Now().Add(auth.AccessTokenLifetime),
+	})
+
+	// If the refresh token is expiring in less than 10 minutes, generate a new one
+	if time.Now().After(tokenData.Expiry.Add(-1 * time.Minute * 10)) {
+		newRefreshToken, err := rt.jwt.Sign(tokenData.Subject, nil, auth.RefreshTokenLifetime)
+		if err != nil {
+			rt.logger.Error("Failed to generate new refresh token", "error", err)
+			http.Error(w, "Failed to generate new refresh token", http.StatusInternalServerError)
+			return
+		}
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     auth.RefreshTokenCookieName,
+			Value:    string(newRefreshToken),
+			HttpOnly: true,
+			Secure:   !rt.IsLocalhost,
+			SameSite: http.SameSiteLaxMode,
+			MaxAge:   int(auth.RefreshTokenLifetime.Seconds()),
+			Expires:  time.Now().Add(auth.RefreshTokenLifetime),
+		})
+	}
+}
 
 // HomeHandler is the handler for the home page
 func (rt *Router) HomeHandler(w http.ResponseWriter, r *http.Request) {

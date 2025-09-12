@@ -15,6 +15,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/cwc1222/rigelledger/internal/auth"
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
@@ -32,6 +33,7 @@ func generateNonce() string {
 var templateFuncs = template.FuncMap{
 	// Time functions
 	"now":            time.Now,
+	"nowUnix":        time.Now().Unix,
 	"timeSince":      time.Since,
 	"timeUntil":      time.Until,
 	"formatTime":     formatTime,
@@ -235,12 +237,13 @@ const (
 )
 
 type TemplateData struct {
-	Version     string
-	Username    string
-	ColorScheme ColorScheme
-	Page        string
-	Data        any
-	Nonce       string
+	Version             string
+	AccessTokenLeftTime float64
+	Username            string
+	ColorScheme         ColorScheme
+	Page                string
+	Data                any
+	Nonce               string
 }
 
 func NewTemplateEngine(appVersion string, templateFs embed.FS, isLocalhost bool) *TemplateEngine {
@@ -302,17 +305,22 @@ func (te *TemplateEngine) RenderResponse(w http.ResponseWriter, r *http.Request,
 	}
 
 	username := chi.URLParam(r, "username")
+	accessTokenLeftTime, ok := r.Context().Value(auth.AccessTokenLeftTimeKey).(time.Duration)
+	if !ok {
+		accessTokenLeftTime = 0
+	}
 
 	// Generate nonce for this request
 	nonce := generateNonce()
 
 	td := TemplateData{
-		Version:     te.appVersion,
-		Username:    username,
-		ColorScheme: preferredColorScheme,
-		Page:        templateName,
-		Data:        data,
-		Nonce:       nonce,
+		Version:             te.appVersion,
+		Username:            username,
+		ColorScheme:         preferredColorScheme,
+		AccessTokenLeftTime: accessTokenLeftTime.Seconds(),
+		Page:                templateName,
+		Data:                data,
+		Nonce:               nonce,
 	}
 
 	err = ts.ExecuteTemplate(buf, templateName, td)

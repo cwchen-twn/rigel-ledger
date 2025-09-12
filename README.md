@@ -46,6 +46,10 @@ make help
 - [github.com/lib/pq](https://github.com/lib/pq)
 - [github.com/golang-jwt/jwt](https://github.com/golang-jwt/jwt)
 
+- [github.com/alpinejs/alpine](https://github.com/alpinejs/alpine)
+- [getbootstrap.com](https://getbootstrap.com/docs/5.3/getting-started/introduction/)
+- [icons.getbootstrap.com](https://icons.getbootstrap.com/)
+
 ### Go Tools
 - [github.com/golang-migrate/migrate](https://github.com/golang-migrate/migrate)
 - [github.com/swaggo/swag](https://github.com/swaggo/swag)

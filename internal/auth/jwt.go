@@ -44,8 +44,9 @@ func (td *TokenData) ToJSONString() (string, error) {
 type contextKey string
 
 const (
-	TokenDataKey   contextKey = "tokenData"
-	AccessTokenKey contextKey = "accessToken"
+	TokenDataKey           contextKey = "tokenData"
+	AccessTokenKey         contextKey = "accessToken"
+	AccessTokenLeftTimeKey contextKey = "accessTokenLeftTimeKey"
 
 	AccessTokenCookieName  = "rigel_jwt_access"
 	RefreshTokenCookieName = "rigel_jwt_refresh"
@@ -240,7 +241,7 @@ func JWTValidateTokenMiddleware(j *JWT) func(http.Handler) http.Handler {
 				return
 			}
 
-			tokenData, err := j.Verify([]byte(accessToken))
+			ad, err := j.Verify([]byte(accessToken))
 
 			if err != nil {
 				// http.Error(w, err.Error(), http.StatusUnauthorized)
@@ -250,14 +251,15 @@ func JWTValidateTokenMiddleware(j *JWT) func(http.Handler) http.Handler {
 			}
 
 			username := chi.URLParam(r, "username")
-			if username != tokenData.Subject {
+			if username != ad.Subject {
 				// http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				errMessage := "Unauthorized. Please login again."
 				http.Redirect(w, r, fmt.Sprintf("/login?error=%s", errMessage), http.StatusSeeOther)
 				return
 			}
 
-			ctx = context.WithValue(ctx, TokenDataKey, tokenData)
+			ctx = context.WithValue(ctx, TokenDataKey, ad)
+			ctx = context.WithValue(ctx, AccessTokenLeftTimeKey, time.Until(ad.Expiry))
 			next.ServeHTTP(w, r.WithContext(ctx))
 		}
 

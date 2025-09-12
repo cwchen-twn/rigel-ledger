@@ -63,6 +63,7 @@ func NewRouter(rc *RouterConfig, te *response.TemplateEngine, je *response.JSONE
 	r.Get("/login", rt.LoginViewHandler)
 	r.Post("/login", rt.LoginHandler)
 	r.Get("/logout", rt.LogoutHandler)
+	r.Post("/refresh-token", rt.RefreshTokenHandler)
 
 	r.Route("/{username}", func(r chi.Router) {
 		r.Use(auth.JWTValidateTokenMiddleware(jwt))
