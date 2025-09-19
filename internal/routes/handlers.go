@@ -347,6 +347,32 @@ func (rt *Router) LedgersGetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (rt *Router) LedgerTypesHandler(w http.ResponseWriter, r *http.Request) {
+	types, err := models.FindLedgerTypes(rt.db)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := rt.je.RenderResponse(w, r, types); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (rt *Router) CurrenciesHandler(w http.ResponseWriter, r *http.Request) {
+	currencies, err := models.FindCurrencies(rt.db)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := rt.je.RenderResponse(w, r, currencies); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
 func (rt *Router) LedgersSaveHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tokenData, ok := ctx.Value(auth.TokenDataKey).(*auth.TokenData)

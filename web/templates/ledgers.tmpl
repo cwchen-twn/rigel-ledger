@@ -10,11 +10,14 @@
 
 {{define "protected:scripts"}}
 <script type="text/javascript" nonce="{{.Nonce}}">
+let table = null;
+
 document.addEventListener('DOMContentLoaded', async function() {
-    const table = new DataTable('#ledgers-table', {
+    table = new DataTable('#ledgers-table', {
         pageLength: 10,
         responsive: true,
         ajax: {
+            dataSrc: "",
             url: '/{{.Username}}/api/ledgers',
             method: 'GET',
             accepts: 'application/json',
@@ -68,31 +71,90 @@ document.addEventListener('DOMContentLoaded', async function() {
             },
         ],
     });
+
+    const modal = document.getElementById('new-ledger-modal');
+    if (modal) {
+        modal.addEventListener('hide.bs.modal', () => {
+            // Ensure no element inside the modal retains focus when hidden
+            const focusedElement = document.activeElement;
+            if (focusedElement && modal.contains(focusedElement)) {
+                focusedElement.blur();
+            }
+        });
+    }
 });
 
 const ledgerData = () => ({
-    ledgerTypes: [
-        {
-            label: 'Select a ledger type',
-            value: '',
+    ledgerName: '',
+    ledgerTypeID: '',
+    currency: '',
+    balance: "0.00",
+
+    validateField(element) {
+        if (!element.checkValidity()) {
+            element.classList.add('is-invalid');
+            element.classList.remove('is-valid');
+        } else {
+            element.classList.add('is-valid');
+            element.classList.remove('is-invalid');
         }
-    ],
-    currencies: [
-        {
-            label: 'Select a currency',
-            value: '',
+    },
+
+    async save() {
+        const formData = {
+            ledgerName: this.ledgerName,
+            ledgerTypeID: this.ledgerTypeID,
+            currency: this.currency,
+            balance: new bigDecimal(this.balance),
+        };
+        console.log(formData);
+
+        // Validate the form
+        const form = document.getElementById('new-ledger-form');
+        if (!form.checkValidity()) {
+            console.error('Form validation failed');
+            form.querySelectorAll('[required]').forEach(element => {
+                this.validateField(element);
+            });
+            return;
         }
-    ],
-    async init() {
-        this.ledgerTypes = [...this.ledgerTypes, ...await fetch('/{{.Username}}/api/ledger-types').then(res => res.json())];
-        this.currencies = [...this.currencies, ...await fetch('/{{.Username}}/api/currencies').then(res => res.json())];
-    }
+        form.classList.add('was-validated');
+
+        // Submit the form
+        const response = await fetch('/{{.Username}}/api/ledgers', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify([formData]),
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            console.error(error);
+            return;
+        }
+
+        // Reload the table
+        table.ajax.reload();
+
+        // Properly handle modal closing with focus management
+        const modal = document.getElementById('new-ledger-modal');
+        if (modal) {
+            // Hide the modal
+            const bsModal = bootstrap.Modal.getInstance(modal);
+            if (bsModal) {
+                bsModal.hide();
+            }
+        }
+    },
 });
 </script>
 {{end}}
 
+
 {{define "protected:main"}}
-<div x-data="ledgerData()" x-init="init">
+<div>
     <div class="card">
         <div class="card-header">
             {{ .Username }}'s Ledgers
@@ -101,7 +163,6 @@ const ledgerData = () => ({
             <table class="table table-striped table-bordered" id="ledgers-table">
                 <thead>
                     <tr>
-                        <th></th>
                         <th>Ledger Name</th>
                         <th>Ledger Type</th>
                         <th>Currency</th>
@@ -129,7 +190,7 @@ const ledgerData = () => ({
         id="new-ledger-modal"
         tabindex="-1"
         aria-labelledby="new-ledger-modal-label"
-        aria-hidden="true"
+        x-data="ledgerData()"
     >
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
@@ -138,37 +199,70 @@ const ledgerData = () => ({
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <form id="new-ledger-form">
+                    <form id="new-ledger-form" class="needs-validation" novalidate>
                         <div class="form-group">
                             <label for="ledger-name">Ledger Name</label>
-                            <input type="text" class="form-control" id="ledger-name" name="ledger-name" required>
+                            <input
+                                x-model="ledgerName"
+                                type="text"
+                                class="form-control"
+                                id="ledger-name"
+                                name="ledger-name"
+                                autocomplete="off"
+                                x-on:input="validateField($el)"
+                                required
+                            >
+                            <div class="invalid-feedback">Please enter a ledger name</div>
                         </div>
-                        <div class="form-group">
-                            <label for="ledger-type">Ledger Type</label>
-                            <select class="form-control" id="ledger-type" name="ledger-type" required>
-                                <option value="">Select a ledger type</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="currency">Currency</label>
-                            <input type="text" class="form-control" id="currency" name="currency" required>
-                        </div>
+                        {{template "searchable-select" (map
+                            "ID" "ledgertype"
+                            "Name" "ledger-type"
+                            "Label" "Ledger Type"
+                            "Placeholder" "Search a ledger type..."
+                            "ApiUrl" (printf "/%s/api/ledger-types" .Username)
+                            "IdField" "ledgerTypeID"
+                            "TextField" "typeName"
+                            "SelectedValue" ""
+                            "SelectedText" ""
+                            "MaxResults" 10
+                            "Required" true
+                            "EventTarget" "ledgerTypeID"
+                        )}}
+                        {{template "searchable-select" (map
+                            "ID" "currency"
+                            "Name" "currency"
+                            "Label" "Currency"
+                            "Placeholder" "Search a currency..."
+                            "ApiUrl" (printf "/%s/api/currencies" .Username)
+                            "IdField" "alphabeticCode"
+                            "TextField" "currencyName"
+                            "SelectedValue" ""
+                            "SelectedText" ""
+                            "MaxResults" 10
+                            "Required" true
+                            "EventTarget" "currency"
+                        )}}
                         <div class="form-group">
                             <label for="balance">Balance</label>
-                            <input type="number" class="form-control" id="balance" name="balance" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="ledger-status">Ledger Status</label>
-                            <select class="form-control" id="ledger-status" name="ledger-status" required>
-                                <option value="1">Active</option>
-                                <option value="0">Inactive</option>
-                            </select>
+                            <input
+                                x-model="balance"
+                                x-on:input="validateField($el)"
+                                class="form-control"
+                                id="balance"
+                                name="balance"
+                                required
+                                autocomplete="off"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                            >
+                            <div class="invalid-feedback">Please enter a balance</div>
                         </div>
                     </form>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-primary">Save</button>
+                    <button type="button" class="btn btn-primary" @click="save">Save</button>
                 </div>
             </div>
         </div>

@@ -61,6 +61,9 @@ var templateFuncs = template.FuncMap{
 	// URL functions
 	"urlSetParam": urlSetParam,
 	"urlDelParam": urlDelParam,
+
+	// Map/Dict functions for template data
+	"map": createMap,
 }
 
 func formatTime(format string, t time.Time) string {
@@ -194,6 +197,23 @@ func urlDelParam(u *url.URL, key string) *url.URL {
 	return &nu
 }
 
+// createMap creates a map from key-value pairs for template use
+func createMap(pairs ...any) map[string]any {
+	result := make(map[string]any)
+
+	// Process pairs in groups of 2 (key, value)
+	for i := 0; i < len(pairs); i += 2 {
+		if i+1 < len(pairs) {
+			key, ok := pairs[i].(string)
+			if ok {
+				result[key] = pairs[i+1]
+			}
+		}
+	}
+
+	return result
+}
+
 func toInt64(i any) (int64, error) {
 	switch v := i.(type) {
 	case int:
@@ -263,7 +283,11 @@ func (te *TemplateEngine) addDefaultHeaders(w http.ResponseWriter, nonce string)
 	w.Header().Set("Cross-Origin-Embedder-Policy", "require-corp")
 	w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
 
-	w.Header().Set("Cache-Control", "no-store")
+	// Allow bfcache for HTML pages while preventing stale content
+	// no-cache requires revalidation but allows bfcache compatibility
+	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 
 	w.Header().Set("X-Frame-Options", "deny")
 	w.Header().Set("X-Content-Type-Options", "nosniff")

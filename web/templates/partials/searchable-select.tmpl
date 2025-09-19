@@ -1,0 +1,99 @@
+{{/*
+    Reusable Searchable Select Component
+
+    Usage:
+    {{template "searchable-select" (map
+        "ID" "field-id"
+        "Name" "field-name"
+        "Label" "Field Label"
+        "Placeholder" "Search..."
+        "ApiUrl" "/api/endpoint"
+        "IdField" "id"
+        "TextField" "name"
+        "SelectedValue" ""
+        "SelectedText" ""
+        "MaxResults" 10
+        "Required" true
+    )}}
+*/}}
+
+{{define "searchable-select"}}
+
+<div
+    class="form-group"
+    x-data="searchableSelect({
+        apiUrl: '{{.ApiUrl}}',
+        placeholder: '{{.Placeholder}}',
+        idField: '{{.IdField}}',
+        textField: '{{.TextField}}',
+        selectedValue: '{{.SelectedValue}}',
+        selectedText: '{{.SelectedText}}',
+        maxResults: {{.MaxResults}},
+    })"
+    x-init="fetchData"
+    @searchable-select-changed="{{.EventTarget}} = $event.detail.value"
+>
+
+    <label for="{{.ID}}-input">{{.Label}}</label>
+
+    {{/* Hidden input for form submission */}}
+    <input
+        type="hidden"
+        id="{{.ID}}"
+        name="{{.Name}}"
+        x-model="selectedValue"
+        {{if .Required}}required{{end}}
+    >
+
+    {{/* Visible input for user interaction */}}
+    <input
+        type="text"
+        class="form-control"
+        id="{{.ID}}-input"
+        name="{{.Name}}-input"
+        x-model="selected"
+        x-ref="{{.ID}}"
+        x-on:input="validateField($el)"
+        @focusin="openDropdown()"
+        @focusout="closeDropdown()"
+        @input="openDropdown()"
+        placeholder="{{.Placeholder}}"
+        autocomplete="off"
+        {{if .Required}}required{{end}}
+    >
+    <div class="invalid-feedback">Please select a {{.Label}}</div>
+
+    {{/* Dropdown container */}}
+    <div
+        class="bg-secondary z-1 position-absolute p-1 rounded-3 overflow-y-scroll w-75 h-50"
+        x-show="isOpen"
+        x-transition.duration.400ms
+    >
+        {{/* Loading state */}}
+        <div x-show="loading" class="p-2 text-center">
+            <small class="text-muted">Loading...</small>
+        </div>
+
+        {{/* Error state */}}
+        <div x-show="error" class="p-2 text-center">
+            <small class="text-danger">Error: <span x-text="error"></span></small>
+        </div>
+
+        {{/* Options list */}}
+        <template x-for="option in filteredOptions" :key="option.id">
+            <div
+                class="p-2 hover:bg-gray-100 cursor-pointer"
+                x-text="option.text"
+                @click="selectOption(option, $refs.{{.ID}})"
+                @keydown.enter="selectOption(option, $refs.{{.ID}})"
+                tabindex="0"
+            ></div>
+        </template>
+
+        {{/* No results message */}}
+        <div x-show="showNoResults" class="p-2 text-center">
+            <small class="text-muted">No results found</small>
+        </div>
+    </div>
+</div>
+{{end}}

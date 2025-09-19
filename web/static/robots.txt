@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: /
+
+# This is a private personal finance management application
+# All content is restricted and should not be indexed by search engines

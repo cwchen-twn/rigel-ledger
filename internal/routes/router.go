@@ -3,6 +3,7 @@ package routes
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -58,7 +59,26 @@ func NewRouter(rc *RouterConfig, te *response.TemplateEngine, je *response.JSONE
 
 	// Setup Swagger conditionally based on build tags
 	rt.setupSwagger(rc.AppURL, rc.AppPort)
-	r.Handle("/static/*", http.FileServer(http.FS(web.StaticFiles)))
+	// Create a file server with cache headers for static resources
+	staticHandler := http.FileServer(http.FS(web.StaticFiles))
+	r.Handle("/static/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set cache headers for static resources
+		w.Header().Set("Cache-Control", "public, max-age=7884000") // 1 year / 4 = 3 months
+		w.Header().Set("Expires", time.Now().AddDate(0, 3, 0).Format(http.TimeFormat))
+		staticHandler.ServeHTTP(w, r)
+	}))
+	r.Get("/robots.txt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=7884000") // 1 year / 4 = 3 months
+		w.Header().Set("Expires", time.Now().AddDate(0, 3, 0).Format(http.TimeFormat))
+		// Read robots.txt from embedded static files
+		robotsContent, err := web.StaticFiles.ReadFile("static/robots.txt")
+		if err != nil {
+			http.Error(w, "robots.txt not found", http.StatusNotFound)
+			return
+		}
+		w.Write(robotsContent)
+	}))
+
 	r.Get("/", rt.LoginViewHandler)
 	r.Get("/login", rt.LoginViewHandler)
 	r.Post("/login", rt.LoginHandler)
@@ -74,6 +94,10 @@ func NewRouter(rc *RouterConfig, te *response.TemplateEngine, je *response.JSONE
 
 		r.Route("/api", func(r chi.Router) {
 			r.Post("/transactions", rt.ListTransactionsHandler)
+			r.Get("/ledgers", rt.LedgersGetHandler)
+			r.Get("/ledger-types", rt.LedgerTypesHandler)
+			r.Get("/currencies", rt.CurrenciesHandler)
+			r.Post("/ledgers", rt.LedgersSaveHandler)
 		})
 	})
 
