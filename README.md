@@ -41,14 +41,25 @@ make help
 - [github.com/StarpTech/go-web](https://github.com/StarpTech/go-web)
 
 ### Dependencies
+
+#### Backend
+
 - [github.com/go-chi/chi](https://github.com/go-chi/chi)
 - [github.com/jmoiron/sqlx](https://github.com/jmoiron/sqlx)
 - [github.com/lib/pq](https://github.com/lib/pq)
 - [github.com/golang-jwt/jwt](https://github.com/golang-jwt/jwt)
+- [github.com/shopspring/decimal](https://github.com/shopspring/decimal)
+
+#### Frontend
 
 - [github.com/alpinejs/alpine](https://github.com/alpinejs/alpine)
 - [getbootstrap.com](https://getbootstrap.com/docs/5.3/getting-started/introduction/)
 - [icons.getbootstrap.com](https://icons.getbootstrap.com/)
+- [github.com/orchidjs/tom-select](https://github.com/orchidjs/tom-select/)
+- [github.com/sweetalert2/sweetalert2](https://github.com/sweetalert2/sweetalert2/)
+- [github.com/iamkun/dayjs](https://github.com/iamkun/dayjs/)
+- [github.com/royNiladri/js-big-decimal](https://github.com/royNiladri/js-big-decimal/)
+- [github.com/DataTables/DataTables](https://github.com/DataTables/DataTables)
 
 ### Go Tools
 - [github.com/golang-migrate/migrate](https://github.com/golang-migrate/migrate)
