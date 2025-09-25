@@ -1,5 +1,7 @@
 # GoReleaser configuration for rigelledger
 
+version: 2
+
 builds:
   - id: rigelledger
     binary: rigelledger
@@ -19,10 +21,9 @@ builds:
 
 archives:
   - id: rigelledger
-    builds:
-      - rigelledger
+    ids: [rigelledger]
     name_template: "rigelledger_{{.Version}}_{{.Os}}_{{.Arch}}"
-    format: tar.gz
+    formats: [tar.gz]
     files:
       - README.md
       - LICENSE
@@ -51,7 +52,7 @@ release:
   prerelease: false
 
 snapshot:
-  name_template: "{{.Tag}}-SNAPSHOT"
+  version_template: "{{.Tag}}-SNAPSHOT"
 
 checksum:
   name_template: "checksums.txt"

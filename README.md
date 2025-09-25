@@ -86,3 +86,4 @@ make help
 - [simpleicons.org](https://simpleicons.org/)
 - [goreportcard.com](https://goreportcard.com/)
 - [app.codacy.com](https://app.codacy.com/)
+- [goreleaser.com](https://goreleaser.com/customization/)
