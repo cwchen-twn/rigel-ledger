@@ -10,9 +10,239 @@
 
 {{define "protected:scripts"}}
 <script type="text/javascript" nonce="{{.Nonce}}">
+
 let table = null;
+let ledgerTypeSel = null;
+let currencySel = null;
+
+let firstGradeOptions = [];
+let ledgerTypesOptions = [];
+let currenciesOptions = [];
+
+const tomSelectConfig = {
+    options: [],
+    create: false,
+    // maxOptions: 20,
+    maxItems: 1,
+    loadThrottle: 100,
+    preload: 'focus',
+};
+const childRow = (row) => `
+<form
+    method="post"
+    enctype="application/x-www-form-urlencoded"
+    class="needs-validation d-flex flex-column gap-3 col-12 col-md-5"
+    novalidate
+    x-init="init()"
+    x-data="{
+        ledgerID: ${row.ledgerID},
+        ledgerName: '${row.ledgerName}',
+        ledgerTypeID: '${row.ledgerTypeID}',
+        currency: '${row.currency}',
+        balance: '${row.balance}',
+        ledgerStatus: '${row.ledgerStatus}',
+        initialized: false,
+        validateField(element) {
+            const ele = Array.from(element.classList).includes('tomselected')
+                ? element.nextElementSibling
+                : element;
+            if (!ele) {
+                return;
+            }
+            if (!element.checkValidity()) {
+                ele.classList.add('is-invalid');
+                ele.classList.remove('is-valid');
+                return;
+            }
+            ele.classList.add('is-valid');
+            ele.classList.remove('is-invalid');
+        },
+        async save(el) {
+            const form = el.closest('form');
+            if (!form.checkValidity()) {
+                form.querySelectorAll('[required]').forEach(element => {
+                    this.validateField(element);
+                });
+                return;
+            }
+            form.classList.add('was-validated');
+
+            const response = await fetch('/{{.Username}}/api/ledgers', {
+                method: 'PUT',
+                body: JSON.stringify([{
+                    ledgerID: this.ledgerID,
+                    ledgerName: this.ledgerName,
+                    ledgerTypeID: this.ledgerTypeID,
+                    currency: this.currency,
+                    balance: bigDecimal.round(this.balance, 2, bigDecimal.RoundingModes.HALF_EVEN),
+                    ledgerStatus: parseInt(this.ledgerStatus),
+                }]),
+            });
+            if (!response.ok) {
+                const error = await response.text();
+                console.error(error);
+                sideAlert.fire({ icon: 'error', title: 'Error', text: error });
+                return;
+            }
+            sideAlert.fire({ icon: 'success', title: 'Success', text: 'Ledger updated successfully' });
+            table.ajax.reload();
+        },
+        cancel(el) {
+            const row = Array.from(el.closest('tr').classList).includes('child')
+                ? el.closest('tr').prev()
+                : el.closest('tr');
+            table.row(row).child.hide();
+        },
+        init() {
+            if (this.initialized) {
+                return;
+            }
+            this.initialized = true;
+            if (${row.postingsCount} > 0) {
+                return;
+            }
+            new TomSelect('#ledgertype-${row.ledgerID}', {
+                ...tomSelectConfig,
+                options: ledgerTypesOptions,
+                items: [this.ledgerTypeID],
+                valueField: 'ledgerTypeID',
+	            labelField: 'typeName',
+                searchField: ['typeName'],
+            });
+            new TomSelect('#currency-${row.ledgerID}', {
+                ...tomSelectConfig,
+                options: currenciesOptions,
+                items: [this.currency],
+                valueField: 'alphabeticCode',
+	            labelField: 'currencyName',
+                searchField: ['currencyName'],
+            });
+        },
+    }"
+>
+    <div class="form-group">
+        <label for="ledger-name-${row.ledgerID}">Ledger Name</label>
+        <input
+            type="text"
+            class="form-control"
+            id="ledger-name-${row.ledgerID}"
+            name="ledger-name-${row.ledgerID}"
+            x-model="ledgerName"
+            x-on:input="validateField($el)"
+            required
+        >
+        <div class="invalid-feedback">Please enter a ledger name</div>
+    </div>
+    <div class="form-group">
+        <label for="ledgertype-${row.ledgerID}">Ledger Type</label>
+        <select
+            class="form-control"
+            id="ledgertype-${row.ledgerID}"
+            name="ledgertype-${row.ledgerID}"
+            x-model="ledgerTypeID"
+            autocomplete="off"
+            x-on:change="validateField($el)"
+            ${row.postingsCount === 0 ? '' : 'disabled'}
+            required
+        >
+            <template x-if="${row.postingsCount} > 0">
+                <option value="${row.ledgerTypeID}">${ledgerTypesOptions.find(l => l.ledgerTypeID === row.ledgerTypeID).typeName}</option>
+            </template>
+        </select>
+        <div class="invalid-feedback">Please select a ledger type</div>
+    </div>
+    <div class="form-group">
+        <label for="currency-${row.ledgerID}">Currency</label>
+        <select
+            class="form-control"
+            id="currency-${row.ledgerID}"
+            name="currency-${row.ledgerID}"
+            x-model="currency"
+            autocomplete="off"
+            x-on:change="validateField($el)"
+            ${row.postingsCount === 0 ? '' : 'disabled'}
+            required
+        >
+            <template x-if="${row.postingsCount} > 0">
+                <option value="${row.currency}">${currenciesOptions.find(c => c.alphabeticCode === row.currency).currencyName}</option>
+            </template>
+        </select>
+        <div class="invalid-feedback">Please select a currency</div>
+    </div>
+    <div class="form-group">
+        <label for="balance-${row.ledgerID}">Balance</label>
+        <input
+            type="number"
+            class="form-control"
+            id="balance-${row.ledgerID}"
+            name="balance-${row.ledgerID}"
+            x-model="balance"
+            autocomplete="off"
+            min="0"
+            step="0.01"
+            ${row.postingsCount === 0 ? '' : 'disabled'}
+            x-on:input="validateField($el)"
+            required
+        >
+        <div class="invalid-feedback">Please enter a balance, up to 2 decimal places</div>
+    </div>
+    <div class="form-group">
+        <div class="form-check form-check-inline">
+          <input
+            class="form-check-input"
+            type="radio"
+            name="ledger-status-${row.ledgerID}"
+            id="ledger-status-active-${row.ledgerID}"
+            value="1"
+            x-model="ledgerStatus"
+            ${row.ledgerStatus === 1 ? 'checked' : ''}
+          >
+          <label class="form-check-label" for="ledger-status-active-${row.ledgerID}">
+            Active
+          </label>
+        </div>
+        <div class="form-check form-check-inline">
+          <input
+            class="form-check-input"
+            type="radio"
+            name="ledger-status-${row.ledgerID}"
+            id="ledger-status-inactive-${row.ledgerID}"
+            value="0"
+            x-model="ledgerStatus"
+            ${row.ledgerStatus === 0 ? 'checked' : ''}
+          >
+          <label class="form-check-label" for="ledger-status-inactive-${row.ledgerID}">
+            Inactive
+          </label>
+        </div>
+        <template x-if="${row.postingsCount} === 0">
+            <div class="form-check form-check-inline">
+              <input
+                class="form-check-input"
+                type="radio"
+                name="ledger-status-${row.ledgerID}"
+                id="ledger-status-deleted-${row.ledgerID}"
+                value="2"
+                x-model="ledgerStatus"
+              >
+              <label class="form-check-label" for="ledger-status-deleted-${row.ledgerID}">
+                Deleted
+              </label>
+            </div>
+        </template>
+    </div>
+    <div class="form-group">
+        <button type="button" class="btn btn-primary" name="submit" x-on:click="save($el)">Submit</button>
+        <button type="button" class="btn btn-secondary" name="cancel" x-on:click="cancel($el)">Cancel</button>
+    </div>
+</form>
+`;
 
 document.addEventListener('DOMContentLoaded', async function() {
+    firstGradeOptions = await fetch('/{{.Username}}/api/ledger-types/firstgrade').then(response => response.json());
+    ledgerTypesOptions = await fetch('/{{.Username}}/api/ledger-types').then(response => response.json());
+    currenciesOptions = await fetch('/{{.Username}}/api/currencies').then(response => response.json());
+
     table = new DataTable('#ledgers-table', {
         pageLength: 10,
         responsive: true,
@@ -30,23 +260,40 @@ document.addEventListener('DOMContentLoaded', async function() {
         },
         columns: [
             {
+                data: 'ledgerID',
+                visible: false,
+                searchable: false,
+                sortable: false,
+            },
+            {
+                data: function(row, type, set, meta) {
+                    const deleteBtn = `<button class="btn btn-sm btn-danger" name="delete"><i class="bi bi-trash"></i></button>`;
+                    const editBtn = `<button class="btn btn-sm btn-warning" name="edit"><i class="bi bi-pencil-square"></i></button>`;
+                    const btns = `${row.postingsCount === 0 ? deleteBtn : ''} ${editBtn}`;
+                    return `<div class="d-flex gap-1">${btns}</div>`;
+                },
+                orderable: false,
+                searchable: false,
+                sortable: false,
+            },
+            {
                 title: 'Ledger Name',
-                data: 'ledger_name',
+                data: 'ledgerName',
             },
             {
                 title: 'Ledger Type',
                 data: function(row, type, set, meta) {
                     if (type === 'set') {
-                        row.ledger_type = set;
+                        row.ledgerType = set;
                         return;
                     }
                     if (type === 'display') {
-                        return row.ledger_type.type_name;
+                        return row.ledgerType.typeName;
                     }
                     if (type === 'filter') {
-                        return row.ledger_type.type_name;
+                        return row.ledgerType.typeName;
                     }
-                    return row.ledger_type;
+                    return row.ledgerType;
                 },
             },
             {
@@ -59,17 +306,61 @@ document.addEventListener('DOMContentLoaded', async function() {
             },
             {
                 title: 'Ledger Status',
-                data: 'ledger_status',
+                data: function(row, type, set, meta) {
+                    if (type === 'set') {
+                        row.ledgerStatus = set;
+                        return;
+                    }
+                    const ledgerStatus = row.ledgerStatus === 1 ? 'Active' : 'Inactive';
+                    if (type === 'display') {
+                        return ledgerStatus;
+                    }
+                    if (type === 'filter') {
+                        return ledgerStatus;
+                    }
+                    return row.ledgerStatus;
+                },
             },
             {
                 title: 'Created At',
-                data: 'created_at',
+                data: 'createdAt',
             },
             {
                 title: 'Updated At',
-                data: 'updated_at',
+                data: 'updatedAt',
             },
         ],
+        order: [[0, 'asc']],
+    });
+    table.on('click', 'button[name="delete"]', async function() {
+        const row = Array.from(this.closest('tr').classList).includes('child')
+            ? this.closest('tr').prev()
+            : this.closest('tr');
+        const rowData = table.row(row).data();
+        fetch(`/{{.Username}}/api/ledger/${rowData.ledgerID}`, {
+            method: 'DELETE',
+        }).then(response => {
+            if (!response.ok) {
+                sideAlert.fire({ icon: "error", title: "Error", text: response.statusText });
+                return;
+            }
+            sideAlert.fire({ icon: "success", title: "Success", text: "Ledger deleted successfully" });
+            table.ajax.reload();
+        })
+        .catch(error => {
+            sideAlert.fire({ icon: "error", title: "Error", text: error });
+        });
+    });
+    table.on('click', 'button[name="edit"]', function() {
+        const row = Array.from(this.closest('tr').classList).includes('child')
+            ? this.closest('tr').prev()
+            : this.closest('tr');
+        const rowData = table.row(row);
+        if (rowData.child.isShown()) {
+            rowData.child.hide();
+            return;
+        }
+        rowData.child(childRow(rowData.data())).show();
     });
 
     const modal = document.getElementById('new-ledger-modal');
@@ -82,6 +373,37 @@ document.addEventListener('DOMContentLoaded', async function() {
             }
         });
     }
+
+    ledgerTypeSel = new TomSelect('#ledgertype', {
+        ...tomSelectConfig,
+        options: ledgerTypesOptions,
+        optgroups: firstGradeOptions,
+        optgroupField: 'firstGrade',
+        optgroupLabelField: 'typeName',
+        optgroupValueField: 'firstGrade',
+        valueField: 'ledgerTypeID',
+	    labelField: 'typeName',
+        searchField: ['typeName'],
+
+        render: {
+            optgroup: function(data) {
+                let optgroup = document.createElement('div');
+			    optgroup.className = 'optgroup';
+			    optgroup.appendChild(data.options);
+			    return optgroup;
+            },
+            optgroup_header: function(data, escape) {
+                return '<div class="optgroup-header text-muted fst-italic">' + escape(data.typeName) + '</div>';
+		    }
+        },
+    });
+    currencySel = new TomSelect('#currency', {
+        ...tomSelectConfig,
+        options: currenciesOptions,
+        valueField: 'alphabeticCode',
+	    labelField: 'currencyName',
+        searchField: ['currencyName'],
+    });
 });
 
 const ledgerData = () => ({
@@ -90,14 +412,41 @@ const ledgerData = () => ({
     currency: '',
     balance: "0.00",
 
+    cleanInput() {
+        this.ledgerName = '';
+        this.ledgerTypeID = '';
+        this.currency = '';
+        this.balance = "0.00";
+        ledgerTypeSel.clear();
+        currencySel.clear();
+
+        const form = document.getElementById('new-ledger-form');
+        form.classList.remove('was-validated');
+        form.querySelectorAll('[required]').forEach(element => {
+            const ele = Array.from(element.classList).includes('tomselected')
+                ? element.nextElementSibling
+                : element;
+            ele.classList.remove('is-invalid');
+            ele.classList.remove('is-valid');
+        });
+    },
+
     validateField(element) {
-        if (!element.checkValidity()) {
-            element.classList.add('is-invalid');
-            element.classList.remove('is-valid');
-        } else {
-            element.classList.add('is-valid');
-            element.classList.remove('is-invalid');
+        const ele = Array.from(element.classList).includes('tomselected')
+            ? element.nextElementSibling
+            : element;
+        if (!ele) {
+            return;
         }
+
+        if (!element.checkValidity()) {
+            ele.classList.add('is-invalid');
+            ele.classList.remove('is-valid');
+            return;
+        }
+
+        ele.classList.add('is-valid');
+        ele.classList.remove('is-invalid');
     },
 
     async save() {
@@ -105,9 +454,8 @@ const ledgerData = () => ({
             ledgerName: this.ledgerName,
             ledgerTypeID: this.ledgerTypeID,
             currency: this.currency,
-            balance: new bigDecimal(this.balance),
+            balance: bigDecimal.round(this.balance, 2, bigDecimal.RoundingModes.HALF_EVEN),
         };
-        console.log(formData);
 
         // Validate the form
         const form = document.getElementById('new-ledger-form');
@@ -132,11 +480,14 @@ const ledgerData = () => ({
         if (!response.ok) {
             const error = await response.text();
             console.error(error);
+            sideAlert.fire({ icon: "error", title: "Error", text: error });
             return;
         }
 
-        // Reload the table
+        // Reload the table and clean the input
+        sideAlert.fire({ icon: "success", title: "Success", text: "Ledger created successfully" });
         table.ajax.reload();
+        this.cleanInput();
 
         // Properly handle modal closing with focus management
         const modal = document.getElementById('new-ledger-modal');
@@ -163,6 +514,7 @@ const ledgerData = () => ({
             <table class="table table-striped table-bordered" id="ledgers-table">
                 <thead>
                     <tr>
+                        <th></th>
                         <th>Ledger Name</th>
                         <th>Ledger Type</th>
                         <th>Currency</th>
@@ -193,13 +545,13 @@ const ledgerData = () => ({
         x-data="ledgerData()"
     >
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-            <div class="modal-content">
+            <div class="modal-content h-75">
                 <div class="modal-header">
                     <h5 class="modal-title">New Ledger</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <form id="new-ledger-form" class="needs-validation" novalidate>
+                    <form id="new-ledger-form" class="needs-validation d-flex flex-column gap-3" novalidate>
                         <div class="form-group">
                             <label for="ledger-name">Ledger Name</label>
                             <input
@@ -214,34 +566,36 @@ const ledgerData = () => ({
                             >
                             <div class="invalid-feedback">Please enter a ledger name</div>
                         </div>
-                        {{template "searchable-select" (map
-                            "ID" "ledgertype"
-                            "Name" "ledger-type"
-                            "Label" "Ledger Type"
-                            "Placeholder" "Search a ledger type..."
-                            "ApiUrl" (printf "/%s/api/ledger-types" .Username)
-                            "IdField" "ledgerTypeID"
-                            "TextField" "typeName"
-                            "SelectedValue" ""
-                            "SelectedText" ""
-                            "MaxResults" 10
-                            "Required" true
-                            "EventTarget" "ledgerTypeID"
-                        )}}
-                        {{template "searchable-select" (map
-                            "ID" "currency"
-                            "Name" "currency"
-                            "Label" "Currency"
-                            "Placeholder" "Search a currency..."
-                            "ApiUrl" (printf "/%s/api/currencies" .Username)
-                            "IdField" "alphabeticCode"
-                            "TextField" "currencyName"
-                            "SelectedValue" ""
-                            "SelectedText" ""
-                            "MaxResults" 10
-                            "Required" true
-                            "EventTarget" "currency"
-                        )}}
+                        <div class="form-group">
+                            <label for="ledgertype">Ledger Type</label>
+                            <select
+                                class="form-control"
+                                aria-label="Ledger Type"
+                                id="ledgertype"
+                                name="ledgertype"
+                                x-model="ledgerTypeID"
+                                x-on:change="validateField($el)"
+                                required
+                            >
+                                <option value="">Select a ledger type</option>
+                            </select>
+                            <div class="invalid-feedback">Please select a ledger type</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="currency">Currency</label>
+                            <select
+                                class="form-control"
+                                aria-label="Currency"
+                                id="currency"
+                                name="currency"
+                                x-model="currency"
+                                x-on:change="validateField($el)"
+                                required
+                            >
+                                <option value="">Select a currency</option>
+                            </select>
+                            <div class="invalid-feedback">Please select a currency</div>
+                        </div>
                         <div class="form-group">
                             <label for="balance">Balance</label>
                             <input
@@ -256,7 +610,7 @@ const ledgerData = () => ({
                                 min="0"
                                 step="0.01"
                             >
-                            <div class="invalid-feedback">Please enter a balance</div>
+                            <div class="invalid-feedback">Please enter a balance, up to 2 decimal places</div>
                         </div>
                     </form>
                 </div>

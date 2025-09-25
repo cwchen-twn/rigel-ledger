@@ -96,7 +96,7 @@ CREATE TABLE user_ledgers (
     ledger_type_id  VARCHAR(4) NOT NULL REFERENCES ref_ledger_types(ledger_type_id) ON DELETE RESTRICT,
     currency        VARCHAR(3) REFERENCES ref_currencies_iso4217(alphabetic_code) ON DELETE RESTRICT,
     balance         NUMERIC(20, 6) DEFAULT 0,
-    ledger_status   SMALLINT DEFAULT 1 CHECK (ledger_status IN (0, 1)), -- 0: Inactive 1: Active
+    ledger_status   SMALLINT DEFAULT 1 CHECK (ledger_status IN (0, 1, 2)), -- 0: Inactive 1: Active 2: Deleted
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NULL
 );

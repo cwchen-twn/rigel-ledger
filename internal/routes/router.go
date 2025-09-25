@@ -96,8 +96,11 @@ func NewRouter(rc *RouterConfig, te *response.TemplateEngine, je *response.JSONE
 			r.Post("/transactions", rt.ListTransactionsHandler)
 			r.Get("/ledgers", rt.LedgersGetHandler)
 			r.Get("/ledger-types", rt.LedgerTypesHandler)
+			r.Get("/ledger-types/firstgrade", rt.LedgerTypesFirstGradeHandler)
 			r.Get("/currencies", rt.CurrenciesHandler)
 			r.Post("/ledgers", rt.LedgersSaveHandler)
+			r.Put("/ledgers", rt.LedgersEditHandler)
+			r.Delete("/ledger/{ledgerID}", rt.LedgersDeleteHandler)
 		})
 	})
 

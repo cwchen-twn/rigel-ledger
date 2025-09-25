@@ -2,34 +2,48 @@ package models
 
 import (
 	"encoding/json"
-	"time"
+	"errors"
+	"slices"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/shopspring/decimal"
+)
+
+var (
+	ErrLedgerNameRequired   = errors.New("ledger name is required")
+	ErrLedgerTypeIDRequired = errors.New("ledger type id is required")
+	ErrCurrencyRequired     = errors.New("currency is required")
+	ErrBalanceRequired      = errors.New("balance is required")
 )
 
 type Ledger struct {
-	LedgerID     int        `json:"ledgerID" db:"ledger_id"`
-	LedgerOwner  string     `json:"ledgerOwner" db:"ledger_owner"`
-	LedgerName   string     `json:"ledgerName" db:"ledger_name"`
-	LedgerTypeID string     `json:"ledgerTypeID" db:"ledger_type_id"`
-	LedgerType   LedgerType `json:"ledgerType" db:"ledger_type"`
-	Currency     string     `json:"currency" db:"currency"`
-	Balance      float64    `json:"balance" db:"balance"`
-	LedgerStatus int        `json:"ledgerStatus" db:"ledger_status"`
-	CreatedAt    time.Time  `json:"createdAt" db:"created_at"`
-	UpdatedAt    time.Time  `json:"updatedAt" db:"updated_at"`
+	LedgerID      int             `json:"ledgerID" db:"ledger_id"`
+	LedgerOwner   string          `json:"ledgerOwner" db:"ledger_owner"`
+	LedgerName    string          `json:"ledgerName" db:"ledger_name"`
+	LedgerTypeID  string          `json:"ledgerTypeID" db:"ledger_type_id"`
+	LedgerType    LedgerType      `json:"ledgerType" db:"ledger_type"`
+	Currency      string          `json:"currency" db:"currency"`
+	Balance       decimal.Decimal `json:"balance" db:"balance"`
+	LedgerStatus  int             `json:"ledgerStatus" db:"ledger_status"`
+	CreatedAt     string          `json:"createdAt" db:"created_at"`
+	UpdatedAt     string          `json:"updatedAt" db:"updated_at"`
+	PostingsCount int             `json:"postingsCount" db:"postings_count"`
 }
 
 type LedgerType struct {
-	LedgerTypeID  string `json:"ledgerTypeID" db:"ledger_type_id"`
-	FirstGrade    string `json:"firstGrade" db:"first_grade"`
-	SecondGrade   string `json:"secondGrade" db:"second_grade"`
-	ThirdGrade    string `json:"thirdGrade" db:"third_grade"`
-	TypeName      string `json:"typeName" db:"type_name"`
-	TypeNameZH    string `json:"typeNameZH" db:"type_name_zh"`
-	DescriptionEN string `json:"descriptionEN" db:"description_en"`
-	DescriptionZH string `json:"descriptionZH" db:"description_zh"`
-	IsActive      bool   `json:"isActive" db:"is_active"`
+	LedgerTypeID string `json:"ledgerTypeID" db:"ledger_type_id"`
+	FirstGrade   string `json:"firstGrade" db:"first_grade"`
+	SecondGrade  string `json:"secondGrade" db:"second_grade"`
+	ThirdGrade   string `json:"thirdGrade" db:"third_grade"`
+	TypeName     string `json:"typeName" db:"type_name"`
+	Description  string `json:"description" db:"description"`
+	IsActive     bool   `json:"isActive" db:"is_active"`
+}
+
+type LedgerTypesFirstGrade struct {
+	FirstGrade  string `json:"firstGrade" db:"first_grade"`
+	TypeName    string `json:"typeName" db:"type_name"`
+	Description string `json:"description" db:"description"`
 }
 
 type Currency struct {
@@ -42,7 +56,7 @@ type Currency struct {
 type Ledgers []Ledger
 
 type LedgerTypes []LedgerType
-
+type LedgerTypesFirstGrades []LedgerTypesFirstGrade
 type Currencies []Currency
 
 func FindLedgersByUserID(userID string, conn *sqlx.DB) (Ledgers, error) {
@@ -55,12 +69,20 @@ func FindLedgersByUserID(userID string, conn *sqlx.DB) (Ledgers, error) {
 			currency,
 			balance,
 			ledger_status,
-			created_at,
-			updated_at
+			CASE
+				WHEN created_at IS NULL THEN ''
+				ELSE TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI')
+			END created_at,
+			CASE
+				WHEN updated_at IS NULL THEN ''
+				ELSE TO_CHAR(updated_at, 'YYYY-MM-DD HH24:MI')
+			END updated_at,
+			(SELECT COUNT(*) FROM user_ledger_postings WHERE ledger_id = ledger_id) postings_count
 		FROM
 			user_ledgers
 		WHERE
 			ledger_owner = $1
+			AND ledger_status < 2
 	`
 	ledgers := Ledgers{}
 	err := conn.Select(&ledgers, query, userID)
@@ -71,22 +93,26 @@ func FindLedgersByUserID(userID string, conn *sqlx.DB) (Ledgers, error) {
 	queryLt := `
 		SELECT
 			ledger_type_id,
-			first_grade,
-			second_grade,
-			third_grade,
-			type_name,
-			type_name_zh,
-			description_en,
-			description_zh,
+			CONCAT(t.first_grade, '. ', fg.type_name, ' (', fg.type_name_zh, ')') first_grade,
+			CONCAT(t.second_grade, '. ', sg.type_name, ' (', sg.type_name_zh, ')') second_grade,
+			CONCAT(t.third_grade, '. ', tg.type_name, ' (', tg.type_name_zh, ')') third_grade,
+			CONCAT(t.type_name, ' (', t.type_name_zh, ')') type_name,
+			CASE
+				WHEN t.description_en IS NULL THEN ''
+				ELSE CONCAT(t.description_en, ' (', t.description_zh, ')')
+			END description,
 			is_active
 		FROM
-			ref_ledger_types
+			ref_ledger_types t
+		JOIN ref_ledger_first_grade fg USING (first_grade)
+		JOIN ref_ledger_second_grade sg USING (first_grade, second_grade)
+		JOIN ref_ledger_third_grade tg USING (first_grade, second_grade, third_grade)
 		WHERE
 			ledger_type_id = $1
 	`
 	for i, l := range ledgers {
 		lt := LedgerType{}
-		err := conn.Get(lt, queryLt, l.LedgerTypeID)
+		err := conn.Get(&lt, queryLt, l.LedgerTypeID)
 		if err != nil {
 			return Ledgers{}, err
 		}
@@ -99,16 +125,20 @@ func FindLedgerTypes(conn *sqlx.DB) (LedgerTypes, error) {
 	query := `
 		SELECT
 			ledger_type_id,
-			COALESCE(first_grade, '') first_grade,
-			COALESCE(second_grade, '') second_grade,
-			COALESCE(third_grade, '') third_grade,
-			COALESCE(type_name, '') type_name,
-			COALESCE(type_name_zh, '') type_name_zh,
-			COALESCE(description_en, '') description_en,
-			COALESCE(description_zh, '') description_zh,
+			t.first_grade,
+			t.second_grade,
+			t.third_grade,
+			CONCAT(t.type_name, ' (', t.type_name_zh, ')') type_name,
+			CASE
+				WHEN t.description_en IS NULL THEN ''
+				ELSE CONCAT(t.description_en, ' (', t.description_zh, ')')
+			END description,
 			is_active
 		FROM
-			ref_ledger_types
+			ref_ledger_types t
+		JOIN ref_ledger_first_grade fg USING (first_grade)
+		JOIN ref_ledger_second_grade sg USING (first_grade, second_grade)
+		JOIN ref_ledger_third_grade tg USING (first_grade, second_grade, third_grade)
 		WHERE
 			is_active = TRUE
 	`
@@ -118,6 +148,23 @@ func FindLedgerTypes(conn *sqlx.DB) (LedgerTypes, error) {
 		return LedgerTypes{}, err
 	}
 	return ledgerTypes, nil
+}
+
+func FindLedgerTypesFirstGrade(conn *sqlx.DB) (LedgerTypesFirstGrades, error) {
+	query := `
+		SELECT
+			first_grade,
+			CONCAT(fg.type_name, ' (', fg.type_name_zh, ')') type_name,
+			CONCAT(fg.description_en, ' (', fg.description_zh, ')') description
+		FROM
+			ref_ledger_first_grade fg
+	`
+	ledgerTypesFirstGrades := LedgerTypesFirstGrades{}
+	err := conn.Select(&ledgerTypesFirstGrades, query)
+	if err != nil {
+		return LedgerTypesFirstGrades{}, err
+	}
+	return ledgerTypesFirstGrades, nil
 }
 
 func FindCurrencies(conn *sqlx.DB) (Currencies, error) {
@@ -138,7 +185,45 @@ func FindCurrencies(conn *sqlx.DB) (Currencies, error) {
 	return currencies, nil
 }
 
-func (ls *Ledgers) Save(conn *sqlx.DB) error {
+func DeleteLedger(ledgerID int, username string, conn *sqlx.DB) error {
+	tx := conn.MustBegin()
+	_, err := tx.Exec(`SELECT set_config('app.current_user', $1, TRUE);`, username)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	_, err = tx.Exec(`UPDATE user_ledgers SET ledger_status = 2 WHERE ledger_id = $1;`, ledgerID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	err = tx.Commit()
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	return nil
+}
+
+func (ls *Ledgers) Save(conn *sqlx.DB, username string) error {
+
+	currencies, err := FindCurrencies(conn)
+	if err != nil {
+		return err
+	}
+	ledgerTypes, err := FindLedgerTypes(conn)
+	if err != nil {
+		return err
+	}
+
+	tx := conn.MustBegin()
+	sq := `SELECT set_config('app.current_user', $1, TRUE);`
+	_, err = tx.Exec(sq, username)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
 	query := `
 		INSERT INTO user_ledgers (
 			ledger_owner,
@@ -146,11 +231,94 @@ func (ls *Ledgers) Save(conn *sqlx.DB) error {
 			ledger_type_id,
 			currency,
 			balance
-		) VALUES (:ledger_owner, :ledger_name, :ledger_type_id, :currency, :balance)
+		) VALUES (:ledger_owner, :ledger_name, :ledger_type_id, :currency, :balance);
 	`
-	_, err := conn.NamedExec(query, ls)
+
+	for _, ledger := range *ls {
+		if err := ledger.validateBeforeUpdate(currencies, ledgerTypes); err != nil {
+			return err
+		}
+		_, err = tx.NamedExec(query, ledger)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return nil
+}
+
+func (ls *Ledgers) Edit(conn *sqlx.DB, username string) error {
+
+	currencies, err := FindCurrencies(conn)
 	if err != nil {
 		return err
+	}
+	ledgerTypes, err := FindLedgerTypes(conn)
+	if err != nil {
+		return err
+	}
+
+	tx := conn.MustBegin()
+	sq := `SELECT set_config('app.current_user', $1, TRUE);`
+	_, err = tx.Exec(sq, username)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	query := `
+	UPDATE
+		user_ledgers
+	SET
+		ledger_name = :ledger_name,
+		ledger_type_id = :ledger_type_id,
+		currency = :currency,
+		balance = :balance,
+		ledger_status = :ledger_status
+	WHERE
+		ledger_id = :ledger_id;
+	`
+	for _, ledger := range *ls {
+		if err := ledger.validateBeforeUpdate(currencies, ledgerTypes); err != nil {
+			return err
+		}
+		_, err = tx.NamedExec(query, ledger)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	err = tx.Commit()
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	return nil
+}
+
+func (l *Ledger) validateBeforeUpdate(currencies Currencies, ledgerTypes LedgerTypes) error {
+	if l.LedgerName == "" {
+		return ErrLedgerNameRequired
+	}
+	if !slices.ContainsFunc(ledgerTypes, func(lt LedgerType) bool {
+		return lt.LedgerTypeID == l.LedgerTypeID
+	}) {
+		return ErrLedgerTypeIDRequired
+	}
+	if !slices.ContainsFunc(currencies, func(c Currency) bool {
+		return c.AlphabeticCode == l.Currency
+	}) {
+		return ErrCurrencyRequired
+	}
+	if l.Balance.IsNegative() {
+		return ErrBalanceRequired
 	}
 	return nil
 }
@@ -165,6 +333,14 @@ func (ls Ledgers) ToJSONString() (string, error) {
 
 func (lts LedgerTypes) ToJSONString() (string, error) {
 	json, err := json.Marshal(lts)
+	if err != nil {
+		return "", err
+	}
+	return string(json), nil
+}
+
+func (ltsfgs LedgerTypesFirstGrades) ToJSONString() (string, error) {
+	json, err := json.Marshal(ltsfgs)
 	if err != nil {
 		return "", err
 	}

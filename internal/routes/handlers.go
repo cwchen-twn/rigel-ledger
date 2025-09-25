@@ -2,11 +2,13 @@ package routes
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/go-viper/mapstructure/v2"
 
 	"github.com/cwc1222/rigelledger/internal/auth"
@@ -17,6 +19,15 @@ type LoginRequest struct {
 	Username string `mapstructure:"username"`
 	Password string `mapstructure:"password"`
 }
+
+var (
+	ErrUserNotFound       = errors.New("user not found")
+	ErrInvalidPassword    = errors.New("invalid password")
+	ErrFailedToParseForm  = errors.New("failed to parse form")
+	ErrFailedToDecodeForm = errors.New("failed to decode form")
+	ErrFailedToParseJSON  = errors.New("failed to parse JSON")
+	ErrPGInsertError      = errors.New("failed to insert into database")
+)
 
 func (rt *Router) LoginViewHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -360,6 +371,19 @@ func (rt *Router) LedgerTypesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (rt *Router) LedgerTypesFirstGradeHandler(w http.ResponseWriter, r *http.Request) {
+	types, err := models.FindLedgerTypesFirstGrade(rt.db)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := rt.je.RenderResponse(w, r, types); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
 func (rt *Router) CurrenciesHandler(w http.ResponseWriter, r *http.Request) {
 	currencies, err := models.FindCurrencies(rt.db)
 	if err != nil {
@@ -384,7 +408,8 @@ func (rt *Router) LedgersSaveHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	var ledgers models.Ledgers
 	if err := json.NewDecoder(r.Body).Decode(&ledgers); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		rt.logger.Error("Failed to decode request body", "error", err)
+		http.Error(w, ErrFailedToParseJSON.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -392,7 +417,61 @@ func (rt *Router) LedgersSaveHandler(w http.ResponseWriter, r *http.Request) {
 		ledgers[i].LedgerOwner = tokenData.Subject
 	}
 
-	if err := ledgers.Save(rt.db); err != nil {
+	if err := ledgers.Save(rt.db, tokenData.Subject); err != nil {
+		rt.logger.Error("Failed to insert into database", "error", err)
+		http.Error(w, ErrPGInsertError.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (rt *Router) LedgersEditHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tokenData, ok := ctx.Value(auth.TokenDataKey).(*auth.TokenData)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	defer r.Body.Close()
+	var ledgers models.Ledgers
+	if err := json.NewDecoder(r.Body).Decode(&ledgers); err != nil {
+		rt.logger.Error("Failed to decode request body", "error", err)
+		http.Error(w, ErrFailedToParseJSON.Error(), http.StatusBadRequest)
+		return
+	}
+
+	for i := range ledgers {
+		ledgers[i].LedgerOwner = tokenData.Subject
+	}
+
+	if err := ledgers.Edit(rt.db, tokenData.Subject); err != nil {
+		rt.logger.Error("Failed to insert into database", "error", err)
+		http.Error(w, ErrPGInsertError.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (rt *Router) LedgersDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tokenData, ok := ctx.Value(auth.TokenDataKey).(*auth.TokenData)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	ledgerIDStr := chi.URLParam(r, "ledgerID")
+	if ledgerIDStr == "" {
+		http.Error(w, "Ledger ID is required", http.StatusBadRequest)
+		return
+	}
+
+	ledgerID, err := strconv.Atoi(ledgerIDStr)
+	if err != nil {
+		http.Error(w, "Invalid ledger ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := models.DeleteLedger(ledgerID, tokenData.Subject, rt.db); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
