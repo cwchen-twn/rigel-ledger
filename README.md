@@ -1,10 +1,23 @@
 # rigelledger
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/cwc1222/rigelledger)](https://goreportcard.com/report/github.com/cwc1222/rigelledger)
+
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/2473cb637d2b41f0aab854fe02dd88f1)](https://app.codacy.com/gh/cwc1222/rigelledger/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
+
+[![GitHub Build Status](https://github.com/cwc1222/rigelledger/workflows/Build/badge.svg)](https://github.com/cwc1222/rigelledger/actions)
+
+[![GitHub License](https://img.shields.io/github/license/cwc1222/rigelledger?logo=github)](https://github.com/cwc1222/rigelledger/blob/main/LICENSE)
+
+[![GitHub Repo Size](https://img.shields.io/github/repo-size/cwc1222/rigelledger?logo=github)](https://github.com/cwc1222/rigelledger)
+
+
 <!-- TOC -->
 - [Getting started](#getting-started)
 - [References](#references)
     - [Project Layout](#project-layout)
     - [Dependencies](#dependencies)
+        - [Backend](#backend)
+        - [Frontend](#frontend)
     - [Go Tools](#go-tools)
     - [Others](#others)
 <!-- /TOC -->
@@ -73,3 +86,7 @@ make help
 - [www.arhea.net/posts/2023-08-25-golang-debugging-with-air-and-vscode](https://www.arhea.net/posts/2023-08-25-golang-debugging-with-air-and-vscode/)
 - [github.com/pre-commit/pre-commit-hooks](https://github.com/pre-commit/pre-commit-hooks)
 - [github.com/go-chi/jwtauth](https://github.com/go-chi/jwtauth)
+- [shields.io/badges](https://shields.io/badges)
+- [simpleicons.org](https://simpleicons.org/)
+- [goreportcard.com](https://goreportcard.com/)
+- [app.codacy.com](https://app.codacy.com/)
