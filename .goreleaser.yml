@@ -1,0 +1,68 @@
+# GoReleaser configuration for rigelledger
+
+builds:
+  - id: rigelledger
+    binary: rigelledger
+    main: ./cmd/rigelledger
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: rigelledger
+    builds:
+      - rigelledger
+    name_template: "rigelledger_{{.Version}}_{{.Os}}_{{.Arch}}"
+    format: tar.gz
+    files:
+      - README.md
+      - LICENSE
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - '^build:'
+
+release:
+  name_template: "Release {{.Version}}"
+  header: |
+    # Version {{.Version}}
+
+    ## What's Changed
+  footer: |
+    ## Contributors
+    {{range .Contributors}}- {{.Name}}
+    {{end}}
+
+  draft: false
+  prerelease: false
+
+snapshot:
+  name_template: "{{.Tag}}-SNAPSHOT"
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+# dockers:
+#   - image_templates:
+#       - "rigelledger:{{.Version}}"
+#       - "rigelledger:latest"
+#     dockerfile: Dockerfile
+#     use: buildx
+#     build_flag_templates:
+#       - --platform=linux/amd64
+#       - --platform=linux/arm64
