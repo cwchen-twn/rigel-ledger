@@ -25,7 +25,7 @@
 
     <!-- Desktop Sidebar (visible on md+ screens) -->
     <div
-        class="d-none d-md-flex flex-column flex-shrink-0 justify-content-between min-vh-100 p-3"
+        class="d-none d-md-flex flex-column flex-shrink-0 justify-content-between min-vh-100 p-3 fixed-top col-md-2"
         x-show="isLargeScreen"
         x-transition:enter="transition ease-out duration-300"
         x-transition:enter-start="opacity-0 transform -translate-x-4"
@@ -96,6 +96,13 @@
             {{ end }}
             <a href="/{{.Username}}/reports" class="nav-link {{ $activated }}" ><i class="bi bi-clipboard-data"></i> Reports</a>
         </li>
+        <li class="nav-item">
+            {{ $activated := "" }}
+            {{ if eq .Page "settings" }}
+                {{ $activated = "active" }}
+            {{ end }}
+            <a href="/{{.Username}}/settings" class="nav-link {{ $activated }}" ><i class="bi bi-gear"></i> User Settings</a>
+        </li>
     </ul>
 </div>
 <div>
@@ -109,9 +116,7 @@
         <p class="fs-6 text-muted mb-1">
             RigelLedger Web, Version: {{.Version}}
         </p>
-        <p class="fs-6 text-muted">
-            Copyright &copy; {{now | formatTime "2006"}} Catopia de Chen Antúnez E.A.S. Paraguay
-        </p>
+        <p class="fs-6 text-muted mb-0">{{.CopyrightDeclaration}}</p>
     </footer>
 </div>
 {{end}}

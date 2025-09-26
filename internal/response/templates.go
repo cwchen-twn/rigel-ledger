@@ -23,6 +23,11 @@ import (
 
 var printer = message.NewPrinter(language.English)
 
+var copyrightDeclaration = fmt.Sprintf(`
+&copy; 2024 - %d Catopia de Chen Antúnez E.A.S. Paraguay —
+<a href="https://github.com/cwc1222/rigelledger/blob/main/LICENSE">MIT Licensed</a>
+`, time.Now().Year())
+
 // generateNonce creates a cryptographically secure random nonce
 func generateNonce() string {
 	bytes := make([]byte, 16)
@@ -257,13 +262,14 @@ const (
 )
 
 type TemplateData struct {
-	Version             string
-	AccessTokenLeftTime float64
-	Username            string
-	ColorScheme         ColorScheme
-	Page                string
-	Data                any
-	Nonce               string
+	Version              string
+	CopyrightDeclaration template.HTML
+	AccessTokenLeftTime  float64
+	Username             string
+	ColorScheme          ColorScheme
+	Page                 string
+	Data                 any
+	Nonce                string
 }
 
 func NewTemplateEngine(appVersion string, templateFs embed.FS, isLocalhost bool) *TemplateEngine {
@@ -278,7 +284,7 @@ func NewTemplateEngine(appVersion string, templateFs embed.FS, isLocalhost bool)
 func (te *TemplateEngine) addDefaultHeaders(w http.ResponseWriter, nonce string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	w.Header().Set("Content-Security-Policy", fmt.Sprintf("default-src 'self'; script-src 'self' 'nonce-%s' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;", nonce))
+	w.Header().Set("Content-Security-Policy", fmt.Sprintf("default-src 'self'; script-src 'self' 'nonce-%s' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'none';", nonce))
 	w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
 	w.Header().Set("Cross-Origin-Embedder-Policy", "require-corp")
 	w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
@@ -338,13 +344,14 @@ func (te *TemplateEngine) RenderResponse(w http.ResponseWriter, r *http.Request,
 	nonce := generateNonce()
 
 	td := TemplateData{
-		Version:             te.appVersion,
-		Username:            username,
-		ColorScheme:         preferredColorScheme,
-		AccessTokenLeftTime: accessTokenLeftTime.Seconds(),
-		Page:                templateName,
-		Data:                data,
-		Nonce:               nonce,
+		Version:              te.appVersion,
+		CopyrightDeclaration: safeHTML(copyrightDeclaration),
+		Username:             username,
+		ColorScheme:          preferredColorScheme,
+		AccessTokenLeftTime:  accessTokenLeftTime.Seconds(),
+		Page:                 templateName,
+		Data:                 data,
+		Nonce:                nonce,
 	}
 
 	err = ts.ExecuteTemplate(buf, templateName, td)

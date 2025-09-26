@@ -2,6 +2,7 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/cwc1222/rigelledger)](https://goreportcard.com/report/github.com/cwc1222/rigelledger)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/2473cb637d2b41f0aab854fe02dd88f1)](https://app.codacy.com/gh/cwc1222/rigelledger/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
+[![GitHub Release](https://img.shields.io/github/v/release/cwc1222/rigelledger?logo=github)](https://github.com/cwc1222/rigelledger/releases)
 [![GitHub Release Status](https://github.com/cwc1222/rigelledger/workflows/Release/badge.svg)](https://github.com/cwc1222/rigelledger/actions)
 [![GitHub License](https://img.shields.io/github/license/cwc1222/rigelledger?logo=github)](https://github.com/cwc1222/rigelledger/blob/main/LICENSE)
 [![GitHub Repo Size](https://img.shields.io/github/repo-size/cwc1222/rigelledger?logo=github)](https://github.com/cwc1222/rigelledger)

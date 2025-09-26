@@ -88,9 +88,8 @@ func NewRouter(rc *RouterConfig, te *response.TemplateEngine, je *response.JSONE
 	r.Route("/{username}", func(r chi.Router) {
 		r.Use(auth.JWTValidateTokenMiddleware(jwt))
 
-		r.Get("/", rt.HomeHandler)
-		r.Get("/ledgers", rt.LedgersHandler)
-		r.Get("/reports", rt.ReportsHandler)
+		r.Get("/", rt.TmplHandler)
+		r.Get("/{template}", rt.TmplHandler)
 
 		r.Route("/api", func(r chi.Router) {
 			r.Post("/transactions", rt.ListTransactionsHandler)

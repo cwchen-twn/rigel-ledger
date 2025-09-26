@@ -253,9 +253,17 @@ func (rt *Router) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-// HomeHandler is the handler for the home page
-func (rt *Router) HomeHandler(w http.ResponseWriter, r *http.Request) {
-	err := rt.te.RenderResponse(w, r, nil, "home")
+// TmplHandler is the handler for the template pages
+// Remember, there should be a web/templates/{template}.tmpl file for each template
+// And, inside the template, there should be a {{define "{template}"}} {{end}} block
+func (rt *Router) TmplHandler(w http.ResponseWriter, r *http.Request) {
+
+	templateName := chi.URLParam(r, "template")
+	if templateName == "" {
+		templateName = "home"
+	}
+
+	err := rt.te.RenderResponse(w, r, nil, templateName)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

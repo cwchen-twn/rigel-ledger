@@ -267,8 +267,8 @@ document.addEventListener('DOMContentLoaded', async function() {
             },
             {
                 data: function(row, type, set, meta) {
-                    const deleteBtn = `<button class="btn btn-sm btn-danger" name="delete"><i class="bi bi-trash"></i></button>`;
-                    const editBtn = `<button class="btn btn-sm btn-warning" name="edit"><i class="bi bi-pencil-square"></i></button>`;
+                    const deleteBtn = `<button type="button" title="Delete Ledger" class="btn btn-sm btn-danger" name="deleteledger"><i class="bi bi-trash"></i></button>`;
+                    const editBtn = `<button type="button" title="Edit Ledger" class="btn btn-sm btn-warning" name="editledger"><i class="bi bi-pencil-square"></i></button>`;
                     const btns = `${row.postingsCount === 0 ? deleteBtn : ''} ${editBtn}`;
                     return `<div class="d-flex gap-1">${btns}</div>`;
                 },
@@ -332,7 +332,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         ],
         order: [[0, 'asc']],
     });
-    table.on('click', 'button[name="delete"]', async function() {
+    table.on('click', 'button[name="deleteledger"]', async function() {
         const row = Array.from(this.closest('tr').classList).includes('child')
             ? this.closest('tr').prev()
             : this.closest('tr');
@@ -351,7 +351,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             sideAlert.fire({ icon: "error", title: "Error", text: error });
         });
     });
-    table.on('click', 'button[name="edit"]', function() {
+    table.on('click', 'button[name="editledger"]', function() {
         const row = Array.from(this.closest('tr').classList).includes('child')
             ? this.closest('tr').prev()
             : this.closest('tr');
