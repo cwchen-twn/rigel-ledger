@@ -1,28 +1,17 @@
 {{define "protected:menu"}}
 <div x-data="{
+    largeScreenThreshold: 1024,
     isLargeScreen: false,
     init() {
         // Initialize screen size state without causing flash
-        this.isLargeScreen = window.innerWidth >= 768;
+        this.isLargeScreen = window.innerWidth >= this.largeScreenThreshold;
 
         // Update display state on window resize
         window.addEventListener('resize', () => {
-            this.isLargeScreen = window.innerWidth >= 768;
+            this.isLargeScreen = window.innerWidth >= this.largeScreenThreshold;
         });
     }
 }">
-    <!-- Mobile/Tablet Offcanvas Toggle Button -->
-    <button
-        class="btn btn-secondary d-md-none"
-        type="button"
-        data-bs-toggle="offcanvas"
-        data-bs-target="#sidebarOffcanvas"
-        aria-controls="sidebarOffcanvas"
-        aria-label="Toggle sidebar"
-    >
-        <i class="bi bi-layout-sidebar-inset"></i>
-    </button>
-
     <!-- Desktop Sidebar (visible on md+ screens) -->
     <div
         class="d-none d-md-flex flex-column flex-shrink-0 justify-content-between min-vh-100 p-3 fixed-top col-md-2"
@@ -36,6 +25,22 @@
     >
         {{template "menu-content" .}}
     </div>
+
+    <!-- Mobile/Tablet Offcanvas Toggle Button -->
+    <nav class="navbar fixed-top col-12 d-md-none">
+        <div class="container-fluid">
+            <button
+                class="btn btn-secondary"
+                type="button"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#sidebarOffcanvas"
+                aria-controls="sidebarOffcanvas"
+                aria-label="Toggle sidebar"
+            >
+                <i class="bi bi-layout-sidebar-inset"></i>
+        </button>
+        </div>
+    </nav>
 
     <!-- Mobile/Tablet Offcanvas -->
     <div
@@ -63,7 +68,9 @@
 
 {{define "menu-content"}}
 <div>
-    <div class="d-flex justify-content-center align-items-center flex-wrap gap-2">
+    <div
+        class="d-flex justify-content-center align-items-center flex-wrap gap-2"
+    >
         <img
             class="img-thumbnail rounded-circle"
             width="48"

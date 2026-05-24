@@ -1,0 +1,56 @@
+info:
+  contact: {}
+  title: Rigel Ledger OpenAPI Specification
+  version: 1.0.0.beta
+paths:
+  /login:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: Returns a JWT token for the user
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: JWT token
+          schema:
+            type: string
+        "400":
+          description: Failed to parse form
+          schema:
+            type: string
+        "401":
+          description: Invalid password
+          schema:
+            type: string
+        "404":
+          description: User not found
+          schema:
+            type: string
+        "500":
+          description: Failed to generate access token
+          schema:
+            type: string
+      summary: Post login page
+      tags:
+      - root
+  /transactions:
+    get:
+      consumes:
+      - text/html
+      description: Returns the list transactions page
+      produces:
+      - text/html
+      responses:
+        "200":
+          description: List transactions page
+          schema:
+            type: string
+        "500":
+          description: Error occurred while rendering template
+          schema:
+            type: string
+      summary: Get list transactions page
+      tags:
+      - transactions
+swagger: "2.0"
