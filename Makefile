@@ -29,8 +29,8 @@ updatedep:
 	go get -u ./...
 	go mod tidy
 	uv sync --upgrade-package pre-commit
-	pre-commit autoupdate
-	pre-commit install
+	.venv/bin/pre-commit autoupdate
+	.venv/bin/pre-commit install
 
 ##updatego: Update go version (e.g. $ make updatego version=1.24.6), remember to have $(go env GOPATH) in your PATH
 .PHONY: updatego
