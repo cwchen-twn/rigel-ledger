@@ -14,17 +14,14 @@
         <script nonce="{{.Nonce}}">
 window.__APP_CONFIG__ = {
   username: "{{.Username}}",
-  accessTokenLeftTime: {{formatFloat .AccessTokenLeftTime 0}},
-  page: "{{.Page}}"
+  accessTokenLeftTime: {{formatFloat .AccessTokenLeftTime 0}}
 };
         </script>
-        <script src="/static/dist/main.js?version={{.Version}}" defer></script>
+        <script src="/static/dist/main.js?version={{.Version}}" defer nonce="{{.Nonce}}"></script>
         {{block "scripts" .}}{{end}}
     </head>
     <body>
-        <main>
-        {{block "main" .}}Default content for the page.{{end}}
-        </main>
+        {{block "main" .}}{{end}}
     </body>
 </html>
 {{end}}

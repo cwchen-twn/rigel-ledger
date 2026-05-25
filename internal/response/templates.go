@@ -284,7 +284,7 @@ func NewTemplateEngine(appVersion string, templateFs embed.FS, isLocalhost bool)
 func (te *TemplateEngine) addDefaultHeaders(w http.ResponseWriter, nonce string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	w.Header().Set("Content-Security-Policy", fmt.Sprintf("default-src 'self'; script-src 'self' 'nonce-%s' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'none';", nonce))
+	w.Header().Set("Content-Security-Policy", fmt.Sprintf("default-src 'self'; script-src 'self' 'nonce-%s' 'strict-dynamic' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; base-uri 'none';", nonce))
 	w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
 	w.Header().Set("Cross-Origin-Embedder-Policy", "require-corp")
 	w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")

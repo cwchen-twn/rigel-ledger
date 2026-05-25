@@ -59,18 +59,17 @@ func NewRouter(rc *RouterConfig, te *response.TemplateEngine, je *response.JSONE
 
 	// Setup Swagger conditionally based on build tags
 	rt.setupSwagger(rc.AppURL, rc.AppPort)
-	// Create a file server with cache headers for static resources
+
+	// Static files with long-lived cache
 	staticHandler := http.FileServer(http.FS(web.StaticFiles))
 	r.Handle("/static/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Set cache headers for static resources
-		w.Header().Set("Cache-Control", "public, max-age=7884000") // 1 year / 4 = 3 months
+		w.Header().Set("Cache-Control", "public, max-age=7884000")
 		w.Header().Set("Expires", time.Now().AddDate(0, 3, 0).Format(http.TimeFormat))
 		staticHandler.ServeHTTP(w, r)
 	}))
 	r.Get("/robots.txt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=7884000") // 1 year / 4 = 3 months
+		w.Header().Set("Cache-Control", "public, max-age=7884000")
 		w.Header().Set("Expires", time.Now().AddDate(0, 3, 0).Format(http.TimeFormat))
-		// Read robots.txt from embedded static files
 		robotsContent, err := web.StaticFiles.ReadFile("static/robots.txt")
 		if err != nil {
 			http.Error(w, "robots.txt not found", http.StatusNotFound)
@@ -79,19 +78,26 @@ func NewRouter(rc *RouterConfig, te *response.TemplateEngine, je *response.JSONE
 		w.Write(robotsContent)
 	}))
 
-	r.Get("/", rt.LoginViewHandler)
-	r.Get("/login", rt.LoginViewHandler)
+	// Auth endpoints
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	})
+	r.Get("/login", rt.SPAHandler)
 	r.Post("/login", rt.LoginHandler)
 	r.Get("/logout", rt.LogoutHandler)
 	r.Post("/refresh-token", rt.RefreshTokenHandler)
 
+	// Top-level auth check API (no username prefix needed by the SPA)
+	r.With(auth.JWTValidateAPIMiddleware(jwt)).Get("/api/me", rt.MeHandler)
+
 	r.Route("/{username}", func(r chi.Router) {
-		r.Use(auth.JWTValidateTokenMiddleware(jwt))
+		// HTML routes: serve the SPA shell, no JWT required (SPA handles auth via /api/me)
+		r.Get("/", rt.SPAHandler)
+		r.Get("/{page}", rt.SPAHandler)
 
-		r.Get("/", rt.TmplHandler)
-		r.Get("/{template}", rt.TmplHandler)
-
+		// API routes: JWT required, returns JSON errors on failure
 		r.Route("/api", func(r chi.Router) {
+			r.Use(auth.JWTValidateAPIMiddleware(jwt))
 			r.Post("/transactions", rt.ListTransactionsHandler)
 			r.Get("/ledgers", rt.LedgersGetHandler)
 			r.Get("/ledger-types", rt.LedgerTypesHandler)

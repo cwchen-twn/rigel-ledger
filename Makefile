@@ -22,6 +22,8 @@ init:
 	@command -v uv >/dev/null 2>&1 || curl -LsSf https://astral.sh/uv/install.sh | sh
 	@uv sync --dev
 	@.venv/bin/pre-commit install
+	@command -v bun >/dev/null 2>&1 || curl -fsSL https://bun.sh/install | bash
+	@cd web && bun install
 
 ##updatedep: Update dependencies, including go modules and uv packages
 .PHONY: updatedep
@@ -144,7 +146,7 @@ build/compare:
 .PHONY: checkbuilt
 checkbuilt:
 	@if [ -f $(BUILD_DIR)/rigelledger ]; then \
-		go run github.com/Zxilly/go-size-analyzer/cmd/gsa@latest $(BUILD_DIR)/rigelledger; \
+		go run github.com/Zxilly/go-size-analyzer/cmd/gsa@v1.12.0 $(BUILD_DIR)/rigelledger; \
 	else \
 		echo "Error: $(BUILD_DIR)/rigelledger not found, please build the development binary first"; \
 		echo "To build the development binary, run: make build/dev"; \
@@ -155,7 +157,7 @@ checkbuilt:
 .PHONY: checkbuilt/prod
 checkbuilt/prod:
 	@if [ -f $(BUILD_DIR)/rigelledger.$(APP_VERSION) ]; then \
-		go run github.com/Zxilly/go-size-analyzer/cmd/gsa@latest $(BUILD_DIR)/rigelledger.$(APP_VERSION); \
+		go run github.com/Zxilly/go-size-analyzer/cmd/gsa@v1.12.0 $(BUILD_DIR)/rigelledger.$(APP_VERSION); \
 	else \
 		echo "Error: $(BUILD_DIR)/rigelledger.$(APP_VERSION) not found, please build the production binary first"; \
 		echo "To build the production binary, run: make build/prod"; \

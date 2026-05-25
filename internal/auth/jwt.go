@@ -228,6 +228,41 @@ func JWTExtractTokenMiddleware(j *JWT) func(http.Handler) http.Handler {
 	}
 }
 
+// JWTValidateAPIMiddleware validates JWT and returns 401 JSON on failure (for API routes).
+func JWTValidateAPIMiddleware(j *JWT) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		handler := func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			accessToken, ok := ctx.Value(AccessTokenKey).(string)
+			if !ok || accessToken == "" {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+
+			ad, err := j.Verify([]byte(accessToken))
+			if err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+
+			// Only check username match when {username} param is in route
+			username := chi.URLParam(r, "username")
+			if username != "" && username != ad.Subject {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+
+			ctx = context.WithValue(ctx, TokenDataKey, ad)
+			ctx = context.WithValue(ctx, AccessTokenLeftTimeKey, time.Until(ad.Expiry))
+			next.ServeHTTP(w, r.WithContext(ctx))
+		}
+		return http.HandlerFunc(handler)
+	}
+}
+
 func JWTValidateTokenMiddleware(j *JWT) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 

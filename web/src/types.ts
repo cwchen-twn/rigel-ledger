@@ -1,7 +1,6 @@
 export interface AppConfig {
   username: string;
   accessTokenLeftTime: number;
-  page: string;
 }
 
 declare global {
@@ -73,4 +72,11 @@ export interface Ledger {
   createdAt: string;
   updatedAt: string;
   postingsCount: number;
+}
+
+export interface DataTableResponse<T> {
+  draw: number;
+  recordsTotal: number;
+  recordsFiltered: number;
+  data: T[];
 }

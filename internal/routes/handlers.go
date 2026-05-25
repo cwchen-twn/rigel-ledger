@@ -3,7 +3,6 @@ package routes
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -22,24 +21,53 @@ var (
 	ErrPGInsertError     = errors.New("failed to insert into database")
 )
 
-func (rt *Router) LoginViewHandler(w http.ResponseWriter, r *http.Request) {
+// SPAHandler serves the SolidJS SPA shell for all HTML routes.
+// Auth is handled entirely client-side via /api/me.
+func (rt *Router) SPAHandler(w http.ResponseWriter, r *http.Request) {
+	if err := rt.te.RenderResponse(w, r, nil, "app"); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
 
+type LoginResponse struct {
+	Username string `json:"username"`
+}
+
+func (lr LoginResponse) ToJSONString() (string, error) {
+	b, err := json.Marshal(lr)
+	return string(b), err
+}
+
+type MeResponse struct {
+	Username            string `json:"username"`
+	AccessTokenLeftTime int    `json:"access_token_left_time"`
+}
+
+func (mr MeResponse) ToJSONString() (string, error) {
+	b, err := json.Marshal(mr)
+	return string(b), err
+}
+
+// MeHandler returns the authenticated user's info from the JWT.
+func (rt *Router) MeHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	accessToken, ok := ctx.Value(auth.AccessTokenKey).(string)
-	if ok {
-		tokenData, err := rt.jwt.Verify([]byte(accessToken))
-		if err == nil {
-			rt.logger.Info("Access token verified")
-			http.Redirect(w, r, fmt.Sprintf("/%s", tokenData.Subject), http.StatusSeeOther)
-			return
-		}
+	tokenData, ok := ctx.Value(auth.TokenDataKey).(*auth.TokenData)
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
 	}
 
-	errorMessage := r.URL.Query().Get("error")
-	err := rt.te.RenderResponse(w, r, map[string]any{"Error": errorMessage}, "login")
-	if err != nil {
+	leftTime := int(time.Until(tokenData.Expiry).Seconds())
+	if leftTime < 0 {
+		leftTime = 0
+	}
+
+	resp := MeResponse{
+		Username:            tokenData.Subject,
+		AccessTokenLeftTime: leftTime,
+	}
+	if err := rt.je.RenderResponse(w, r, resp); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
 	}
 }
 
@@ -126,7 +154,9 @@ func (rt *Router) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Now().Add(auth.RefreshTokenLifetime),
 	})
 
-	// http.Redirect(w, r, "/home", http.StatusSeeOther)
+	if err := rt.je.RenderResponse(w, r, LoginResponse{Username: username}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func (rt *Router) LogoutHandler(w http.ResponseWriter, r *http.Request) {
@@ -234,23 +264,6 @@ func (rt *Router) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-// TmplHandler is the handler for the template pages
-// Remember, there should be a web/templates/{template}.tmpl file for each template
-// And, inside the template, there should be a {{define "{template}"}} {{end}} block
-func (rt *Router) TmplHandler(w http.ResponseWriter, r *http.Request) {
-
-	templateName := chi.URLParam(r, "template")
-	if templateName == "" {
-		templateName = "home"
-	}
-
-	err := rt.te.RenderResponse(w, r, nil, templateName)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
-
 // ListTransactionsHandler is the handler for the list transactions page
 // @Summary		Get list transactions page
 // @Description	Returns the list transactions page
@@ -314,14 +327,6 @@ func (rt *Router) ListTransactionsHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	if err := rt.je.RenderResponse(w, r, journals); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
-
-func (rt *Router) LedgersHandler(w http.ResponseWriter, r *http.Request) {
-	err := rt.te.RenderResponse(w, r, nil, "ledgers")
-	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -461,14 +466,6 @@ func (rt *Router) LedgersDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := models.DeleteLedger(ledgerID, tokenData.Subject, rt.db); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
-
-func (rt *Router) ReportsHandler(w http.ResponseWriter, r *http.Request) {
-	err := rt.te.RenderResponse(w, r, nil, "reports")
-	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
