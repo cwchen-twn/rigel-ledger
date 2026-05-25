@@ -1,34 +1,37 @@
 package internal
 
 import (
+	"bufio"
 	"log/slog"
+	"os"
+	"strings"
 	"time"
 
-	"github.com/spf13/viper"
+	"github.com/caarlos0/env/v11"
 )
 
 type Config struct {
-	AppName    string `mapstructure:"APP_NAME"`
-	AppVersion string `mapstructure:"APP_VERSION"`
-	AppEnv     string `mapstructure:"APP_ENV"`
-	AppURL     string `mapstructure:"APP_URL"`
-	AppPort    int    `mapstructure:"APP_PORT"`
-	LogLevel   string `mapstructure:"LOG_LEVEL"`
-	JWTSecret  string `mapstructure:"JWT_SECRET"`
+	AppName    string `env:"APP_NAME"`
+	AppVersion string `env:"APP_VERSION"`
+	AppEnv     string `env:"APP_ENV"`
+	AppURL     string `env:"APP_URL"`
+	AppPort    int    `env:"APP_PORT"`
+	LogLevel   string `env:"LOG_LEVEL"`
+	JWTSecret  string `env:"JWT_SECRET"`
 
-	PgHost            string        `mapstructure:"PG_HOST"`
-	PgPort            int           `mapstructure:"PG_PORT"`
-	PgUser            string        `mapstructure:"PG_USER"`
-	PgPassword        string        `mapstructure:"PG_PASS"`
-	PgDbname          string        `mapstructure:"APP_DBNAME"`
-	PgMaxOpenConns    int           `mapstructure:"PG_MAX_OPEN_CONN"`
-	PgMaxIdleConns    int           `mapstructure:"PG_MAX_IDLE_CONNS"`
-	PgMaxConnLifetime time.Duration `mapstructure:"PG_MAX_CONN_LIFETIME"`
-	PgMaxConnIdleTime time.Duration `mapstructure:"PG_MAX_CONN_IDLE_TIME"`
+	PgHost            string        `env:"PG_HOST"`
+	PgPort            int           `env:"PG_PORT"`
+	PgUser            string        `env:"PG_USER"`
+	PgPassword        string        `env:"PG_PASS"`
+	PgDbname          string        `env:"APP_DBNAME"`
+	PgMaxOpenConns    int           `env:"PG_MAX_OPEN_CONN"`
+	PgMaxIdleConns    int           `env:"PG_MAX_IDLE_CONNS"`
+	PgMaxConnLifetime time.Duration `env:"PG_MAX_CONN_LIFETIME"`
+	PgMaxConnIdleTime time.Duration `env:"PG_MAX_CONN_IDLE_TIME"`
 
-	// PgMinConns        int           `mapstructure:"PG_MIN_CONN"`
-	// PgMaxConnLifetimeJitter string        `mapstructure:"PG_MAX_CONN_LIFE_JITTER"`
-	// PgHealthCheckPeriod     string        `mapstructure:"PG_HEALTH_CHECK_PERIOD"`
+	// PgMinConns        int           `env:"PG_MIN_CONN"`
+	// PgMaxConnLifetimeJitter string        `env:"PG_MAX_CONN_LIFE_JITTER"`
+	// PgHealthCheckPeriod     string        `env:"PG_HEALTH_CHECK_PERIOD"`
 }
 
 // GetLogLevel returns the slog.Level based on the configured LogLevel string
@@ -51,16 +54,59 @@ func (c *Config) IsLocalhost() bool {
 	return c.AppURL == "localhost"
 }
 
+// loadDotEnv reads a .env file and sets each KEY=VALUE pair as an environment variable.
+// It skips blank lines and lines starting with '#'. Inline comments and surrounding quotes are stripped.
+func loadDotEnv(filename string) error {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // .env file is optional
+		}
+		return err
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		idx := strings.IndexByte(line, '=')
+		if idx < 0 {
+			continue
+		}
+
+		key := strings.TrimSpace(line[:idx])
+		val := strings.TrimSpace(line[idx+1:])
+
+		// Strip inline comment (# not inside quotes)
+		if i := strings.Index(val, " #"); i >= 0 {
+			val = strings.TrimSpace(val[:i])
+		}
+
+		// Strip surrounding quotes (single or double)
+		if len(val) >= 2 {
+			if (val[0] == '"' && val[len(val)-1] == '"') ||
+				(val[0] == '\'' && val[len(val)-1] == '\'') {
+				val = val[1 : len(val)-1]
+			}
+		}
+
+		if key != "" {
+			os.Setenv(key, val)
+		}
+	}
+	return scanner.Err()
+}
+
 func LoadConfig() (*Config, error) {
-	var cfg Config
-
-	viper.SetConfigFile(".env")
-
-	if err := viper.ReadInConfig(); err != nil {
+	if err := loadDotEnv(".env"); err != nil {
 		return nil, err
 	}
 
-	if err := viper.Unmarshal(&cfg); err != nil {
+	var cfg Config
+	if err := env.Parse(&cfg); err != nil {
 		return nil, err
 	}
 

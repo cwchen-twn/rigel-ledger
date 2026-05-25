@@ -1,0 +1,29 @@
+{
+  "name": "rigelledger-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build:dev": "vite build --mode development",
+    "build:prod": "vite build --mode production",
+    "dev": "vite"
+  },
+  "dependencies": {
+    "alpinejs": "^3.14.9",
+    "bootstrap": "^5.3.6",
+    "bootstrap-icons": "^1.11.3",
+    "chart.js": "^4.4.9",
+    "datatables.net-bs5": "^2.3.1",
+    "datatables.net-responsive-bs5": "^3.0.4",
+    "dayjs": "^1.11.13",
+    "js-big-decimal": "^2.1.0",
+    "sweetalert2": "^11.22.0",
+    "tom-select": "^2.4.3"
+  },
+  "devDependencies": {
+    "@types/alpinejs": "^3.13.11",
+    "@types/node": "^25.9.1",
+    "typescript": "^5.7.3",
+    "vite": "^6.3.5"
+  }
+}

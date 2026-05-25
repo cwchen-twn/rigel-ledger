@@ -8,18 +8,18 @@ import (
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
 
 	"github.com/cwc1222/rigelledger/migrations"
 )
 
 type Postgres struct {
-	db     *sqlx.DB
-	dsn    string
-	logger *slog.Logger
+	db         *sqlx.DB
+	migrateDSN string
+	logger     *slog.Logger
 }
 
 const (
@@ -32,15 +32,16 @@ func NewPostgres(cfg *Config, logger *slog.Logger) (*Postgres, error) {
 
 	logger.Info("Connecting to postgres", "host", cfg.PgHost, "port", cfg.PgPort, "dbname", cfg.PgDbname)
 
-	dsn := fmt.Sprintf(
+	// pgx stdlib driver accepts postgres:// scheme; golang-migrate pgx/v5 driver requires pgx5://
+	connDSN := fmt.Sprintf(
 		"postgres://%s:%s@%s:%d/%s?sslmode=disable",
-		cfg.PgUser,
-		cfg.PgPassword,
-		cfg.PgHost,
-		cfg.PgPort,
-		cfg.PgDbname,
+		cfg.PgUser, cfg.PgPassword, cfg.PgHost, cfg.PgPort, cfg.PgDbname,
 	)
-	db, err := sqlx.ConnectContext(ctx, "postgres", dsn)
+	migrateDSN := fmt.Sprintf(
+		"pgx5://%s:%s@%s:%d/%s?sslmode=disable",
+		cfg.PgUser, cfg.PgPassword, cfg.PgHost, cfg.PgPort, cfg.PgDbname,
+	)
+	db, err := sqlx.ConnectContext(ctx, "pgx", connDSN)
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +53,7 @@ func NewPostgres(cfg *Config, logger *slog.Logger) (*Postgres, error) {
 
 	logger.Info("Connected to postgres", "host", cfg.PgHost, "port", cfg.PgPort, "dbname", cfg.PgDbname)
 
-	pg := &Postgres{db: db, dsn: dsn, logger: logger}
+	pg := &Postgres{db: db, migrateDSN: migrateDSN, logger: logger}
 
 	if err := pg.Migrate(migrations.MigrationsFiles); err != nil {
 		return nil, err
@@ -75,7 +76,7 @@ func (p *Postgres) Migrate(fsys fs.FS) error {
 		return err
 	}
 
-	m, err := migrate.NewWithSourceInstance("iofs", iofsSource, p.dsn)
+	m, err := migrate.NewWithSourceInstance("iofs", iofsSource, p.migrateDSN)
 	if err != nil {
 		p.logger.Error("Failed to create migrate instance", "error", err)
 		return err

@@ -9,24 +9,17 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-viper/mapstructure/v2"
 
 	"github.com/cwc1222/rigelledger/internal/auth"
 	"github.com/cwc1222/rigelledger/internal/models"
 )
 
-type LoginRequest struct {
-	Username string `mapstructure:"username"`
-	Password string `mapstructure:"password"`
-}
-
 var (
-	ErrUserNotFound       = errors.New("user not found")
-	ErrInvalidPassword    = errors.New("invalid password")
-	ErrFailedToParseForm  = errors.New("failed to parse form")
-	ErrFailedToDecodeForm = errors.New("failed to decode form")
-	ErrFailedToParseJSON  = errors.New("failed to parse JSON")
-	ErrPGInsertError      = errors.New("failed to insert into database")
+	ErrUserNotFound      = errors.New("user not found")
+	ErrInvalidPassword   = errors.New("invalid password")
+	ErrFailedToParseForm = errors.New("failed to parse form")
+	ErrFailedToParseJSON = errors.New("failed to parse JSON")
+	ErrPGInsertError     = errors.New("failed to insert into database")
 )
 
 func (rt *Router) LoginViewHandler(w http.ResponseWriter, r *http.Request) {
@@ -71,24 +64,12 @@ func (rt *Router) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	formData := make(map[string]any)
-	for key, values := range r.PostForm {
-		if len(values) > 0 {
-			formData[key] = values[0] // Take the first value for each key
-		}
-	}
+	username := r.FormValue("username")
+	password := r.FormValue("password")
 
-	var req LoginRequest
-	if err := mapstructure.Decode(formData, &req); err != nil {
-		rt.logger.Error("Failed to decode form", "error", err)
-		http.Error(w, "Failed to decode form", http.StatusBadRequest)
-		return
-	}
-
-	// Validate that we got the required fields
-	user, err := models.FindByUserName(req.Username, rt.db)
+	user, err := models.FindByUserName(username, rt.db)
 	if err == models.ErrUserNotFound {
-		rt.logger.Error("User not found", "username", req.Username)
+		rt.logger.Error("User not found", "username", username)
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
@@ -97,22 +78,22 @@ func (rt *Router) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error occurred while finding user", http.StatusInternalServerError)
 		return
 	}
-	if err := user.ValidatePassword(req.Password); err != nil {
-		rt.logger.Error("Invalid password", "username", req.Username)
+	if err := user.ValidatePassword(password); err != nil {
+		rt.logger.Error("Invalid password", "username", username)
 		http.Error(w, "Invalid password", http.StatusUnauthorized)
 		return
 	}
 
-	rt.logger.Info("Form decoded successfully", "username", req.Username)
+	rt.logger.Info("Form decoded successfully", "username", username)
 
-	accessToken, err := rt.jwt.Sign(req.Username, nil, auth.AccessTokenLifetime)
+	accessToken, err := rt.jwt.Sign(username, nil, auth.AccessTokenLifetime)
 	if err != nil {
 		rt.logger.Error("Failed to generate access token", "error", err)
 		http.Error(w, "Failed to generate access token", http.StatusInternalServerError)
 		return
 	}
 
-	refreshToken, err := rt.jwt.Sign(req.Username, nil, auth.RefreshTokenLifetime)
+	refreshToken, err := rt.jwt.Sign(username, nil, auth.RefreshTokenLifetime)
 	if err != nil {
 		rt.logger.Error("Failed to generate refresh token", "error", err)
 		http.Error(w, "Failed to generate refresh token", http.StatusInternalServerError)

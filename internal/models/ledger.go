@@ -3,7 +3,6 @@ package models
 import (
 	"encoding/json"
 	"errors"
-	"slices"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/shopspring/decimal"
@@ -59,64 +58,94 @@ type LedgerTypes []LedgerType
 type LedgerTypesFirstGrades []LedgerTypesFirstGrade
 type Currencies []Currency
 
+// flatLedger is used to scan the JOIN query result, then map into Ledger with nested LedgerType.
+type flatLedger struct {
+	LedgerID      int             `db:"ledger_id"`
+	LedgerOwner   string          `db:"ledger_owner"`
+	LedgerName    string          `db:"ledger_name"`
+	LedgerTypeID  string          `db:"ledger_type_id"`
+	Currency      string          `db:"currency"`
+	Balance       decimal.Decimal `db:"balance"`
+	LedgerStatus  int             `db:"ledger_status"`
+	CreatedAt     string          `db:"created_at"`
+	UpdatedAt     string          `db:"updated_at"`
+	PostingsCount int             `db:"postings_count"`
+	// LedgerType fields (flattened)
+	LtFirstGrade  string `db:"lt_first_grade"`
+	LtSecondGrade string `db:"lt_second_grade"`
+	LtThirdGrade  string `db:"lt_third_grade"`
+	LtTypeName    string `db:"lt_type_name"`
+	LtDescription string `db:"lt_description"`
+	LtIsActive    bool   `db:"lt_is_active"`
+}
+
 func FindLedgersByUserID(userID string, conn *sqlx.DB) (Ledgers, error) {
 	query := `
 		SELECT
-			ledger_id,
-			ledger_owner,
-			ledger_name,
-			ledger_type_id,
-			currency,
-			balance,
-			ledger_status,
+			l.ledger_id,
+			l.ledger_owner,
+			l.ledger_name,
+			l.ledger_type_id,
+			l.currency,
+			l.balance,
+			l.ledger_status,
 			CASE
-				WHEN created_at IS NULL THEN ''
-				ELSE TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI')
+				WHEN l.created_at IS NULL THEN ''
+				ELSE TO_CHAR(l.created_at, 'YYYY-MM-DD HH24:MI')
 			END created_at,
 			CASE
-				WHEN updated_at IS NULL THEN ''
-				ELSE TO_CHAR(updated_at, 'YYYY-MM-DD HH24:MI')
+				WHEN l.updated_at IS NULL THEN ''
+				ELSE TO_CHAR(l.updated_at, 'YYYY-MM-DD HH24:MI')
 			END updated_at,
-			(SELECT COUNT(*) FROM user_ledger_postings WHERE ledger_id = ledger_id) postings_count
-		FROM
-			user_ledgers
-		WHERE
-			ledger_owner = $1
-			AND ledger_status < 2
-	`
-	ledgers := Ledgers{}
-	err := conn.Select(&ledgers, query, userID)
-	if err != nil {
-		return Ledgers{}, err
-	}
-
-	queryLt := `
-		SELECT
-			ledger_type_id,
-			CONCAT(t.first_grade, '. ', fg.type_name, ' (', fg.type_name_zh, ')') first_grade,
-			CONCAT(t.second_grade, '. ', sg.type_name, ' (', sg.type_name_zh, ')') second_grade,
-			CONCAT(t.third_grade, '. ', tg.type_name, ' (', tg.type_name_zh, ')') third_grade,
-			CONCAT(t.type_name, ' (', t.type_name_zh, ')') type_name,
+			(SELECT COUNT(*) FROM user_ledger_postings p WHERE p.ledger_id = l.ledger_id) postings_count,
+			CONCAT(t.first_grade, '. ', fg.type_name, ' (', fg.type_name_zh, ')') lt_first_grade,
+			CONCAT(t.second_grade, '. ', sg.type_name, ' (', sg.type_name_zh, ')') lt_second_grade,
+			CONCAT(t.third_grade, '. ', tg.type_name, ' (', tg.type_name_zh, ')') lt_third_grade,
+			CONCAT(t.type_name, ' (', t.type_name_zh, ')') lt_type_name,
 			CASE
 				WHEN t.description_en IS NULL THEN ''
 				ELSE CONCAT(t.description_en, ' (', t.description_zh, ')')
-			END description,
-			is_active
+			END lt_description,
+			t.is_active lt_is_active
 		FROM
-			ref_ledger_types t
+			user_ledgers l
+		JOIN ref_ledger_types t USING (ledger_type_id)
 		JOIN ref_ledger_first_grade fg USING (first_grade)
 		JOIN ref_ledger_second_grade sg USING (first_grade, second_grade)
 		JOIN ref_ledger_third_grade tg USING (first_grade, second_grade, third_grade)
 		WHERE
-			ledger_type_id = $1
+			l.ledger_owner = $1
+			AND l.ledger_status < 2
 	`
-	for i, l := range ledgers {
-		lt := LedgerType{}
-		err := conn.Get(&lt, queryLt, l.LedgerTypeID)
-		if err != nil {
-			return Ledgers{}, err
+	flat := []flatLedger{}
+	err := conn.Select(&flat, query, userID)
+	if err != nil {
+		return Ledgers{}, err
+	}
+
+	ledgers := make(Ledgers, len(flat))
+	for i, f := range flat {
+		ledgers[i] = Ledger{
+			LedgerID:      f.LedgerID,
+			LedgerOwner:   f.LedgerOwner,
+			LedgerName:    f.LedgerName,
+			LedgerTypeID:  f.LedgerTypeID,
+			Currency:      f.Currency,
+			Balance:       f.Balance,
+			LedgerStatus:  f.LedgerStatus,
+			CreatedAt:     f.CreatedAt,
+			UpdatedAt:     f.UpdatedAt,
+			PostingsCount: f.PostingsCount,
+			LedgerType: LedgerType{
+				LedgerTypeID: f.LedgerTypeID,
+				FirstGrade:   f.LtFirstGrade,
+				SecondGrade:  f.LtSecondGrade,
+				ThirdGrade:   f.LtThirdGrade,
+				TypeName:     f.LtTypeName,
+				Description:  f.LtDescription,
+				IsActive:     f.LtIsActive,
+			},
 		}
-		ledgers[i].LedgerType = lt
 	}
 	return ledgers, nil
 }
@@ -187,40 +216,26 @@ func FindCurrencies(conn *sqlx.DB) (Currencies, error) {
 
 func DeleteLedger(ledgerID int, username string, conn *sqlx.DB) error {
 	tx := conn.MustBegin()
+	defer tx.Rollback() //nolint:errcheck
+
 	_, err := tx.Exec(`SELECT set_config('app.current_user', $1, TRUE);`, username)
 	if err != nil {
-		tx.Rollback()
 		return err
 	}
 	_, err = tx.Exec(`UPDATE user_ledgers SET ledger_status = 2 WHERE ledger_id = $1;`, ledgerID)
 	if err != nil {
-		tx.Rollback()
 		return err
 	}
-	err = tx.Commit()
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-	return nil
+	return tx.Commit()
 }
 
 func (ls *Ledgers) Save(conn *sqlx.DB, username string) error {
-
-	currencies, err := FindCurrencies(conn)
-	if err != nil {
-		return err
-	}
-	ledgerTypes, err := FindLedgerTypes(conn)
-	if err != nil {
-		return err
-	}
-
 	tx := conn.MustBegin()
+	defer tx.Rollback() //nolint:errcheck
+
 	sq := `SELECT set_config('app.current_user', $1, TRUE);`
-	_, err = tx.Exec(sq, username)
+	_, err := tx.Exec(sq, username)
 	if err != nil {
-		tx.Rollback()
 		return err
 	}
 
@@ -235,41 +250,28 @@ func (ls *Ledgers) Save(conn *sqlx.DB, username string) error {
 	`
 
 	for _, ledger := range *ls {
-		if err := ledger.validateBeforeUpdate(currencies, ledgerTypes); err != nil {
-			return err
+		if ledger.LedgerName == "" {
+			return ErrLedgerNameRequired
+		}
+		if ledger.Balance.IsNegative() {
+			return ErrBalanceRequired
 		}
 		_, err = tx.NamedExec(query, ledger)
 		if err != nil {
-			tx.Rollback()
 			return err
 		}
 	}
 
-	err = tx.Commit()
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	return nil
+	return tx.Commit()
 }
 
 func (ls *Ledgers) Edit(conn *sqlx.DB, username string) error {
-
-	currencies, err := FindCurrencies(conn)
-	if err != nil {
-		return err
-	}
-	ledgerTypes, err := FindLedgerTypes(conn)
-	if err != nil {
-		return err
-	}
-
 	tx := conn.MustBegin()
+	defer tx.Rollback() //nolint:errcheck
+
 	sq := `SELECT set_config('app.current_user', $1, TRUE);`
-	_, err = tx.Exec(sq, username)
+	_, err := tx.Exec(sq, username)
 	if err != nil {
-		tx.Rollback()
 		return err
 	}
 
@@ -286,41 +288,18 @@ func (ls *Ledgers) Edit(conn *sqlx.DB, username string) error {
 		ledger_id = :ledger_id;
 	`
 	for _, ledger := range *ls {
-		if err := ledger.validateBeforeUpdate(currencies, ledgerTypes); err != nil {
-			return err
+		if ledger.LedgerName == "" {
+			return ErrLedgerNameRequired
+		}
+		if ledger.Balance.IsNegative() {
+			return ErrBalanceRequired
 		}
 		_, err = tx.NamedExec(query, ledger)
 		if err != nil {
-			tx.Rollback()
 			return err
 		}
 	}
-	err = tx.Commit()
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-	return nil
-}
-
-func (l *Ledger) validateBeforeUpdate(currencies Currencies, ledgerTypes LedgerTypes) error {
-	if l.LedgerName == "" {
-		return ErrLedgerNameRequired
-	}
-	if !slices.ContainsFunc(ledgerTypes, func(lt LedgerType) bool {
-		return lt.LedgerTypeID == l.LedgerTypeID
-	}) {
-		return ErrLedgerTypeIDRequired
-	}
-	if !slices.ContainsFunc(currencies, func(c Currency) bool {
-		return c.AlphabeticCode == l.Currency
-	}) {
-		return ErrCurrencyRequired
-	}
-	if l.Balance.IsNegative() {
-		return ErrBalanceRequired
-	}
-	return nil
+	return tx.Commit()
 }
 
 func (ls Ledgers) ToJSONString() (string, error) {

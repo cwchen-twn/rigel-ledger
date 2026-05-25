@@ -74,6 +74,21 @@ tidy:
 	go mod tidy -v
 	go fmt ./...
 
+##frontend/install: Install frontend dependencies using bun
+.PHONY: frontend/install
+frontend/install:
+	cd web && bun install
+
+##frontend/build/dev: Build frontend for development (with source maps)
+.PHONY: frontend/build/dev
+frontend/build/dev:
+	cd web && bun run build:dev
+
+##frontend/build/prod: Build frontend for production (minified)
+.PHONY: frontend/build/prod
+frontend/build/prod:
+	cd web && bun run build:prod
+
 ##audit: Run code quality checks and security audits
 .PHONY: audit
 audit: test
@@ -97,14 +112,14 @@ test/cover:
 
 ##build/dev: Build the application for development
 .PHONY: build/dev
-build/dev:
+build/dev: frontend/build/dev
 	@CGO_ENABLED=0 go build -tags "dev" -gcflags=all="-N -l" -o=$(BUILD_DIR)/rigelledger ./cmd/rigelledger
 	@echo "Development build finished"
 	du -sh $(BUILD_DIR)/rigelledger
 
 ##build/prod: Build the application for production
 .PHONY: build/prod
-build/prod:
+build/prod: frontend/build/prod
 	@echo "Building production version... $(APP_VERSION)"
 	@CGO_ENABLED=0 GOOS=linux go build -tags "prod" -a -installsuffix cgo \
 		-ldflags "-s -w -extldflags '-static'" \
@@ -154,11 +169,11 @@ run: build/dev
 
 ##run/live: Run with live reload using Air for development
 .PHONY: run/live
-run/live:
+run/live: frontend/build/dev
 	go run github.com/air-verse/air@latest \
 		--build.cmd "make build/dev" --build.bin "$(BUILD_DIR)/rigelledger" --build.delay "100" \
-		--build.exclude_dir "" \
-		--build.include_ext "go, tpl, tmpl, html, css, scss, js, ts, sql, jpeg, jpg, gif, png, bmp, svg, webp, ico" \
+		--build.exclude_dir "web/node_modules" \
+		--build.include_ext "go, tpl, tmpl, html, sql, jpeg, jpg, gif, png, bmp, svg, webp, ico" \
 		--misc.clean_on_exit "true"
 
 ##run/livedebug: Run with live reload using Air, and debug with delve for development

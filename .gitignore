@@ -29,3 +29,7 @@ tmp/
 # Added by goreleaser init:
 dist/
 build/
+
+# Frontend build output
+web/static/dist/
+web/node_modules/

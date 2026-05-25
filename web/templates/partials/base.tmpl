@@ -9,11 +9,16 @@
         <meta name="author" content="cwchen.twn">
         {{block "meta" .}}{{end}}
 
-        <link rel="icon" type="image/x-icon" href="/static/favicon.ico?version={{.Version}}" defer>
-        <link rel="stylesheet" href="/static/bootstrap-icons/bootstrap-icons.min.css" defer>
-        <link rel="stylesheet" href="/static/bootstrap.min.css?version={{.Version}}" defer>
-        <script src='/static/bootstrap.min.js?version={{.Version}}' defer></script>
-        <script src="/static/alpine.min.js?version={{.Version}}" defer></script>
+        <link rel="icon" type="image/x-icon" href="/static/favicon.ico?version={{.Version}}">
+        <link rel="stylesheet" href="/static/dist/main.css?version={{.Version}}">
+        <script nonce="{{.Nonce}}">
+window.__APP_CONFIG__ = {
+  username: "{{.Username}}",
+  accessTokenLeftTime: {{formatFloat .AccessTokenLeftTime 0}},
+  page: "{{.Page}}"
+};
+        </script>
+        <script src="/static/dist/main.js?version={{.Version}}" defer></script>
         {{block "scripts" .}}{{end}}
     </head>
     <body>
