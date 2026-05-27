@@ -119,6 +119,12 @@ build/dev: frontend/build/dev
 	@echo "Development build finished"
 	du -sh $(BUILD_DIR)/rigelledger
 
+##build/dev/go: Rebuild only the Go binary (used by Air during live reload)
+.PHONY: build/dev/go
+build/dev/go:
+	@CGO_ENABLED=0 go build -tags "dev" -gcflags=all="-N -l" -o=$(BUILD_DIR)/rigelledger ./cmd/rigelledger
+	@echo "Go build finished"
+
 ##build/prod: Build the application for production
 .PHONY: build/prod
 build/prod: frontend/build/prod
@@ -172,21 +178,13 @@ run: build/dev
 ##run/live: Run with live reload using Air for development
 .PHONY: run/live
 run/live: frontend/build/dev
-	go run github.com/air-verse/air@latest \
-		--build.cmd "make build/dev" --build.bin "$(BUILD_DIR)/rigelledger" --build.delay "100" \
-		--build.exclude_dir "web/node_modules" \
-		--build.include_ext "go, tpl, tmpl, html, sql, jpeg, jpg, gif, png, bmp, svg, webp, ico" \
-		--misc.clean_on_exit "true"
+	(cd web && bun run build:watch) & VITE_PID=$$!; go run github.com/air-verse/air@latest -c .air.toml; kill $$VITE_PID 2>/dev/null
 
 ##run/livedebug: Run with live reload using Air, and debug with delve for development
 .PHONY: run/livedebug
-run/livedebug:
-	go run github.com/air-verse/air@latest \
-		--build.cmd "make build/dev" --build.bin "$(BUILD_DIR)/rigelledger" --build.delay "100" \
-		--build.exclude_dir "" \
-		--build.include_ext "go, tpl, tmpl, html, css, scss, js, ts, sql, jpeg, jpg, gif, png, bmp, svg, webp, ico" \
-		--build.full_bin "dlv exec $(BUILD_DIR)/rigelledger --listen=127.0.0.1:2345 --headless=true --api-version=2 --accept-multiclient --continue --log -- " \
-		--misc.clean_on_exit "true"
+run/livedebug: frontend/build/dev
+	(cd web && bun run build:watch) & VITE_PID=$$!; go run github.com/air-verse/air@latest -c .air.toml \
+		--build.full_bin "dlv exec $(BUILD_DIR)/rigelledger --listen=127.0.0.1:2345 --headless=true --api-version=2 --accept-multiclient --continue --log -- "; kill $$VITE_PID 2>/dev/null
 
 ##swag: Generate swagger documentation
 .PHONY: swag

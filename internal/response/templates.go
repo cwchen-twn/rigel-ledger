@@ -3,10 +3,10 @@ package response
 import (
 	"bytes"
 	"crypto/rand"
-	"embed"
 	"encoding/base64"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"math"
 	"net/http"
 	"net/url"
@@ -250,7 +250,7 @@ func toInt64(i any) (int64, error) {
 type TemplateEngine struct {
 	isLocalhost   bool
 	appVersion    string
-	templateFs    embed.FS
+	templateFs    fs.FS
 	templateFuncs template.FuncMap
 }
 
@@ -272,7 +272,7 @@ type TemplateData struct {
 	Nonce                string
 }
 
-func NewTemplateEngine(appVersion string, templateFs embed.FS, isLocalhost bool) *TemplateEngine {
+func NewTemplateEngine(appVersion string, templateFs fs.FS, isLocalhost bool) *TemplateEngine {
 	return &TemplateEngine{
 		appVersion:    appVersion,
 		templateFs:    templateFs,

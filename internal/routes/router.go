@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"time"
@@ -70,7 +71,7 @@ func NewRouter(rc *RouterConfig, te *response.TemplateEngine, je *response.JSONE
 	r.Get("/robots.txt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "public, max-age=7884000")
 		w.Header().Set("Expires", time.Now().AddDate(0, 3, 0).Format(http.TimeFormat))
-		robotsContent, err := web.StaticFiles.ReadFile("static/robots.txt")
+		robotsContent, err := fs.ReadFile(web.StaticFiles, "static/robots.txt")
 		if err != nil {
 			http.Error(w, "robots.txt not found", http.StatusNotFound)
 			return

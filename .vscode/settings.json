@@ -3,7 +3,7 @@
         "*.tmpl": "html"
     },
     "gopls": {
-        "buildFlags": ["-tags=!prod"],
+        "buildFlags": ["-tags=tools"],
 
     }
 }
