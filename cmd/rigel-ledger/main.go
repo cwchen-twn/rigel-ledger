@@ -8,12 +8,23 @@ import (
 	"github.com/cwchen-twn/rigel-ledger/internal"
 )
 
+// Set at build time via -ldflags "-X main.version=... -X main.commit=... -X main.date=...".
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
 
 	cfg, err := internal.LoadConfig()
 	if err != nil {
 		fmt.Println("Failed to load config", err)
 		os.Exit(1)
+	}
+	// APP_VERSION still wins when set; otherwise report what was built.
+	if cfg.AppVersion == "" {
+		cfg.AppVersion = version
 	}
 
 	logger := internal.NewLogger(internal.LoggerConfig{
@@ -24,7 +35,7 @@ func main() {
 		Handler:    slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.GetLogLevel()}),
 	})
 
-	logger.Info("Initializing application")
+	logger.Info("Initializing application", "commit", commit, "built", date)
 	app, err := internal.NewApp(cfg, logger)
 	if err != nil {
 		logger.Error("Failed to initialize application", "error", err)

@@ -1,69 +1,93 @@
-# GoReleaser configuration for rigel-ledger
+# GoReleaser configuration for rigel-ledger.
+#
+# The same file releases to BOTH forges. Each workflow sets
+# GORELEASER_FORCE_TOKEN (gitea in .gitea/workflows/release.yaml, github in
+# .github/workflows/release.yml) so the artifacts are identical and only the
+# destination differs. Gitea is the primary remote and push-mirrors tags to
+# GitHub, so one `git push origin vX.Y.Z` produces both releases.
 
 version: 2
+
+before:
+  hooks:
+    # web/static/dist is gitignored; without this the embedded SPA is empty.
+    - sh -c "cd web && bun install --frozen-lockfile && bun run build:prod"
 
 builds:
   - id: rigel-ledger
     binary: rigel-ledger
     main: ./cmd/rigel-ledger
-    goos:
-      - linux
-      - darwin
-      - windows
-    goarch:
-      - amd64
-      - arm64
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    tags:
+      - prod
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
     ldflags:
       - -s -w
       - -X main.version={{.Version}}
-      - -X main.commit={{.Commit}}
+      - -X main.commit={{.ShortCommit}}
       - -X main.date={{.Date}}
+
+  - id: rigel-ledger-cli
+    binary: rigel-ledger-cli
+    main: ./cmd/cli
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    tags:
+      - prod
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
 
 archives:
   - id: rigel-ledger
-    ids: [rigel-ledger]
+    ids: [rigel-ledger, rigel-ledger-cli]
     name_template: "rigel-ledger_{{.Version}}_{{.Os}}_{{.Arch}}"
     formats: [tar.gz]
     files:
       - README.md
       - LICENSE
-
-changelog:
-  sort: asc
-  filters:
-    exclude:
-      - '^docs:'
-      - '^test:'
-      - '^ci:'
-      - '^build:'
-
-release:
-  name_template: "Release {{.Version}}"
-  header: |
-    # Version {{.Version}}
-
-    ## What's Changed
-  footer: |
-    ## Contributors
-    {{range .Contributors}}- {{.Name}}
-    {{end}}
-
-  draft: false
-  prerelease: false
-
-snapshot:
-  version_template: "{{.Tag}}-SNAPSHOT"
+      - .env.example
 
 checksum:
   name_template: "checksums.txt"
   algorithm: sha256
 
-# dockers:
-#   - image_templates:
-#       - "rigel-ledger:{{.Version}}"
-#       - "rigel-ledger:latest"
-#     dockerfile: Dockerfile
-#     use: buildx
-#     build_flag_templates:
-#       - --platform=linux/amd64
-#       - --platform=linux/arm64
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+changelog:
+  use: git
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^feat:'
+      order: 0
+    - title: Fixes
+      regexp: '^fix:'
+      order: 1
+    - title: Other
+      order: 999
+  filters:
+    exclude:
+      - '^docs:'
+      - '^chore\(deps\):'
+
+# Used only when GORELEASER_FORCE_TOKEN=gitea. Job containers on the act-runner
+# do not inherit the runner pod's hostAliases, so the public name would go out
+# through Cloudflare (challenged, 100MB cap); the in-cluster Service does not.
+gitea_urls:
+  api: http://gitea-http.gitea.svc.cluster.local:3000/api/v1
+  download: https://git.chenantunez.com
+
+release:
+  name_template: "{{.Tag}}"
+  draft: false
+  prerelease: auto

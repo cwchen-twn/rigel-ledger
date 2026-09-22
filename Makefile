@@ -1,4 +1,4 @@
-include .env
+-include .env
 
 APP_VERSION := $(shell git describe --exact-match --tags HEAD 2>/dev/null || git rev-parse --short HEAD)
 DB_DSN := $(PG_USER):$(PG_PASS)@$(PG_HOST):$(PG_PORT)/$(APP_DBNAME)?sslmode=disable
@@ -130,7 +130,7 @@ build/dev/go:
 build/prod: frontend/build/prod
 	@echo "Building production version... $(APP_VERSION)"
 	@CGO_ENABLED=0 GOOS=linux go build -tags "prod" -a -installsuffix cgo \
-		-ldflags "-s -w -extldflags '-static'" \
+		-ldflags "-s -w -extldflags '-static' -X main.version=$(APP_VERSION)" \
 		-o=$(BUILD_DIR)/rigel-ledger.$(APP_VERSION) ./cmd/rigel-ledger
 	@echo "Production build finished"
 	@du -sh $(BUILD_DIR)/rigel-ledger.$(APP_VERSION)

@@ -87,12 +87,19 @@ func createUserCommand(conn *sqlx.DB) {
 	fmt.Println("User created successfully")
 }
 
+// Set at build time via -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
 
 	cfg, err := internal.LoadConfig()
 	if err != nil {
 		fmt.Println("Failed to load config", err)
 		os.Exit(1)
+	}
+	// APP_VERSION still wins when set; otherwise report what was built.
+	if cfg.AppVersion == "" {
+		cfg.AppVersion = version
 	}
 
 	logger := internal.NewLogger(internal.LoggerConfig{
