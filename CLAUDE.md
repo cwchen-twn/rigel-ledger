@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-RigelLedger is a personal finance management web application built with Go (backend) and SolidJS (frontend). It supports double-entry bookkeeping with multi-currency and multilingual (English/Chinese) ledger types.
+RigelLedger is a personal and family finance web application built with Go (backend) and SolidJS (frontend): double-entry bookkeeping, multi-currency, IFRS-flavoured reports, statement imports and stock investments. It has never been deployed, so schema and design may change freely.
+
+**Read `docs/ARCHITECTURE.md` before designing anything.** It is the accepted target design (schema reset, books with members, multi-currency with `base_amount`, exchange-rate scheduler, user settings, local-only PDF imports, Firstrade sync, hcloud deployment) and the roadmap P1-P6. The code described below PREDATES it: the current migrations, the 4-grade `ref_ledger_*` chart of accounts, the stored `balance` column and the JWT auth are all slated for replacement. Do not extend them; build toward the target.
 
 ## Common Commands
 
@@ -44,7 +46,7 @@ cmd/rigel-ledger/    # HTTP server entry point
 cmd/cli/            # Admin CLI (user creation)
 internal/
   application.go    # App bootstrap: config → DB → HTTP server
-  config.go         # Viper-based environment config
+  config.go         # caarlos0/env config, plus a hand-written .env loader
   postgres.go       # DB connection + embedded migration runner
   auth/             # JWT middleware and token helpers
   models/           # Domain models + all SQL queries
@@ -53,9 +55,10 @@ internal/
 web/
   efs.go            # Embeds static/ and templates/ into the binary
   src/              # SolidJS app (components, pages, stores, API client)
-  static/           # Vendored JS/CSS libraries
+  static/           # Vite build output (static/dist/, gitignored) and icons
   templates/        # Thin Go html/template shell — renders <div id="app"> only
-migrations/         # golang-migrate SQL files (numbered pairs)
+migrations/         # golang-migrate SQL files (numbered pairs), embedded and run on start
+docs/               # ARCHITECTURE.md -- target design and roadmap
 api/                # Generated Swagger output (do not edit manually)
 ```
 
@@ -73,7 +76,7 @@ All database queries live in `internal/models/`. Each file owns one domain:
 - `ledger.go` — ledger CRUD, ledger types, currency list
 - `journal.go` — journal postings with DataTable-compatible server-side pagination
 
-Queries use `sqlx`. Financial values use `shopspring/decimal` throughout — never `float64`.
+Queries use `sqlx` over the pgx stdlib driver (the target is pgx + sqlc). Financial values use `shopspring/decimal` throughout — never `float64`.
 
 ### Frontend
 
@@ -86,7 +89,7 @@ Copy `.env.example` to `.env`. Key variables:
 | Variable | Purpose |
 |---|---|
 | `APP_ENV` | `development` or `production` |
-| `JWT_SECRET` | HS256 signing key |
+| `JWT_SECRET` | HS256 signing key (goes away with the move to session tokens) |
 | `PG_HOST/PORT/USER/PASS/APP_DBNAME` | PostgreSQL connection |
 | `APP_PORT` | HTTP listen port |
 
@@ -99,7 +102,13 @@ Copy `.env.example` to `.env`. Key variables:
 
 ## Key Conventions
 
-- New API endpoints follow the pattern `/{username}/api/<resource>` and require JWT middleware.
+- Current API endpoints follow `/{username}/api/<resource>` behind JWT middleware; the target is `/api/books/{id}/<resource>` authorised by book membership.
 - PostgreSQL mutations call `SET LOCAL app.current_user` before writing (audit trail via DB config).
-- Bilingual ledger type names are stored as a single concatenated string split by a delimiter — see `migrations/000003_Insert_Ledger_Types.up.sql` for the pattern.
-- Pre-commit hooks run `make audit` and gitleaks — fix audit failures before committing.
+- UI text, including account-type names, lives in the frontend i18n files (`web/src/i18n/{en,zh,es}.json`) keyed by stable codes; the database stores no translations (since migration 000005).
+- Money: `NUMERIC` in Postgres, `shopspring/decimal` in Go, strings in JSON — never floats anywhere.
+- Deployment target: the Helm chart lives in the hcloud repo (`k3s/helm/rigel-ledger/`); this repo only builds the image. See `docs/ARCHITECTURE.md#deployment`.
+
+## Committing
+
+- Use the `commit-style` skill (`.claude/skills/commit-style/SKILL.md`) for every commit message and PR description.
+- Commit on a branch: pre-commit runs `no-commit-to-branch main`, `make audit` and gitleaks. Fix failures; never `--no-verify`.

@@ -8,6 +8,9 @@
 
 Self-hosted double entry bookkeeping accounting system, focusing in personal and family usage. Designing for finance management, income statement, cash flow statement, balance sheet, real estate, and stock/future investment.
 
+The target design (schema, multi-currency, IFRS reports, imports, deployment) is in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); the current code predates it.
+
 
 <!-- TOC -->
 - [Getting started](#getting-started)
@@ -57,20 +60,18 @@ make help
 
 - [github.com/go-chi/chi](https://github.com/go-chi/chi)
 - [github.com/jmoiron/sqlx](https://github.com/jmoiron/sqlx)
-- [github.com/lib/pq](https://github.com/lib/pq)
+- [github.com/jackc/pgx](https://github.com/jackc/pgx)
 - [github.com/golang-jwt/jwt](https://github.com/golang-jwt/jwt)
 - [github.com/shopspring/decimal](https://github.com/shopspring/decimal)
 
 #### Frontend
 
-- [github.com/alpinejs/alpine](https://github.com/alpinejs/alpine)
+- [solidjs.com](https://www.solidjs.com/) and [@solidjs/router](https://github.com/solidjs/solid-router)
 - [getbootstrap.com](https://getbootstrap.com/docs/5.3/getting-started/introduction/)
 - [icons.getbootstrap.com](https://icons.getbootstrap.com/)
-- [github.com/orchidjs/tom-select](https://github.com/orchidjs/tom-select/)
 - [github.com/sweetalert2/sweetalert2](https://github.com/sweetalert2/sweetalert2/)
 - [github.com/iamkun/dayjs](https://github.com/iamkun/dayjs/)
-- [github.com/royNiladri/js-big-decimal](https://github.com/royNiladri/js-big-decimal/)
-- [github.com/DataTables/DataTables](https://github.com/DataTables/DataTables)
+- [vite.dev](https://vite.dev/) and [bun.sh](https://bun.sh/) (build tooling)
 
 ### Go Tools
 - [github.com/golang-migrate/migrate](https://github.com/golang-migrate/migrate)
