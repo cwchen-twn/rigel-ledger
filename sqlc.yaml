@@ -1,0 +1,37 @@
+# sqlc turns internal/db/queries/*.sql into typed Go in internal/db.
+# Regenerate with `make sqlc`; CI runs `sqlc diff` and fails on drift.
+version: "2"
+sql:
+  - engine: postgresql
+    # sqlc reads golang-migrate up files and ignores *.down.sql.
+    schema: migrations
+    queries: internal/db/queries
+    gen:
+      go:
+        package: db
+        out: internal/db
+        sql_package: pgx/v5
+        emit_pointers_for_null_types: true
+        emit_empty_slices: true
+        emit_enum_valid_method: true
+        overrides:
+          # Money never becomes a float.
+          - db_type: pg_catalog.numeric
+            go_type: github.com/shopspring/decimal.Decimal
+          - db_type: pg_catalog.numeric
+            nullable: true
+            go_type: github.com/shopspring/decimal.NullDecimal
+          - db_type: date
+            go_type: time.Time
+          - db_type: date
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+          - db_type: timestamptz
+            go_type: time.Time
+          - db_type: timestamptz
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true

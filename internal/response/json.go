@@ -1,63 +1,73 @@
+// Package response writes HTTP responses: JSON for the API and the HTML shell
+// that the SolidJS app mounts into.
 package response
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
-	"strings"
 )
 
-type JSONEngine struct {
-	appURL         string
-	appPort        int
-	isLocalhost    bool
-	allowedOrigins []string
+// ErrorBody is the shape of every API error:
+//
+//	{"error": {"code": "unbalanced", "message": "...", "fields": {"lines": "unbalanced"}}}
+//
+// code is stable and translated by the frontend as error.<code>; message is
+// English for logs and curl; fields maps input paths to per-field codes.
+type ErrorBody struct {
+	Error ErrorDetail `json:"error"`
 }
 
-func NewJSONEngine(appURL string, appPort int, isLocalhost bool, allowedOrigins []string) *JSONEngine {
-	schema := func() string {
-		if isLocalhost {
-			return "http"
-		}
-		return "https"
-	}()
-
-	// Add schema to all allowed origins
-	schemaOrigins := make([]string, len(allowedOrigins))
-	for i, origin := range allowedOrigins {
-		schemaOrigins[i] = schema + "://" + origin
-	}
-
-	return &JSONEngine{
-		appURL:         appURL,
-		appPort:        appPort,
-		isLocalhost:    isLocalhost,
-		allowedOrigins: schemaOrigins,
-	}
+type ErrorDetail struct {
+	Code    string            `json:"code"`
+	Message string            `json:"message,omitempty"`
+	Fields  map[string]string `json:"fields,omitempty"`
 }
 
-func (je *JSONEngine) addDefaultHeaders(w http.ResponseWriter) {
+func setAPIHeaders(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Cache-Control", "no-store")
-
-	w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
-	w.Header().Set("Access-Control-Allow-Origin", strings.Join(je.allowedOrigins, ", "))
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-	w.Header().Set("Access-Control-Allow-Credentials", "true")
-
-	if !je.isLocalhost {
-		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload") // HSTS
-	}
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 }
 
-func (je *JSONEngine) RenderResponse(w http.ResponseWriter, r *http.Request, data Jsonable) error {
-	je.addDefaultHeaders(w)
-
-	jsonString, err := data.ToJSONString()
-	if err != nil {
-		return err
+func JSON(w http.ResponseWriter, status int, v any) {
+	setAPIHeaders(w)
+	w.WriteHeader(status)
+	if v == nil {
+		return
 	}
-	w.Write([]byte(jsonString))
+	_ = json.NewEncoder(w).Encode(v)
+}
 
+func Error(w http.ResponseWriter, status int, code, message string, fields map[string]string) {
+	JSON(w, status, ErrorBody{Error: ErrorDetail{Code: code, Message: message, Fields: fields}})
+}
+
+func NoContent(w http.ResponseWriter) {
+	setAPIHeaders(w)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+const maxBodyBytes = 1 << 20
+
+// ErrBadJSON wraps any request-body decoding failure.
+var ErrBadJSON = errors.New("bad json")
+
+// Decode reads a JSON body into v, rejecting unknown fields and bodies over
+// 1 MiB so a typo in a field name fails loudly instead of being ignored.
+func Decode(w http.ResponseWriter, r *http.Request, v any) error {
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		return fmt.Errorf("%w: %v", ErrBadJSON, err)
+	}
+	if dec.More() {
+		return fmt.Errorf("%w: trailing data", ErrBadJSON)
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return fmt.Errorf("%w: trailing data", ErrBadJSON)
+	}
 	return nil
 }

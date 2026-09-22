@@ -1,114 +1,153 @@
+// Package routes maps HTTP to the ledger service: the JSON API under /api,
+// static files, and the SPA shell for every other GET.
 package routes
 
 import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httplog/v3"
-	"github.com/jmoiron/sqlx"
 
 	"github.com/cwchen-twn/rigel-ledger/internal/auth"
+	"github.com/cwchen-twn/rigel-ledger/internal/ledger"
 	"github.com/cwchen-twn/rigel-ledger/internal/response"
-	"github.com/cwchen-twn/rigel-ledger/web"
 )
 
-type RouterConfig struct {
+type Deps struct {
+	Service      *ledger.Service
+	Auth         *auth.Manager
+	Templates    *response.TemplateEngine
+	StaticFiles  fs.FS
+	Logger       *slog.Logger
+	AccessLogger *slog.Logger // nil disables request logging (tests)
+	LogLevel     slog.Level
 	AppURL       string
 	AppPort      int
-	AccessLogger *slog.Logger
-	LogLevel     slog.Level
-	IsLocalhost  bool
 }
 
-type Router struct {
-	Handler     *chi.Mux
-	te          *response.TemplateEngine
-	je          *response.JSONEngine
-	jwt         *auth.JWT
-	logger      *slog.Logger
-	db          *sqlx.DB
-	IsLocalhost bool
+type handlers struct {
+	svc       *ledger.Service
+	auth      *auth.Manager
+	templates *response.TemplateEngine
+	logger    *slog.Logger
 }
 
-// NewRouter creates a new router with the given configuration
-// @title    Rigel Ledger OpenAPI Specification
-// @version	 1.0.0.beta
-func NewRouter(rc *RouterConfig, te *response.TemplateEngine, je *response.JSONEngine, jwt *auth.JWT, logger *slog.Logger, db *sqlx.DB) *Router {
+// New builds the HTTP handler.
+//
+//	@title		RigelLedger API
+//	@version	1.0
+//	@description	Session cookie (browser) or Bearer token (scripts, mobile). Cookie-authenticated POST/PUT/PATCH/DELETE must send X-Rigel-Client.
+func New(d Deps) http.Handler {
+	h := &handlers{svc: d.Service, auth: d.Auth, templates: d.Templates, logger: d.Logger}
 	r := chi.NewRouter()
 
 	r.Use(middleware.Compress(6, "text/*", "application/*"))
-	r.Use(httplog.RequestLogger(rc.AccessLogger, &httplog.Options{
-		Level:         rc.LogLevel,
-		Schema:        httplog.SchemaECS,
-		RecoverPanics: true,
-	}))
-	r.Use(auth.JWTExtractTokenMiddleware(jwt))
+	if d.AccessLogger != nil {
+		r.Use(httplog.RequestLogger(d.AccessLogger, &httplog.Options{
+			Level:         d.LogLevel,
+			Schema:        httplog.SchemaECS,
+			RecoverPanics: true,
+		}))
+	} else {
+		r.Use(middleware.Recoverer)
+	}
+	r.Use(d.Auth.Authenticate)
 
-	rt := &Router{
-		Handler:     r,
-		te:          te,
-		je:          je,
-		jwt:         jwt,
-		logger:      logger,
-		db:          db,
-		IsLocalhost: rc.IsLocalhost,
+	setupSwagger(r, d.AppURL, d.AppPort)
+
+	if d.StaticFiles != nil {
+		static := http.FileServer(http.FS(d.StaticFiles))
+		r.Handle("/static/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "public, max-age=7884000")
+			w.Header().Set("Expires", time.Now().AddDate(0, 3, 0).Format(http.TimeFormat))
+			static.ServeHTTP(w, r)
+		}))
+		r.Get("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
+			b, err := fs.ReadFile(d.StaticFiles, "static/robots.txt")
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			_, _ = w.Write(b)
+		})
 	}
 
-	// Setup Swagger conditionally based on build tags
-	rt.setupSwagger(rc.AppURL, rc.AppPort)
+	r.Route("/api", func(r chi.Router) {
+		r.Post("/auth/login", h.login)
+		r.Get("/currencies", h.currencies)
 
-	// Static files with long-lived cache
-	staticHandler := http.FileServer(http.FS(web.StaticFiles))
-	r.Handle("/static/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=7884000")
-		w.Header().Set("Expires", time.Now().AddDate(0, 3, 0).Format(http.TimeFormat))
-		staticHandler.ServeHTTP(w, r)
-	}))
-	r.Get("/robots.txt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=7884000")
-		w.Header().Set("Expires", time.Now().AddDate(0, 3, 0).Format(http.TimeFormat))
-		robotsContent, err := fs.ReadFile(web.StaticFiles, "static/robots.txt")
-		if err != nil {
-			http.Error(w, "robots.txt not found", http.StatusNotFound)
-			return
-		}
-		w.Write(robotsContent)
-	}))
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireUser(writeAuthError))
+			r.Post("/auth/logout", h.logout)
+			r.Get("/me", h.me)
+			r.Patch("/me/settings", h.updateSettings)
+			r.Post("/me/password", h.changePassword)
 
-	// Auth endpoints
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-	})
-	r.Get("/login", rt.SPAHandler)
-	r.Post("/login", rt.LoginHandler)
-	r.Get("/logout", rt.LogoutHandler)
-	r.Post("/refresh-token", rt.RefreshTokenHandler)
+			r.Get("/books", h.listBooks)
+			r.Post("/books", h.createBook)
+			r.Route("/books/{bookID}", func(r chi.Router) {
+				r.Use(h.bookAccess)
+				r.Get("/", h.getBook)
+				r.Patch("/", h.updateBook)
 
-	// Top-level auth check API (no username prefix needed by the SPA)
-	r.With(auth.JWTValidateAPIMiddleware(jwt)).Get("/api/me", rt.MeHandler)
+				r.Get("/members", h.listMembers)
+				r.Post("/members", h.addMember)
+				r.Patch("/members/{userID}", h.updateMember)
+				r.Delete("/members/{userID}", h.removeMember)
 
-	r.Route("/{username}", func(r chi.Router) {
-		// HTML routes: serve the SPA shell, no JWT required (SPA handles auth via /api/me)
-		r.Get("/", rt.SPAHandler)
-		r.Get("/{page}", rt.SPAHandler)
+				r.Get("/accounts", h.listAccounts)
+				r.Post("/accounts", h.createAccount)
+				r.Patch("/accounts/{accountID}", h.updateAccount)
+				r.Post("/accounts/{accountID}/archive", h.archiveAccount)
+				r.Delete("/accounts/{accountID}", h.deleteAccount)
 
-		// API routes: JWT required, returns JSON errors on failure
-		r.Route("/api", func(r chi.Router) {
-			r.Use(auth.JWTValidateAPIMiddleware(jwt))
-			r.Post("/transactions", rt.ListTransactionsHandler)
-			r.Get("/ledgers", rt.LedgersGetHandler)
-			r.Get("/ledger-types", rt.LedgerTypesHandler)
-			r.Get("/ledger-types/firstgrade", rt.LedgerTypesFirstGradeHandler)
-			r.Get("/currencies", rt.CurrenciesHandler)
-			r.Post("/ledgers", rt.LedgersSaveHandler)
-			r.Put("/ledgers", rt.LedgersEditHandler)
-			r.Delete("/ledger/{ledgerID}", rt.LedgersDeleteHandler)
+				r.Get("/transactions", h.listTransactions)
+				r.Post("/transactions", h.createTransaction)
+				r.Get("/transactions/{transactionID}", h.getTransaction)
+				r.Put("/transactions/{transactionID}", h.updateTransaction)
+				r.Delete("/transactions/{transactionID}", h.deleteTransaction)
+				r.Get("/tags", h.listTags)
+
+				r.Get("/balances", h.balances)
+
+				r.Get("/prices", h.listPrices)
+				r.Post("/prices", h.addPrice)
+				r.Delete("/prices/{priceID}", h.deletePrice)
+				r.Get("/rate", h.rate)
+			})
+		})
+
+		r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
+			response.Error(w, http.StatusNotFound, "not_found", "no such endpoint", nil)
+		})
+		r.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
+			response.Error(w, http.StatusMethodNotAllowed, "method_not_allowed", "", nil)
 		})
 	})
 
-	return rt
+	// Every other GET is a client-side route: serve the shell and let the SPA
+	// decide what to show (including its own login redirect).
+	r.Get("/*", h.shell)
+	return r
+}
+
+func (h *handlers) shell(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/static/") {
+		http.NotFound(w, r)
+		return
+	}
+	lang, theme := "", ""
+	if id, ok := auth.FromContext(r.Context()); ok {
+		lang, theme = id.User.Language, id.User.Theme
+	}
+	if err := h.templates.RenderShell(w, lang, theme); err != nil {
+		h.logger.Error("render shell", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+	}
 }

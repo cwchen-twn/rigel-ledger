@@ -15,79 +15,1741 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/login": {
+        "/api/auth/login": {
             "post": {
-                "description": "Returns a JWT token for the user",
                 "consumes": [
-                    "application/x-www-form-urlencoded"
+                    "application/json"
                 ],
                 "produces": [
-                    "text/plain"
+                    "application/json"
                 ],
                 "tags": [
-                    "root"
+                    "auth"
                 ],
-                "summary": "Post login page",
+                "summary": "Sign in",
+                "parameters": [
+                    {
+                        "description": "credentials",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.loginRequest"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
-                        "description": "JWT token",
+                        "description": "OK",
                         "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "400": {
-                        "description": "Failed to parse form",
-                        "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/routes.loginResponse"
                         }
                     },
                     "401": {
-                        "description": "Invalid password",
+                        "description": "Unauthorized",
                         "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "404": {
-                        "description": "User not found",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "500": {
-                        "description": "Failed to generate access token",
-                        "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     }
                 }
             }
         },
-        "/transactions": {
+        "/api/auth/logout": {
+            "post": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Sign out this session",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/books": {
             "get": {
-                "description": "Returns the list transactions page",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "books"
+                ],
+                "summary": "Books the user is a member of",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/routes.BookDTO"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
                 "consumes": [
-                    "text/html"
+                    "application/json"
                 ],
                 "produces": [
-                    "text/html"
+                    "application/json"
+                ],
+                "tags": [
+                    "books"
+                ],
+                "summary": "Create a book seeded with the personal chart of accounts",
+                "parameters": [
+                    {
+                        "description": "book",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.createBookRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/routes.BookDTO"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "books"
+                ],
+                "summary": "One book and the caller's role in it",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.BookDTO"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "books"
+                ],
+                "summary": "Rename, lock, or set IAS 7 choices (owner)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "book",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.updateBookRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.BookDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/accounts": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "The book's chart of accounts, archived ones included",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/routes.AccountDTO"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Create an account, optionally with an opening balance",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "account",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.createAccountRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/routes.AccountDTO"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/accounts/{accountID}": {
+            "delete": {
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Delete an account that never held a posting",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "account id",
+                        "name": "accountID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Replace an account's editable fields (class and commodity are fixed)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "account id",
+                        "name": "accountID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "account",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.updateAccountRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.AccountDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/accounts/{accountID}/archive": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Archive or restore an account",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "account id",
+                        "name": "accountID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "archived flag",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.archiveRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.AccountDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/balances": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reports"
+                ],
+                "summary": "Every account's balance as of a date (debit \u003e 0), rolled up the tree",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "YYYY-MM-DD, default today",
+                        "name": "as_of",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.BalancesDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/members": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "members"
+                ],
+                "summary": "Members of a book",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/routes.MemberDTO"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "members"
+                ],
+                "summary": "Add a user to a book (owner)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "member",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.addMemberRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/members/{userID}": {
+            "delete": {
+                "tags": [
+                    "members"
+                ],
+                "summary": "Remove a member, or leave the book yourself",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "user id",
+                        "name": "userID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "members"
+                ],
+                "summary": "Change a member's role (owner)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "user id",
+                        "name": "userID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "role",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.roleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/prices": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "prices"
+                ],
+                "summary": "Recent exchange rates",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "currency on either side",
+                        "name": "commodity",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "max 500",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/routes.PriceDTO"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "prices"
+                ],
+                "summary": "Record a manual exchange rate: 1 commodity = rate quote",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "rate",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.priceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/routes.PriceDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/prices/{priceID}": {
+            "delete": {
+                "tags": [
+                    "prices"
+                ],
+                "summary": "Delete a manual rate",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "price id",
+                        "name": "priceID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/rate": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "prices"
+                ],
+                "summary": "The rate the entry form should pre-fill",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "currency",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "currency",
+                        "name": "to",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "YYYY-MM-DD, default today",
+                        "name": "date",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "rate is null when unknown",
+                        "schema": {
+                            "$ref": "#/definitions/routes.RateDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/tags": {
+            "get": {
+                "produces": [
+                    "application/json"
                 ],
                 "tags": [
                     "transactions"
                 ],
-                "summary": "Get list transactions page",
+                "summary": "Tag names used in the book",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
                 "responses": {
                     "200": {
-                        "description": "List transactions page",
+                        "description": "OK",
                         "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "500": {
-                        "description": "Error occurred while rendering template",
-                        "schema": {
-                            "type": "string"
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
                         }
                     }
+                }
+            }
+        },
+        "/api/books/{bookID}/transactions": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transactions"
+                ],
+                "summary": "A page of transactions, newest first",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "YYYY-MM-DD, inclusive",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "YYYY-MM-DD, inclusive",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "account id; includes its descendants",
+                        "name": "account",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "matches payee or memo",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "tag name",
+                        "name": "tag",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "next_cursor from the previous page",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "page size, max 200",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.TransactionPageDTO"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Lines are signed (debit \u003e 0). A foreign-currency line may carry base_amount; otherwise it is converted at the latest rate on or before the date. A residue of one minor unit goes to FX gains/losses.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transactions"
+                ],
+                "summary": "Record a transaction",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "transaction",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.TransactionInputDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/routes.TransactionDTO"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/transactions/{transactionID}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transactions"
+                ],
+                "summary": "One transaction",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "transaction id",
+                        "name": "transactionID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.TransactionDTO"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transactions"
+                ],
+                "summary": "Replace a transaction's header, lines and tags",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "transaction id",
+                        "name": "transactionID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "transaction",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.TransactionInputDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.TransactionDTO"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "transactions"
+                ],
+                "summary": "Delete a transaction",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "transaction id",
+                        "name": "transactionID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/currencies": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reference"
+                ],
+                "summary": "Every ISO 4217 currency with its minor units",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/routes.CurrencyDTO"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "The signed-in user and their settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.UserDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/password": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "Change password and sign out every other session",
+                "parameters": [
+                    {
+                        "description": "passwords",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.passwordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/settings": {
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "Replace the user's preferences",
+                "parameters": [
+                    {
+                        "description": "all preference fields",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.settingsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.UserDTO"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "db.AccountClass": {
+            "type": "string",
+            "enum": [
+                "asset",
+                "liability",
+                "equity",
+                "income",
+                "expense"
+            ],
+            "x-enum-varnames": [
+                "AccountClassAsset",
+                "AccountClassLiability",
+                "AccountClassEquity",
+                "AccountClassIncome",
+                "AccountClassExpense"
+            ]
+        },
+        "db.CfClass": {
+            "type": "string",
+            "enum": [
+                "operating",
+                "investing",
+                "financing"
+            ],
+            "x-enum-varnames": [
+                "CfClassOperating",
+                "CfClassInvesting",
+                "CfClassFinancing"
+            ]
+        },
+        "db.MemberRole": {
+            "type": "string",
+            "enum": [
+                "viewer",
+                "editor",
+                "owner"
+            ],
+            "x-enum-varnames": [
+                "MemberRoleViewer",
+                "MemberRoleEditor",
+                "MemberRoleOwner"
+            ]
+        },
+        "db.PostingStatus": {
+            "type": "string",
+            "enum": [
+                "uncleared",
+                "cleared",
+                "reconciled"
+            ],
+            "x-enum-varnames": [
+                "PostingStatusUncleared",
+                "PostingStatusCleared",
+                "PostingStatusReconciled"
+            ]
+        },
+        "response.ErrorBody": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "$ref": "#/definitions/response.ErrorDetail"
+                }
+            }
+        },
+        "response.ErrorDetail": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "fields": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.AccountBalanceDTO": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "amounts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.CommodityAmountDTO"
+                    }
+                },
+                "base_amount": {
+                    "type": "string"
+                },
+                "total_amounts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.CommodityAmountDTO"
+                    }
+                },
+                "total_base_amount": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.AccountDTO": {
+            "type": "object",
+            "properties": {
+                "archived": {
+                    "type": "boolean"
+                },
+                "cf_class": {
+                    "$ref": "#/definitions/db.CfClass"
+                },
+                "class": {
+                    "$ref": "#/definitions/db.AccountClass"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "commodity": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_cash": {
+                    "type": "boolean"
+                },
+                "is_current": {
+                    "type": "boolean"
+                },
+                "is_placeholder": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "parent_id": {
+                    "type": "integer"
+                },
+                "template_key": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.BalancesDTO": {
+            "type": "object",
+            "properties": {
+                "accounts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.AccountBalanceDTO"
+                    }
+                },
+                "as_of": {
+                    "type": "string",
+                    "format": "date"
+                },
+                "base_currency": {
+                    "type": "string"
+                },
+                "check": {
+                    "type": "string"
+                },
+                "class_totals": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "routes.BookDTO": {
+            "type": "object",
+            "properties": {
+                "base_currency": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "interest_dividend_cf_class": {
+                    "$ref": "#/definitions/db.CfClass"
+                },
+                "lock_date": {
+                    "type": "string",
+                    "format": "date"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "role": {
+                    "$ref": "#/definitions/db.MemberRole"
+                }
+            }
+        },
+        "routes.CommodityAmountDTO": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "commodity": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.CurrencyDTO": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "decimals": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.LineInputDTO": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "amount": {
+                    "type": "string"
+                },
+                "base_amount": {
+                    "type": "string"
+                },
+                "cleared_on": {
+                    "type": "string",
+                    "format": "date"
+                },
+                "commodity": {
+                    "type": "string"
+                },
+                "memo": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/db.PostingStatus"
+                }
+            }
+        },
+        "routes.MemberDTO": {
+            "type": "object",
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "role": {
+                    "$ref": "#/definitions/db.MemberRole"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.PostingDTO": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "amount": {
+                    "type": "string"
+                },
+                "base_amount": {
+                    "type": "string"
+                },
+                "cleared_on": {
+                    "type": "string",
+                    "format": "date"
+                },
+                "commodity": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "memo": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/db.PostingStatus"
+                }
+            }
+        },
+        "routes.PriceDTO": {
+            "type": "object",
+            "properties": {
+                "commodity": {
+                    "type": "string"
+                },
+                "date": {
+                    "type": "string",
+                    "format": "date"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "quote": {
+                    "type": "string"
+                },
+                "rate": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.RateDTO": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string",
+                    "format": "date"
+                },
+                "from": {
+                    "type": "string"
+                },
+                "rate": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.TransactionDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "date": {
+                    "type": "string",
+                    "format": "date"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "memo": {
+                    "type": "string"
+                },
+                "payee": {
+                    "type": "string"
+                },
+                "postings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.PostingDTO"
+                    }
+                },
+                "source": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.TransactionInputDTO": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string",
+                    "format": "date"
+                },
+                "lines": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.LineInputDTO"
+                    }
+                },
+                "memo": {
+                    "type": "string"
+                },
+                "payee": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "routes.TransactionPageDTO": {
+            "type": "object",
+            "properties": {
+                "next_cursor": {
+                    "type": "string"
+                },
+                "transactions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.TransactionDTO"
+                    }
+                }
+            }
+        },
+        "routes.UserDTO": {
+            "type": "object",
+            "properties": {
+                "date_format": {
+                    "type": "string"
+                },
+                "default_book_id": {
+                    "type": "integer"
+                },
+                "display_currency": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_admin": {
+                    "type": "boolean"
+                },
+                "language": {
+                    "type": "string"
+                },
+                "theme": {
+                    "type": "string"
+                },
+                "timezone": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.addMemberRequest": {
+            "type": "object",
+            "properties": {
+                "role": {
+                    "$ref": "#/definitions/db.MemberRole"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.archiveRequest": {
+            "type": "object",
+            "properties": {
+                "archived": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "routes.createAccountRequest": {
+            "type": "object",
+            "properties": {
+                "cf_class": {
+                    "$ref": "#/definitions/db.CfClass"
+                },
+                "class": {
+                    "$ref": "#/definitions/db.AccountClass"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "commodity": {
+                    "type": "string"
+                },
+                "is_cash": {
+                    "type": "boolean"
+                },
+                "is_current": {
+                    "type": "boolean"
+                },
+                "is_placeholder": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "opening_balance": {
+                    "$ref": "#/definitions/routes.openingDTO"
+                },
+                "parent_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "routes.createBookRequest": {
+            "type": "object",
+            "properties": {
+                "base_currency": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.loginRequest": {
+            "type": "object",
+            "properties": {
+                "client": {
+                    "description": "\"api\" returns a bearer token in the body instead of setting a cookie.",
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.loginResponse": {
+            "type": "object",
+            "properties": {
+                "token": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/routes.UserDTO"
+                }
+            }
+        },
+        "routes.openingDTO": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "base_amount": {
+                    "type": "string"
+                },
+                "date": {
+                    "type": "string",
+                    "format": "date"
+                }
+            }
+        },
+        "routes.passwordRequest": {
+            "type": "object",
+            "properties": {
+                "current_password": {
+                    "type": "string"
+                },
+                "new_password": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.priceRequest": {
+            "type": "object",
+            "properties": {
+                "commodity": {
+                    "type": "string"
+                },
+                "date": {
+                    "type": "string",
+                    "format": "date"
+                },
+                "quote": {
+                    "type": "string"
+                },
+                "rate": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.roleRequest": {
+            "type": "object",
+            "properties": {
+                "role": {
+                    "$ref": "#/definitions/db.MemberRole"
+                }
+            }
+        },
+        "routes.settingsRequest": {
+            "type": "object",
+            "properties": {
+                "date_format": {
+                    "type": "string"
+                },
+                "default_book_id": {
+                    "type": "integer"
+                },
+                "display_currency": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "language": {
+                    "type": "string"
+                },
+                "theme": {
+                    "type": "string"
+                },
+                "timezone": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.updateAccountRequest": {
+            "type": "object",
+            "properties": {
+                "cf_class": {
+                    "$ref": "#/definitions/db.CfClass"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "is_cash": {
+                    "type": "boolean"
+                },
+                "is_current": {
+                    "type": "boolean"
+                },
+                "is_placeholder": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "parent_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "routes.updateBookRequest": {
+            "type": "object",
+            "properties": {
+                "interest_dividend_cf_class": {
+                    "$ref": "#/definitions/db.CfClass"
+                },
+                "lock_date": {
+                    "type": "string",
+                    "format": "date"
+                },
+                "name": {
+                    "type": "string"
                 }
             }
         }
@@ -96,12 +1758,12 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "1.0.0.beta",
+	Version:          "1.0",
 	Host:             "",
 	BasePath:         "",
 	Schemes:          []string{},
-	Title:            "Rigel Ledger OpenAPI Specification",
-	Description:      "",
+	Title:            "RigelLedger API",
+	Description:      "Session cookie (browser) or Bearer token (scripts, mobile). Cookie-authenticated POST/PUT/PATCH/DELETE must send X-Rigel-Client.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

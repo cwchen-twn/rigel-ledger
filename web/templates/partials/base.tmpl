@@ -1,23 +1,23 @@
 {{define "public:base"}}
 <!doctype html>
-<html lang='en' data-bs-theme="{{.ColorScheme}}">
+<html lang="{{.Lang}}" data-theme="{{.Theme}}">
     <head>
-        <title>{{block "title" .}}Rigelledger{{end}}</title>
-        <meta charset='utf-8'>
+        <title>{{block "title" .}}RigelLedger{{end}}</title>
+        <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="robots" content="noindex, nofollow">
-        <meta name="author" content="cwchen.twn">
-        {{block "meta" .}}{{end}}
-
         <link rel="icon" type="image/x-icon" href="/static/favicon.ico?version={{.Version}}">
         <script nonce="{{.Nonce}}">
-window.__APP_CONFIG__ = {
-  username: "{{.Username}}",
-  accessTokenLeftTime: {{formatFloat .AccessTokenLeftTime 0}}
-};
+// Resolve the theme before first paint so a dark-mode user never sees a white flash.
+(function () {
+  var t = document.documentElement.dataset.theme;
+  var dark = t === "dark" || (t === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.classList.toggle("dark", dark);
+})();
+window.__APP_CONFIG__ = { version: "{{.Version}}" };
         </script>
         <script src="/static/dist/main.js?version={{.Version}}" defer nonce="{{.Nonce}}"></script>
-        {{block "scripts" .}}{{end}}
+        {{block "head" .}}{{end}}
     </head>
     <body>
         {{block "main" .}}{{end}}

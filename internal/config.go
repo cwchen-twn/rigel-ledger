@@ -3,7 +3,10 @@ package internal
 import (
 	"bufio"
 	"log/slog"
+	"net"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -11,27 +14,46 @@ import (
 )
 
 type Config struct {
-	AppName    string `env:"APP_NAME"`
+	AppName    string `env:"APP_NAME" envDefault:"rigel-ledger"`
 	AppVersion string `env:"APP_VERSION"`
-	AppEnv     string `env:"APP_ENV"`
+	AppEnv     string `env:"APP_ENV" envDefault:"production"`
 	AppURL     string `env:"APP_URL"`
-	AppPort    int    `env:"APP_PORT"`
-	LogLevel   string `env:"LOG_LEVEL"`
-	JWTSecret  string `env:"JWT_SECRET"`
+	AppPort    int    `env:"APP_PORT" envDefault:"8080"`
+	LogLevel   string `env:"LOG_LEVEL" envDefault:"info"`
 
-	PgHost            string        `env:"PG_HOST"`
-	PgPort            int           `env:"PG_PORT"`
-	PgUser            string        `env:"PG_USER"`
-	PgPassword        string        `env:"PG_PASS"`
-	PgDbname          string        `env:"APP_DBNAME"`
-	PgMaxOpenConns    int           `env:"PG_MAX_OPEN_CONN"`
-	PgMaxIdleConns    int           `env:"PG_MAX_IDLE_CONNS"`
-	PgMaxConnLifetime time.Duration `env:"PG_MAX_CONN_LIFETIME"`
-	PgMaxConnIdleTime time.Duration `env:"PG_MAX_CONN_IDLE_TIME"`
+	// SessionTTL is the sliding lifetime of a login: every request inside it
+	// pushes the expiry forward again.
+	SessionTTL time.Duration `env:"SESSION_TTL" envDefault:"720h"`
 
-	// PgMinConns        int           `env:"PG_MIN_CONN"`
-	// PgMaxConnLifetimeJitter string        `env:"PG_MAX_CONN_LIFE_JITTER"`
-	// PgHealthCheckPeriod     string        `env:"PG_HEALTH_CHECK_PERIOD"`
+	// DatabaseURL, when set, wins over the PG_* parts. The hcloud chart sets
+	// it from a SOPS secret; local development usually uses the parts.
+	DatabaseURL string `env:"DATABASE_URL"`
+	PgHost      string `env:"PG_HOST" envDefault:"localhost"`
+	PgPort      int    `env:"PG_PORT" envDefault:"5432"`
+	PgUser      string `env:"PG_USER"`
+	PgPassword  string `env:"PG_PASS"`
+	PgDbname    string `env:"APP_DBNAME"`
+	PgMaxConns  int32  `env:"PG_MAX_CONNS" envDefault:"10"`
+}
+
+// DSN returns the postgres:// URL to connect to.
+func (c *Config) DSN() string {
+	if c.DatabaseURL != "" {
+		return c.DatabaseURL
+	}
+	u := url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(c.PgUser, c.PgPassword),
+		Host:     net.JoinHostPort(c.PgHost, strconv.Itoa(c.PgPort)),
+		Path:     "/" + c.PgDbname,
+		RawQuery: "sslmode=disable",
+	}
+	return u.String()
+}
+
+// IsDevelopment relaxes cookie security (no Secure flag) for plain-HTTP localhost.
+func (c *Config) IsDevelopment() bool {
+	return c.AppEnv == "development"
 }
 
 // GetLogLevel returns the slog.Level based on the configured LogLevel string
@@ -54,7 +76,7 @@ func (c *Config) IsLocalhost() bool {
 	return c.AppURL == "localhost"
 }
 
-// loadDotEnv reads a .env file and sets each KEY=VALUE pair as an environment variable.
+// loadDotEnv reads a .env file and sets each KEY=VALUE pair that is not already in the environment.
 // It skips blank lines and lines starting with '#'. Inline comments and surrounding quotes are stripped.
 func loadDotEnv(filename string) error {
 	data, err := os.ReadFile(filename)
@@ -93,7 +115,9 @@ func loadDotEnv(filename string) error {
 			}
 		}
 
-		if key != "" {
+		// The real environment wins: .env only fills in what is unset, so a
+		// stray .env can never override what a container or shell set.
+		if _, exists := os.LookupEnv(key); key != "" && !exists {
 			os.Setenv(key, val)
 		}
 	}

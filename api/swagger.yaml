@@ -1,56 +1,1156 @@
+definitions:
+  db.AccountClass:
+    enum:
+    - asset
+    - liability
+    - equity
+    - income
+    - expense
+    type: string
+    x-enum-varnames:
+    - AccountClassAsset
+    - AccountClassLiability
+    - AccountClassEquity
+    - AccountClassIncome
+    - AccountClassExpense
+  db.CfClass:
+    enum:
+    - operating
+    - investing
+    - financing
+    type: string
+    x-enum-varnames:
+    - CfClassOperating
+    - CfClassInvesting
+    - CfClassFinancing
+  db.MemberRole:
+    enum:
+    - viewer
+    - editor
+    - owner
+    type: string
+    x-enum-varnames:
+    - MemberRoleViewer
+    - MemberRoleEditor
+    - MemberRoleOwner
+  db.PostingStatus:
+    enum:
+    - uncleared
+    - cleared
+    - reconciled
+    type: string
+    x-enum-varnames:
+    - PostingStatusUncleared
+    - PostingStatusCleared
+    - PostingStatusReconciled
+  response.ErrorBody:
+    properties:
+      error:
+        $ref: '#/definitions/response.ErrorDetail'
+    type: object
+  response.ErrorDetail:
+    properties:
+      code:
+        type: string
+      fields:
+        additionalProperties:
+          type: string
+        type: object
+      message:
+        type: string
+    type: object
+  routes.AccountBalanceDTO:
+    properties:
+      account_id:
+        type: integer
+      amounts:
+        items:
+          $ref: '#/definitions/routes.CommodityAmountDTO'
+        type: array
+      base_amount:
+        type: string
+      total_amounts:
+        items:
+          $ref: '#/definitions/routes.CommodityAmountDTO'
+        type: array
+      total_base_amount:
+        type: string
+    type: object
+  routes.AccountDTO:
+    properties:
+      archived:
+        type: boolean
+      cf_class:
+        $ref: '#/definitions/db.CfClass'
+      class:
+        $ref: '#/definitions/db.AccountClass'
+      code:
+        type: string
+      commodity:
+        type: string
+      id:
+        type: integer
+      is_cash:
+        type: boolean
+      is_current:
+        type: boolean
+      is_placeholder:
+        type: boolean
+      name:
+        type: string
+      parent_id:
+        type: integer
+      template_key:
+        type: string
+    type: object
+  routes.BalancesDTO:
+    properties:
+      accounts:
+        items:
+          $ref: '#/definitions/routes.AccountBalanceDTO'
+        type: array
+      as_of:
+        format: date
+        type: string
+      base_currency:
+        type: string
+      check:
+        type: string
+      class_totals:
+        additionalProperties:
+          type: string
+        type: object
+    type: object
+  routes.BookDTO:
+    properties:
+      base_currency:
+        type: string
+      id:
+        type: integer
+      interest_dividend_cf_class:
+        $ref: '#/definitions/db.CfClass'
+      lock_date:
+        format: date
+        type: string
+      name:
+        type: string
+      role:
+        $ref: '#/definitions/db.MemberRole'
+    type: object
+  routes.CommodityAmountDTO:
+    properties:
+      amount:
+        type: string
+      commodity:
+        type: string
+    type: object
+  routes.CurrencyDTO:
+    properties:
+      code:
+        type: string
+      decimals:
+        type: integer
+      name:
+        type: string
+    type: object
+  routes.LineInputDTO:
+    properties:
+      account_id:
+        type: integer
+      amount:
+        type: string
+      base_amount:
+        type: string
+      cleared_on:
+        format: date
+        type: string
+      commodity:
+        type: string
+      memo:
+        type: string
+      status:
+        $ref: '#/definitions/db.PostingStatus'
+    type: object
+  routes.MemberDTO:
+    properties:
+      display_name:
+        type: string
+      role:
+        $ref: '#/definitions/db.MemberRole'
+      user_id:
+        type: integer
+      username:
+        type: string
+    type: object
+  routes.PostingDTO:
+    properties:
+      account_id:
+        type: integer
+      amount:
+        type: string
+      base_amount:
+        type: string
+      cleared_on:
+        format: date
+        type: string
+      commodity:
+        type: string
+      id:
+        type: integer
+      memo:
+        type: string
+      status:
+        $ref: '#/definitions/db.PostingStatus'
+    type: object
+  routes.PriceDTO:
+    properties:
+      commodity:
+        type: string
+      date:
+        format: date
+        type: string
+      id:
+        type: integer
+      quote:
+        type: string
+      rate:
+        type: string
+      source:
+        type: string
+    type: object
+  routes.RateDTO:
+    properties:
+      date:
+        format: date
+        type: string
+      from:
+        type: string
+      rate:
+        type: string
+      to:
+        type: string
+    type: object
+  routes.TransactionDTO:
+    properties:
+      created_at:
+        type: string
+      date:
+        format: date
+        type: string
+      id:
+        type: integer
+      memo:
+        type: string
+      payee:
+        type: string
+      postings:
+        items:
+          $ref: '#/definitions/routes.PostingDTO'
+        type: array
+      source:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      updated_at:
+        type: string
+    type: object
+  routes.TransactionInputDTO:
+    properties:
+      date:
+        format: date
+        type: string
+      lines:
+        items:
+          $ref: '#/definitions/routes.LineInputDTO'
+        type: array
+      memo:
+        type: string
+      payee:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+    type: object
+  routes.TransactionPageDTO:
+    properties:
+      next_cursor:
+        type: string
+      transactions:
+        items:
+          $ref: '#/definitions/routes.TransactionDTO'
+        type: array
+    type: object
+  routes.UserDTO:
+    properties:
+      date_format:
+        type: string
+      default_book_id:
+        type: integer
+      display_currency:
+        type: string
+      display_name:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      is_admin:
+        type: boolean
+      language:
+        type: string
+      theme:
+        type: string
+      timezone:
+        type: string
+      username:
+        type: string
+    type: object
+  routes.addMemberRequest:
+    properties:
+      role:
+        $ref: '#/definitions/db.MemberRole'
+      username:
+        type: string
+    type: object
+  routes.archiveRequest:
+    properties:
+      archived:
+        type: boolean
+    type: object
+  routes.createAccountRequest:
+    properties:
+      cf_class:
+        $ref: '#/definitions/db.CfClass'
+      class:
+        $ref: '#/definitions/db.AccountClass'
+      code:
+        type: string
+      commodity:
+        type: string
+      is_cash:
+        type: boolean
+      is_current:
+        type: boolean
+      is_placeholder:
+        type: boolean
+      name:
+        type: string
+      opening_balance:
+        $ref: '#/definitions/routes.openingDTO'
+      parent_id:
+        type: integer
+    type: object
+  routes.createBookRequest:
+    properties:
+      base_currency:
+        type: string
+      name:
+        type: string
+    type: object
+  routes.loginRequest:
+    properties:
+      client:
+        description: '"api" returns a bearer token in the body instead of setting
+          a cookie.'
+        type: string
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  routes.loginResponse:
+    properties:
+      token:
+        type: string
+      user:
+        $ref: '#/definitions/routes.UserDTO'
+    type: object
+  routes.openingDTO:
+    properties:
+      amount:
+        type: string
+      base_amount:
+        type: string
+      date:
+        format: date
+        type: string
+    type: object
+  routes.passwordRequest:
+    properties:
+      current_password:
+        type: string
+      new_password:
+        type: string
+    type: object
+  routes.priceRequest:
+    properties:
+      commodity:
+        type: string
+      date:
+        format: date
+        type: string
+      quote:
+        type: string
+      rate:
+        type: string
+    type: object
+  routes.roleRequest:
+    properties:
+      role:
+        $ref: '#/definitions/db.MemberRole'
+    type: object
+  routes.settingsRequest:
+    properties:
+      date_format:
+        type: string
+      default_book_id:
+        type: integer
+      display_currency:
+        type: string
+      display_name:
+        type: string
+      language:
+        type: string
+      theme:
+        type: string
+      timezone:
+        type: string
+    type: object
+  routes.updateAccountRequest:
+    properties:
+      cf_class:
+        $ref: '#/definitions/db.CfClass'
+      code:
+        type: string
+      is_cash:
+        type: boolean
+      is_current:
+        type: boolean
+      is_placeholder:
+        type: boolean
+      name:
+        type: string
+      parent_id:
+        type: integer
+    type: object
+  routes.updateBookRequest:
+    properties:
+      interest_dividend_cf_class:
+        $ref: '#/definitions/db.CfClass'
+      lock_date:
+        format: date
+        type: string
+      name:
+        type: string
+    type: object
 info:
   contact: {}
-  title: Rigel Ledger OpenAPI Specification
-  version: 1.0.0.beta
+  description: Session cookie (browser) or Bearer token (scripts, mobile). Cookie-authenticated
+    POST/PUT/PATCH/DELETE must send X-Rigel-Client.
+  title: RigelLedger API
+  version: "1.0"
 paths:
-  /login:
+  /api/auth/login:
     post:
       consumes:
-      - application/x-www-form-urlencoded
-      description: Returns a JWT token for the user
+      - application/json
+      parameters:
+      - description: credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.loginRequest'
       produces:
-      - text/plain
+      - application/json
       responses:
         "200":
-          description: JWT token
+          description: OK
           schema:
-            type: string
-        "400":
-          description: Failed to parse form
-          schema:
-            type: string
+            $ref: '#/definitions/routes.loginResponse'
         "401":
-          description: Invalid password
+          description: Unauthorized
           schema:
-            type: string
-        "404":
-          description: User not found
-          schema:
-            type: string
-        "500":
-          description: Failed to generate access token
-          schema:
-            type: string
-      summary: Post login page
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Sign in
       tags:
-      - root
-  /transactions:
+      - auth
+  /api/auth/logout:
+    post:
+      responses:
+        "204":
+          description: No Content
+      summary: Sign out this session
+      tags:
+      - auth
+  /api/books:
     get:
-      consumes:
-      - text/html
-      description: Returns the list transactions page
       produces:
-      - text/html
+      - application/json
       responses:
         "200":
-          description: List transactions page
+          description: OK
           schema:
-            type: string
-        "500":
-          description: Error occurred while rendering template
+            items:
+              $ref: '#/definitions/routes.BookDTO'
+            type: array
+      summary: Books the user is a member of
+      tags:
+      - books
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: book
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.createBookRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
           schema:
-            type: string
-      summary: Get list transactions page
+            $ref: '#/definitions/routes.BookDTO'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Create a book seeded with the personal chart of accounts
+      tags:
+      - books
+  /api/books/{bookID}:
+    get:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.BookDTO'
+      summary: One book and the caller's role in it
+      tags:
+      - books
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: book
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.updateBookRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.BookDTO'
+      summary: Rename, lock, or set IAS 7 choices (owner)
+      tags:
+      - books
+  /api/books/{bookID}/accounts:
+    get:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/routes.AccountDTO'
+            type: array
+      summary: The book's chart of accounts, archived ones included
+      tags:
+      - accounts
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: account
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.createAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/routes.AccountDTO'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Create an account, optionally with an opening balance
+      tags:
+      - accounts
+  /api/books/{bookID}/accounts/{accountID}:
+    delete:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: account id
+        in: path
+        name: accountID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Delete an account that never held a posting
+      tags:
+      - accounts
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: account id
+        in: path
+        name: accountID
+        required: true
+        type: integer
+      - description: account
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.updateAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.AccountDTO'
+      summary: Replace an account's editable fields (class and commodity are fixed)
+      tags:
+      - accounts
+  /api/books/{bookID}/accounts/{accountID}/archive:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: account id
+        in: path
+        name: accountID
+        required: true
+        type: integer
+      - description: archived flag
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.archiveRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.AccountDTO'
+      summary: Archive or restore an account
+      tags:
+      - accounts
+  /api/books/{bookID}/balances:
+    get:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: YYYY-MM-DD, default today
+        in: query
+        name: as_of
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.BalancesDTO'
+      summary: Every account's balance as of a date (debit > 0), rolled up the tree
+      tags:
+      - reports
+  /api/books/{bookID}/members:
+    get:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/routes.MemberDTO'
+            type: array
+      summary: Members of a book
+      tags:
+      - members
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: member
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.addMemberRequest'
+      responses:
+        "204":
+          description: No Content
+      summary: Add a user to a book (owner)
+      tags:
+      - members
+  /api/books/{bookID}/members/{userID}:
+    delete:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: user id
+        in: path
+        name: userID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      summary: Remove a member, or leave the book yourself
+      tags:
+      - members
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: user id
+        in: path
+        name: userID
+        required: true
+        type: integer
+      - description: role
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.roleRequest'
+      responses:
+        "204":
+          description: No Content
+      summary: Change a member's role (owner)
+      tags:
+      - members
+  /api/books/{bookID}/prices:
+    get:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: currency on either side
+        in: query
+        name: commodity
+        type: string
+      - description: max 500
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/routes.PriceDTO'
+            type: array
+      summary: Recent exchange rates
+      tags:
+      - prices
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: rate
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.priceRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/routes.PriceDTO'
+      summary: 'Record a manual exchange rate: 1 commodity = rate quote'
+      tags:
+      - prices
+  /api/books/{bookID}/prices/{priceID}:
+    delete:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: price id
+        in: path
+        name: priceID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      summary: Delete a manual rate
+      tags:
+      - prices
+  /api/books/{bookID}/rate:
+    get:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: currency
+        in: query
+        name: from
+        required: true
+        type: string
+      - description: currency
+        in: query
+        name: to
+        required: true
+        type: string
+      - description: YYYY-MM-DD, default today
+        in: query
+        name: date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: rate is null when unknown
+          schema:
+            $ref: '#/definitions/routes.RateDTO'
+      summary: The rate the entry form should pre-fill
+      tags:
+      - prices
+  /api/books/{bookID}/tags:
+    get:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              type: string
+            type: array
+      summary: Tag names used in the book
       tags:
       - transactions
+  /api/books/{bookID}/transactions:
+    get:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: YYYY-MM-DD, inclusive
+        in: query
+        name: from
+        type: string
+      - description: YYYY-MM-DD, inclusive
+        in: query
+        name: to
+        type: string
+      - description: account id; includes its descendants
+        in: query
+        name: account
+        type: integer
+      - description: matches payee or memo
+        in: query
+        name: q
+        type: string
+      - description: tag name
+        in: query
+        name: tag
+        type: string
+      - description: next_cursor from the previous page
+        in: query
+        name: cursor
+        type: string
+      - description: page size, max 200
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.TransactionPageDTO'
+      summary: A page of transactions, newest first
+      tags:
+      - transactions
+    post:
+      consumes:
+      - application/json
+      description: Lines are signed (debit > 0). A foreign-currency line may carry
+        base_amount; otherwise it is converted at the latest rate on or before the
+        date. A residue of one minor unit goes to FX gains/losses.
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: transaction
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.TransactionInputDTO'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/routes.TransactionDTO'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Record a transaction
+      tags:
+      - transactions
+  /api/books/{bookID}/transactions/{transactionID}:
+    delete:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: transaction id
+        in: path
+        name: transactionID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      summary: Delete a transaction
+      tags:
+      - transactions
+    get:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: transaction id
+        in: path
+        name: transactionID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.TransactionDTO'
+      summary: One transaction
+      tags:
+      - transactions
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: transaction id
+        in: path
+        name: transactionID
+        required: true
+        type: integer
+      - description: transaction
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.TransactionInputDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.TransactionDTO'
+      summary: Replace a transaction's header, lines and tags
+      tags:
+      - transactions
+  /api/currencies:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/routes.CurrencyDTO'
+            type: array
+      summary: Every ISO 4217 currency with its minor units
+      tags:
+      - reference
+  /api/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.UserDTO'
+      summary: The signed-in user and their settings
+      tags:
+      - me
+  /api/me/password:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: passwords
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.passwordRequest'
+      responses:
+        "204":
+          description: No Content
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Change password and sign out every other session
+      tags:
+      - me
+  /api/me/settings:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: all preference fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.settingsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.UserDTO'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Replace the user's preferences
+      tags:
+      - me
 swagger: "2.0"

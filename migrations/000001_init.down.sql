@@ -1,0 +1,30 @@
+DROP TABLE IF EXISTS audit_log;
+DROP TABLE IF EXISTS transaction_tags;
+DROP TABLE IF EXISTS tags;
+DROP TABLE IF EXISTS postings;
+DROP TABLE IF EXISTS transactions;
+DROP TABLE IF EXISTS accounts;
+DROP TABLE IF EXISTS prices;
+DROP TABLE IF EXISTS book_members;
+ALTER TABLE IF EXISTS users DROP CONSTRAINT IF EXISTS users_default_book_id_fkey;
+DROP TABLE IF EXISTS books;
+DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS commodities;
+
+DROP FUNCTION IF EXISTS audit_row();
+DROP FUNCTION IF EXISTS postings_lock_trigger();
+DROP FUNCTION IF EXISTS transactions_lock_trigger();
+DROP FUNCTION IF EXISTS check_lock_date(BIGINT, DATE);
+DROP FUNCTION IF EXISTS transactions_balance_trigger();
+DROP FUNCTION IF EXISTS postings_balance_trigger();
+DROP FUNCTION IF EXISTS check_transaction_balance(BIGINT);
+DROP FUNCTION IF EXISTS check_posting();
+DROP FUNCTION IF EXISTS check_account_parent();
+DROP FUNCTION IF EXISTS set_updated_at();
+
+DROP TYPE IF EXISTS commodity_kind;
+DROP TYPE IF EXISTS posting_status;
+DROP TYPE IF EXISTS member_role;
+DROP TYPE IF EXISTS cf_class;
+DROP TYPE IF EXISTS account_class;

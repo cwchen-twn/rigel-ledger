@@ -101,15 +101,15 @@ audit: test
 	go run honnef.co/go/tools/cmd/staticcheck@latest -checks=all,-ST1000,-U1000 ./...
 	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
-##test: Run all tests with race detection
+##test: Run all tests with race detection (DB tests need TEST_DATABASE_URL, see .env.example)
 .PHONY: test
 test:
-	go test -v -race -buildvcs ./...
+	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -v -race -buildvcs ./...
 
 ##test/cover: Run tests with coverage report
 .PHONY: test/cover
 test/cover:
-	go test -v -race -buildvcs -coverprofile=/tmp/coverage.out ./...
+	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -v -race -buildvcs -coverprofile=/tmp/coverage.out ./...
 	go tool cover -html=/tmp/coverage.out
 
 ##build/dev: Build the application for development
@@ -185,6 +185,23 @@ run/live: frontend/build/dev
 run/livedebug: frontend/build/dev
 	(cd web && bun run build:watch) & VITE_PID=$$!; go run github.com/air-verse/air@latest -c .air.toml \
 		--build.full_bin "dlv exec $(BUILD_DIR)/rigel-ledger --listen=127.0.0.1:2345 --headless=true --api-version=2 --accept-multiclient --continue --log -- "; kill $$VITE_PID 2>/dev/null
+
+##sqlc: Regenerate internal/db from migrations/ and internal/db/queries/ (CI fails if this is stale)
+.PHONY: sqlc
+sqlc:
+	go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
+
+##db/reset: Drop every table in the dev database and re-apply migrations (destroys local data)
+.PHONY: db/reset
+db/reset:
+	go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest \
+		-path ./migrations \
+		-database "postgres://$(DB_DSN)" \
+		drop -f
+	go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest \
+		-path ./migrations \
+		-database "postgres://$(DB_DSN)" \
+		up
 
 ##swag: Generate swagger documentation
 .PHONY: swag

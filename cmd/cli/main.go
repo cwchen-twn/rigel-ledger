@@ -1,135 +1,119 @@
+// rigel-ledger-cli administers users. There is no public sign-up: accounts are
+// created here, e.g. inside the running container:
+//
+//	rigel-ledger-cli create-user -u alice -e alice@example.com --display-name Alice
+//	rigel-ledger-cli reset-password -u alice
+//	rigel-ledger-cli set-admin -u alice --admin=true
+//
+// A password not given with -p is read from stdin, so it stays out of the
+// shell history and the process list.
 package main
 
 import (
+	"bufio"
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
-	"github.com/jmoiron/sqlx"
 	flag "github.com/spf13/pflag"
-	"golang.org/x/crypto/bcrypt"
 
 	"github.com/cwchen-twn/rigel-ledger/internal"
-	"github.com/cwchen-twn/rigel-ledger/internal/models"
+	"github.com/cwchen-twn/rigel-ledger/internal/ledger"
 )
-
-var (
-	command Command
-)
-
-func validateUser(u *models.User, password string) error {
-	if u.Username == "" {
-		return fmt.Errorf("username is required")
-	}
-	if u.Email == "" {
-		return fmt.Errorf("email is required")
-	}
-	if password == "" {
-		return fmt.Errorf("password is required")
-	}
-	if u.FirstName == "" {
-		return fmt.Errorf("first name is required")
-	}
-	if u.LastName == "" {
-		return fmt.Errorf("last name is required")
-	}
-
-	if u.MainCountry == "" {
-		u.MainCountry = "US"
-	}
-	if u.MainLanguage == "" {
-		u.MainLanguage = "en"
-	}
-	if u.MainCurrency == "" {
-		u.MainCurrency = "USD"
-	}
-
-	return nil
-}
-
-func createUserCommand(conn *sqlx.DB) {
-	var user models.User
-	var password string
-
-	cuFlags := flag.NewFlagSet("create-user", flag.ExitOnError)
-	cuFlags.StringVarP(&user.Username, "username", "u", "", "Username")
-	cuFlags.StringVarP(&user.Email, "email", "e", "", "Email")
-	cuFlags.StringVarP(&password, "password", "p", "", "Password")
-	cuFlags.StringVarP(&user.FirstName, "first-name", "f", "", "First Name")
-	cuFlags.StringVarP(&user.LastName, "last-name", "l", "", "Last Name")
-	cuFlags.Parse(os.Args[2:])
-
-	if err := validateUser(&user, password); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	user.PasswordHash = string(passwordHash)
-
-	json, err := user.ToJSONString()
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	fmt.Println(json)
-
-	if err := user.Create(conn); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	fmt.Println("User created successfully")
-}
 
 // Set at build time via -ldflags "-X main.version=...".
 var version = "dev"
 
+func usage() {
+	fmt.Fprintf(os.Stderr, `rigel-ledger-cli %s
+
+Usage:
+  rigel-ledger-cli create-user    -u USER -e EMAIL [-p PASS] [--display-name N] [--language en|zh|es] [--currency USD] [--timezone UTC] [--admin]
+  rigel-ledger-cli reset-password -u USER [-p PASS]
+  rigel-ledger-cli set-admin      -u USER --admin=true|false
+
+Configuration comes from the same environment (or .env) as the server.
+`, version)
+}
+
+func readPassword(given string) string {
+	if given != "" {
+		return given
+	}
+	fmt.Fprint(os.Stderr, "Password: ")
+	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	return strings.TrimRight(line, "\r\n")
+}
+
+func die(err error) {
+	fmt.Fprintln(os.Stderr, "error:", err)
+	os.Exit(1)
+}
+
 func main() {
+	if len(os.Args) < 2 || os.Args[1] == "-h" || os.Args[1] == "--help" {
+		usage()
+		os.Exit(2)
+	}
+	cmd, args := os.Args[1], os.Args[2:]
 
 	cfg, err := internal.LoadConfig()
 	if err != nil {
-		fmt.Println("Failed to load config", err)
-		os.Exit(1)
+		die(err)
 	}
-	// APP_VERSION still wins when set; otherwise report what was built.
 	if cfg.AppVersion == "" {
 		cfg.AppVersion = version
 	}
-
-	logger := internal.NewLogger(internal.LoggerConfig{
-		AppName:    cfg.AppName,
-		AppVersion: cfg.AppVersion,
-		AppEnv:     cfg.AppEnv,
-		LogLevel:   cfg.GetLogLevel(),
-		Handler:    slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.GetLogLevel()}),
-	})
-
-	db, err := internal.NewPostgres(cfg, logger)
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	store, err := internal.OpenStore(cfg, logger)
 	if err != nil {
-		logger.Error("Failed to connect to postgres", "error", err)
-		os.Exit(1)
+		die(err)
 	}
-	defer db.Close()
+	defer store.Close()
+	svc := ledger.NewService(store)
+	ctx := context.Background()
 
-	rootFlags := flag.NewFlagSet("root", flag.ExitOnError)
-	rootFlags.VarP(&command, "command", "c", "Run pre-defined commands")
-	rootFlags.Parse(os.Args[1:2])
+	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
+	username := fs.StringP("username", "u", "", "username (lowercase)")
+	password := fs.StringP("password", "p", "", "password; read from stdin when omitted")
 
-	if command.Value == "" {
-		fmt.Println("No command provided")
-		os.Exit(1)
-	}
-
-	switch command.Value {
+	switch cmd {
 	case "create-user":
-		createUserCommand(db.GetDB())
+		email := fs.StringP("email", "e", "", "email")
+		display := fs.String("display-name", "", "display name")
+		language := fs.String("language", "en", "en, zh or es")
+		currency := fs.String("currency", "USD", "display currency")
+		timezone := fs.String("timezone", "UTC", "IANA time zone")
+		admin := fs.Bool("admin", false, "make the user an administrator")
+		_ = fs.Parse(args)
+		u, err := svc.CreateUser(ctx, ledger.NewUser{
+			Username: *username, Email: *email, Password: readPassword(*password), DisplayName: *display,
+			Language: *language, DisplayCurrency: *currency, Timezone: *timezone, IsAdmin: *admin,
+		})
+		if err != nil {
+			die(err)
+		}
+		fmt.Printf("created user %s (id %d)\n", u.Username, u.ID)
+
+	case "reset-password":
+		_ = fs.Parse(args)
+		if err := svc.ResetPassword(ctx, *username, readPassword(*password)); err != nil {
+			die(err)
+		}
+		fmt.Printf("password reset for %s; all their sessions were signed out\n", *username)
+
+	case "set-admin":
+		admin := fs.Bool("admin", true, "true to grant, false to revoke")
+		_ = fs.Parse(args)
+		if err := svc.SetAdmin(ctx, *username, *admin); err != nil {
+			die(err)
+		}
+		fmt.Printf("%s admin=%v\n", *username, *admin)
+
 	default:
-		fmt.Println("Invalid command")
+		usage()
+		os.Exit(2)
 	}
 }

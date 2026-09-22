@@ -1,19 +1,19 @@
 //go:build !prod
-// +build !prod
 
 package routes
 
 import (
 	"fmt"
 
-	_ "github.com/cwchen-twn/rigel-ledger/api"
+	"github.com/go-chi/chi/v5"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
+
+	_ "github.com/cwchen-twn/rigel-ledger/api"
 )
 
-// setupSwagger sets up Swagger documentation endpoints for development builds
-func (rt *Router) setupSwagger(appURL string, appPort int) {
-	rt.Handler.Get("/swagger/*", httpSwagger.Handler(
-		// The url pointing to API definition
+// setupSwagger mounts Swagger UI at /swagger/ in non-production builds.
+func setupSwagger(r chi.Router, appURL string, appPort int) {
+	r.Get("/swagger/*", httpSwagger.Handler(
 		httpSwagger.URL(fmt.Sprintf("http://%s:%d/swagger/doc.json", appURL, appPort)),
 	))
 }
