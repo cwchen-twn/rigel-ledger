@@ -298,16 +298,14 @@ hcloud keeps every chart local under `k3s/helm/`. It has no OCI chart registry a
 deploys with `k3s/upgrade.sh`. So **the chart lives in hcloud**, and this repo only
 builds images.
 
-**This repo owns:**
-- A `Dockerfile` with three stages:
-  1. bun build of the SPA;
-  2. static Go build with `-tags prod`;
-  3. Debian slim with `poppler-utils`.
-- `.gitea/workflows/image.yaml`, mirroring `hcloud/.gitea/workflows/musicbox.yaml`. It
-  pushes `git.chenantunez.com/cwchen-twn/rigel-ledger:sha-<12>` and `:latest`, and does
-  the same for the firstrade image.
-- The GitHub GoReleaser release will be removed. Today it ships binaries without the
-  frontend `dist` and without `-tags prod`.
+**This repo owns** (done, see CLAUDE.md "CI and releases"):
+- A multi-stage `Dockerfile`: bun builds the SPA, Go builds static binaries with
+  `-tags prod`, and the result runs on distroless static. P4 switches the runtime stage
+  to Debian slim with `poppler-utils` for `pdftotext`.
+- Identical pipelines on both forges: `ci` on every push, `image` on `main` and tags,
+  and `release` (GoReleaser) on `v*` tags. Gitea pushes to
+  `git.chenantunez.com/cwchen-twn/rigel-ledger`, and GitHub pushes to
+  `ghcr.io/cwchen-twn/rigel-ledger`.
 
 **hcloud owns** `k3s/helm/rigel-ledger/`, modelled on `k3s/helm/navidrome/`:
 - A stateless Deployment (RollingUpdate, no PVC), plus the firstrade CronJob.
@@ -326,7 +324,7 @@ builds images.
 | Phase | Scope |
 |---|---|
 | P1 | Schema reset, sessions, sqlc; books, accounts, multi-currency transactions API and UI; the "All accounts" balances page; the user Settings page |
-| P2 | Dockerfile, Gitea CI, hcloud chart; deploy and start daily entry |
+| P2 | ~~Dockerfile, Gitea/GitHub CI and release~~ (done); hcloud chart; deploy and start daily entry |
 | P3 | Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback), book rebase, the three statements with FX revaluation and display-currency translation |
 | P4 | CSV and PDF import, review queue, rules, reconciliation. Confirm whether "future transactions pdf" means futures-broker statements or scheduled transactions |
 | P5 | Securities: FIFO realised gains, price scheduler, Firstrade CronJob |

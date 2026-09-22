@@ -1,0 +1,92 @@
+# Build the container image and push it to Gitea's registry. Mirrors
+# .github/workflows/image.yml (which pushes the same tags to ghcr.io) --
+# change both together.
+#
+#   push to main  -> :sha-<12>, :latest   VERSION=sha-<12>
+#   tag vX.Y.Z    -> :vX.Y.Z, :sha-<12>   VERSION=X.Y.Z
+#
+# The recipe is hcloud's .gitea/workflows/musicbox.yaml, including why:
+#   * the push goes to git.chenantunez.com but never leaves the node -- the
+#     runner pod's hostAliases resolve it to 10.0.1.1, so Cloudflare's 100MB
+#     request cap does not apply; dockerd lives in that pod and inherits them
+#   * actions/checkout runs in a sibling job container WITHOUT those
+#     hostAliases, hence the in-cluster Service URL
+#   * the buildx plugin is required: the Dockerfile uses BuildKit syntax and a
+#     modern docker-ce-cli without it falls back to the legacy builder
+#   * REGISTRY_TOKEN is a dedicated token with package read/write, not the
+#     per-job token, whose scope does not reliably cover packages
+
+name: image
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  REGISTRY: git.chenantunez.com
+  IMAGE_PATH: cwchen-twn/rigel-ledger
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          github-server-url: http://gitea-http.gitea.svc.cluster.local:3000
+
+      - name: Install the Docker CLI
+        run: |
+          set -eu
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl gnupg
+          install -m 0755 -d /etc/apt/keyrings
+          curl -fsSL --retry 5 --retry-all-errors https://download.docker.com/linux/debian/gpg \
+            | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+          chmod a+r /etc/apt/keyrings/docker.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+            > /etc/apt/sources.list.d/docker.list
+          apt-get update
+          apt-get install -y --no-install-recommends docker-ce-cli docker-buildx-plugin
+          docker version
+
+      - name: Log in to the registry
+        run: |
+          set -eu
+          echo "${{ secrets.REGISTRY_TOKEN }}" \
+            | docker login "$REGISTRY" \
+                -u "${{ secrets.REGISTRY_USER }}" --password-stdin
+
+      - name: Build and push
+        run: |
+          set -eu
+          SHA_TAG="sha-$(echo "$GITHUB_SHA" | cut -c1-12)"
+          IMG="$REGISTRY/$IMAGE_PATH"
+
+          case "$GITHUB_REF" in
+            refs/tags/v*)
+              VERSION="${GITHUB_REF#refs/tags/v}"
+              TAGS="v$VERSION $SHA_TAG"
+              ;;
+            *)
+              VERSION="$SHA_TAG"
+              TAGS="$SHA_TAG latest"
+              ;;
+          esac
+
+          ARGS=""
+          for t in $TAGS; do ARGS="$ARGS -t $IMG:$t"; done
+
+          # linux/amd64 only: the hcloud node is x86_64.
+          # shellcheck disable=SC2086
+          docker build \
+            --platform linux/amd64 \
+            --build-arg VERSION="$VERSION" \
+            --build-arg COMMIT="$(echo "$GITHUB_SHA" | cut -c1-12)" \
+            --build-arg DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            $ARGS .
+
+          for t in $TAGS; do docker push "$IMG:$t"; done
+          echo "pushed $IMG: $TAGS"

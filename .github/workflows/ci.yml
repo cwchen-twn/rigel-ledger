@@ -1,0 +1,58 @@
+# CI for every push and pull request. Mirrors .gitea/workflows/ci.yaml --
+# change both together; the two forges must reach the same verdict.
+# Gitea is the primary remote and push-mirrors here, so this usually runs on
+# the mirrored push rather than on a GitHub PR.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: web/package.json
+
+      - name: Build frontend
+        run: cd web && bun install --frozen-lockfile && bun run build:prod
+
+      - name: make audit
+        run: make audit
+
+  hooks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: pre-commit
+        env:
+          SKIP: no-commit-to-branch,make-audit
+        run: |
+          uv sync --dev
+          .venv/bin/pre-commit run --all-files --show-diff-on-failure

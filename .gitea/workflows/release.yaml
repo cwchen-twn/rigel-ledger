@@ -1,16 +1,18 @@
-# Publish a GitHub release for a vX.Y.Z tag. Mirrors .gitea/workflows/release.yaml
+# Publish a Gitea release for a vX.Y.Z tag. Mirrors .github/workflows/release.yml
 # -- both run the same .goreleaser.yaml, and GORELEASER_FORCE_TOKEN picks the
-# forge. Tags arrive here through Gitea's push mirror.
+# forge. Gitea push-mirrors the tag to GitHub, so one push produces both.
+#
+# RELEASE_TOKEN is a Gitea PAT with repository write. The env var GoReleaser
+# reads is GITEA_TOKEN, but Gitea refuses secret names starting with GITEA_.
+# The API goes to the in-cluster Service (gitea_urls in .goreleaser.yaml),
+# because job containers do not get the runner's hostAliases.
 
-name: Release
+name: release
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
   goreleaser:
@@ -19,12 +21,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          github-server-url: http://gitea-http.gitea.svc.cluster.local:3000
           fetch-depth: 0 # the changelog needs history and the previous tag
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: false
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -38,5 +42,5 @@ jobs:
           version: "~> v2"
           args: release --clean
         env:
-          GORELEASER_FORCE_TOKEN: github
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_FORCE_TOKEN: gitea
+          GITEA_TOKEN: ${{ secrets.RELEASE_TOKEN }}

@@ -1,0 +1,9 @@
+.git
+.venv
+.vscode
+.claude
+.env
+dist/
+git-of-theseus/
+web/node_modules/
+web/static/dist/

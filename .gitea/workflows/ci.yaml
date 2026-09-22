@@ -1,0 +1,72 @@
+# CI for every push and pull request. Mirrors .github/workflows/ci.yml --
+# change both together; the two forges must reach the same verdict.
+#
+# Runner facts inherited from hcloud (see hcloud/.gitea/CLAUDE.md):
+#   * ubuntu-latest maps to node:22-bookworm on the act-runner. It has node,
+#     which JavaScript actions need, and gcc, which `go test -race` needs.
+#   * Checkout goes through the in-cluster Service. The public name is behind
+#     Cloudflare, which has 403'd job-container fetches before.
+#   * The runner has no cache server, so setup-go caching is off.
+
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          github-server-url: http://gitea-http.gitea.svc.cluster.local:3000
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: web/package.json
+
+      - name: Build frontend
+        # Proves the SPA compiles; the Go embed then carries a real bundle.
+        run: cd web && bun install --frozen-lockfile && bun run build:prod
+
+      - name: make audit
+        # tests with -race, go mod tidy -diff, gofmt, vet, staticcheck, govulncheck
+        run: make audit
+
+  hooks:
+    # The pre-commit hooks, server-side, so a commit made with --no-verify or
+    # without `make init` is still checked. make-audit is the job above, and
+    # no-commit-to-branch would fail every push to main by design.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          github-server-url: http://gitea-http.gitea.svc.cluster.local:3000
+
+      - name: Set up Go
+        # gitleaks is a golang-language hook and is built from source.
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: pre-commit
+        env:
+          SKIP: no-commit-to-branch,make-audit
+        run: |
+          uv sync --dev
+          .venv/bin/pre-commit run --all-files --show-diff-on-failure

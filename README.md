@@ -1,6 +1,7 @@
 # rigel-ledger
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/cwchen-twn/rigel-ledger)](https://goreportcard.com/report/github.com/cwchen-twn/rigel-ledger)
+[![CI](https://github.com/cwchen-twn/rigel-ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/cwchen-twn/rigel-ledger/actions/workflows/ci.yml)
 [![GitHub Release](https://img.shields.io/github/v/release/cwchen-twn/rigel-ledger?logo=github)](https://github.com/cwchen-twn/rigel-ledger/releases)
 [![GitHub Release Status](https://github.com/cwchen-twn/rigel-ledger/workflows/Release/badge.svg)](https://github.com/cwchen-twn/rigel-ledger/actions)
 [![GitHub License](https://img.shields.io/github/license/cwchen-twn/rigel-ledger?logo=github)](https://github.com/cwchen-twn/rigel-ledger/blob/main/LICENSE)

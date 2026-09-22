@@ -108,6 +108,23 @@ Copy `.env.example` to `.env`. Key variables:
 - Money: `NUMERIC` in Postgres, `shopspring/decimal` in Go, strings in JSON — never floats anywhere.
 - Deployment target: the Helm chart lives in the hcloud repo (`k3s/helm/rigel-ledger/`); this repo only builds the image. See `docs/ARCHITECTURE.md#deployment`.
 
+## CI and releases
+
+Gitea (`git.chenantunez.com`, private) is the primary remote and push-mirrors every commit and tag to the public GitHub repo. Gitea runs only `.gitea/workflows/`, GitHub runs only `.github/workflows/`, and **the two sets must stay behaviourally identical — change one, change the other in the same commit.**
+
+| Trigger | `ci` (frontend build, `make audit`, pre-commit hooks) | `image` | `release` (GoReleaser) |
+|---|---|---|---|
+| any push / PR | yes | — | — |
+| push to `main` | yes | `:sha-<12>`, `:latest` | — |
+| tag `vX.Y.Z` | yes | `:vX.Y.Z`, `:sha-<12>` | binaries (linux/darwin × amd64/arm64) + checksums |
+
+- Images: `git.chenantunez.com/cwchen-twn/rigel-ledger` (Gitea) and `ghcr.io/cwchen-twn/rigel-ledger` (GitHub), built from the same `Dockerfile`, linux/amd64 only. The image carries `rigel-ledger` (entrypoint) and `rigel-ledger-cli`.
+- Releases are cut by hand: `git tag vX.Y.Z && git push origin vX.Y.Z` on Gitea; the mirror carries the tag to GitHub. One `.goreleaser.yaml` serves both; `GORELEASER_FORCE_TOKEN` in each workflow picks the forge.
+- The version shown in logs comes from `-X main.version` (both `cmd/*/main.go`); a non-empty `APP_VERSION` env var overrides it.
+- Gitea secrets on this repo: `REGISTRY_USER`, `REGISTRY_TOKEN` (package rw), `RELEASE_TOKEN` (repo write; mapped to `GITEA_TOKEN`, since Gitea forbids secret names starting `GITEA_`).
+- Gitea runner traps are inherited from hcloud (`hcloud/.gitea/CLAUDE.md`): checkout and the GoReleaser API use the in-cluster Service `http://gitea-http.gitea.svc.cluster.local:3000`, `setup-go` runs with `cache: false`, and docker needs the buildx plugin.
+- Toolchain pins: Go in `go.mod` + Dockerfile build stage; Bun in `web/package.json` `packageManager` + Dockerfile web stage. Renovate (hcloud's self-hosted bot, config in `renovate.json`) groups each pair so they move together.
+
 ## Committing
 
 - Use the `commit-style` skill (`.claude/skills/commit-style/SKILL.md`) for every commit message and PR description.
