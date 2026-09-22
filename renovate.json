@@ -12,7 +12,8 @@
     "dockerfile",
     "github-actions",
     "pre-commit",
-    "pep621"
+    "pep621",
+    "custom.regex"
   ],
   "pre-commit": {
     "enabled": true
@@ -79,6 +80,28 @@
         "github-actions"
       ],
       "groupName": "ci actions"
+    },
+    {
+      "description": "sqlc is pinned in the Makefile (go run ...@vX) and in both CI workflows; move them together.",
+      "matchDepNames": [
+        "sqlc-dev/sqlc",
+        "github.com/sqlc-dev/sqlc"
+      ],
+      "groupName": "sqlc"
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "Tool pins in the CI workflows are plain env strings that no other manager reads. The annotation sits on the line above the pin so it is obvious the value is managed.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.gitea/workflows/.+\\.yaml$/",
+        "/^\\.github/workflows/.+\\.yml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[a-z-]+?) depName=(?<depName>\\S+?)(?: extractVersion=(?<extractVersion>\\S+?))?\\s+[A-Z_]+_VERSION: \"(?<currentValue>[^\"]+)\""
+      ],
+      "versioningTemplate": "semver"
     }
   ]
 }

@@ -18,6 +18,26 @@ on:
 jobs:
   audit:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        # hcloud runs PostgreSQL 18; test against the same major.
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # THE ONE INTENTIONAL DIFFERENCE between the Gitea and GitHub copies:
+      # the job runs in a container on the same docker network as the service,
+      # so it is reached by its service name.
+      TEST_DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres?sslmode=disable
+      # Fail instead of skipping if the database is unreachable.
+      REQUIRE_DB_TESTS: "1"
+      # renovate: datasource=github-releases depName=sqlc-dev/sqlc extractVersion=^v(?<version>.+)$
+      SQLC_VERSION: "1.31.1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,6 +58,17 @@ jobs:
       - name: Build frontend
         # Proves the SPA compiles; the Go embed then carries a real bundle.
         run: cd web && bun install --frozen-lockfile && bun run build:prod
+
+      - name: sqlc diff
+        # internal/db is generated; fail if it no longer matches migrations/
+        # and internal/db/queries/. The release binary avoids compiling sqlc's
+        # cgo parser on every run.
+        run: |
+          set -eu
+          curl -sSL --fail --retry 5 --retry-all-errors \
+            "https://github.com/sqlc-dev/sqlc/releases/download/v${SQLC_VERSION}/sqlc_${SQLC_VERSION}_linux_amd64.tar.gz" \
+            | tar -xz -C /tmp sqlc
+          /tmp/sqlc diff
 
       - name: make audit
         # tests with -race, go mod tidy -diff, gofmt, vet, staticcheck, govulncheck
