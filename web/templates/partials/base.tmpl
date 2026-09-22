@@ -16,6 +16,7 @@
 })();
 window.__APP_CONFIG__ = { version: "{{.Version}}" };
         </script>
+        <link rel="stylesheet" href="/static/dist/main.css?version={{.Version}}">
         <script src="/static/dist/main.js?version={{.Version}}" defer nonce="{{.Nonce}}"></script>
         {{block "head" .}}{{end}}
     </head>

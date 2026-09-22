@@ -1,100 +1,62 @@
-import { createSignal, createEffect, Show, type JSXElement } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
-import { login } from '../api/auth';
-import { useAuth } from '../stores/auth';
-import { useI18n } from '../i18n';
+import { Wallet } from 'lucide-solid';
+import { createSignal, Show } from 'solid-js';
+import { Button } from '~/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
+import { Field, Input } from '~/components/ui/input';
+import { useI18n } from '~/i18n';
+import { useSession } from '~/stores/session';
 
-export default function Login(): JSXElement {
+export default function Login() {
+  const { t, te } = useI18n();
+  const { login } = useSession();
   const navigate = useNavigate();
-  const { auth, refetch } = useAuth();
-  const { t } = useI18n();
   const [username, setUsername] = createSignal('');
   const [password, setPassword] = createSignal('');
-  const [errorCode, setErrorCode] = createSignal('');
-  const [submitting, setSubmitting] = createSignal(false);
+  const [error, setError] = createSignal('');
+  const [busy, setBusy] = createSignal(false);
 
-  createEffect(() => {
-    const authData = auth();
-    if (!auth.loading && authData) {
-      const redirect = sessionStorage.getItem('redirectAfterLogin') ?? `/${authData.username}/`;
-      sessionStorage.removeItem('redirectAfterLogin');
-      navigate(redirect, { replace: true });
-    }
-  });
-
-  async function handleSubmit(e: SubmitEvent): Promise<void> {
+  const submit = async (e: Event) => {
     e.preventDefault();
-    if (!username().trim() || !password()) return;
-
-    setSubmitting(true);
-    setErrorCode('');
-
+    setBusy(true);
+    setError('');
     try {
-      const loggedInAs = await login(username(), password());
-      refetch();
-      const redirect = sessionStorage.getItem('redirectAfterLogin') ?? `/${loggedInAs}/`;
-      sessionStorage.removeItem('redirectAfterLogin');
-      navigate(redirect, { replace: true });
+      await login(username(), password());
+      navigate('/', { replace: true });
     } catch (err) {
-      setErrorCode(err instanceof Error ? err.message : 'UNKNOWN_ERROR');
+      setError(te(err));
     } finally {
-      setSubmitting(false);
+      setBusy(false);
     }
-  }
+  };
 
   return (
-    <div class="d-flex vh-100 align-items-center justify-content-center bg-body-secondary">
-      <div class="card shadow-sm" style="width:380px;max-width:95vw">
-        <div class="card-body p-4">
-          <div class="text-center mb-4">
-            <i class="bi bi-gem fs-1 text-primary"></i>
-            <h4 class="mt-2 mb-0">{t('app.name')}</h4>
-            <p class="text-muted small mt-1">{t('app.tagline')}</p>
+    <div class="flex min-h-screen items-center justify-center bg-muted/40 p-4">
+      <Card class="w-full max-w-sm">
+        <CardHeader class="justify-items-center text-center">
+          <div class="mb-2 flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <Wallet class="size-5" />
           </div>
-
-          <form onSubmit={handleSubmit} noValidate>
-            <div class="mb-3">
-              <label class="form-label" for="username">{t('auth.username')}</label>
-              <input
-                id="username"
-                type="text"
-                class="form-control"
-                value={username()}
-                onInput={e => setUsername(e.currentTarget.value)}
-                required
-                autocomplete="username"
-                disabled={submitting()}
-              />
-            </div>
-            <div class="mb-3">
-              <label class="form-label" for="password">{t('auth.password')}</label>
-              <input
-                id="password"
-                type="password"
-                class="form-control"
-                value={password()}
-                onInput={e => setPassword(e.currentTarget.value)}
-                required
-                autocomplete="current-password"
-                disabled={submitting()}
-              />
-            </div>
-
-            <Show when={errorCode()}>
-              <div class="alert alert-danger py-2 small mb-3" role="alert">
-                {t(`errors.${errorCode()}`, {}, t('errors.UNKNOWN_ERROR'))}
-              </div>
+          <CardTitle class="text-xl">{t('app.name')}</CardTitle>
+          <CardDescription>{t('auth.welcome')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form class="grid gap-4" onSubmit={submit}>
+            <Field label={t('auth.username')}>
+              <Input autocomplete="username" autofocus required value={username()} onInput={(e) => setUsername(e.currentTarget.value)} />
+            </Field>
+            <Field label={t('auth.password')}>
+              <Input type="password" autocomplete="current-password" required value={password()} onInput={(e) => setPassword(e.currentTarget.value)} />
+            </Field>
+            <Show when={error()}>
+              <p role="alert" class="text-sm text-destructive">{error()}</p>
             </Show>
-
-            <button type="submit" class="btn btn-primary w-100" disabled={submitting()}>
-              <Show when={submitting()} fallback={<>{t('auth.sign_in')}</>}>
-                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                {t('auth.signing_in')}
-              </Show>
-            </button>
+            <Button type="submit" disabled={busy()}>
+              {busy() ? t('auth.signing_in') : t('auth.sign_in')}
+            </Button>
           </form>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
