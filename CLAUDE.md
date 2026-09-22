@@ -119,7 +119,7 @@ Copy `.env.example` to `.env`. Real environment variables always win over `.env`
 
 Gitea (`git.chenantunez.com`, private) is the primary remote and push-mirrors every commit and tag to the public GitHub repo. Gitea runs only `.gitea/workflows/`, GitHub runs only `.github/workflows/`, and **the two sets must stay behaviourally identical — change one, change the other in the same commit.**
 
-| Trigger | `ci` (frontend build, `sqlc diff`, `make audit` with a Postgres 18 service, pre-commit hooks) | `image` | `release` (GoReleaser) |
+| Trigger | `ci` (frontend build, `sqlc diff`, `make audit` against PostgreSQL 18, pre-commit hooks) | `image` | `release` (GoReleaser) |
 |---|---|---|---|
 | any push / PR | yes | — | — |
 | push to `main` | yes | `:sha-<12>`, `:latest` | — |
@@ -131,7 +131,7 @@ Gitea (`git.chenantunez.com`, private) is the primary remote and push-mirrors ev
 - Gitea secrets on this repo: `REGISTRY_USER`, `REGISTRY_TOKEN` (package rw), `RELEASE_TOKEN` (repo write; mapped to `GITEA_TOKEN`, since Gitea forbids secret names starting `GITEA_`).
 - Gitea runner traps are inherited from hcloud (`hcloud/.gitea/CLAUDE.md`): checkout and the GoReleaser API use the in-cluster Service `http://gitea-http.gitea.svc.cluster.local:3000`, `setup-go` runs with `cache: false`, and docker needs the buildx plugin.
 - Toolchain pins: Go in `go.mod` + Dockerfile build stage; Bun in `web/package.json` `packageManager` + Dockerfile web stage; sqlc in the Makefile + both CI files (`SQLC_VERSION`). Renovate (hcloud's self-hosted bot, config in `renovate.json`) groups each pair so they move together.
-- The CI `TEST_DATABASE_URL` host is the one intended difference between forges: `postgres` on Gitea (job container on the service network), `localhost` on GitHub (VM with a mapped port).
+- How CI gets PostgreSQL 18 is the one intended difference between forges: GitHub uses a `services:` container; Gitea installs it inside the job from PGDG, because hcloud's runner puts jobs on docker's default bridge (no service DNS). Both use `localhost:5432`.
 
 ## Committing
 

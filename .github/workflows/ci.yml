@@ -30,8 +30,10 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      # THE ONE INTENTIONAL DIFFERENCE between the Gitea and GitHub copies:
-      # the job runs on the VM, so the service is reached through its mapped port.
+      # THE ONE INTENTIONAL DIFFERENCE from .gitea/workflows/ci.yaml: here
+      # PostgreSQL is a service container reached through its mapped port;
+      # the Gitea runner's network has no service DNS, so that copy starts
+      # PostgreSQL inside the job. Both end up on localhost:5432.
       TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
       # Fail instead of skipping if the database is unreachable.
       REQUIRE_DB_TESTS: "1"

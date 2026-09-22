@@ -18,22 +18,10 @@ on:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        # hcloud runs PostgreSQL 18; test against the same major.
-        image: postgres:18
-        env:
-          POSTGRES_PASSWORD: postgres
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
     env:
-      # THE ONE INTENTIONAL DIFFERENCE between the Gitea and GitHub copies:
-      # the job runs in a container on the same docker network as the service,
-      # so it is reached by its service name.
-      TEST_DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres?sslmode=disable
+      # PostgreSQL runs INSIDE this job container (step below), so it is on
+      # localhost -- the same URL the GitHub copy uses for its service container.
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
       # Fail instead of skipping if the database is unreachable.
       REQUIRE_DB_TESTS: "1"
       # renovate: datasource=github-releases depName=sqlc-dev/sqlc extractVersion=^v(?<version>.+)$
@@ -43,6 +31,28 @@ jobs:
         uses: actions/checkout@v4
         with:
           github-server-url: http://gitea-http.gitea.svc.cluster.local:3000
+
+      - name: Start PostgreSQL 18
+        # THE ONE INTENTIONAL DIFFERENCE from .github/workflows/ci.yml, which
+        # uses a `services:` container. hcloud's runner puts job containers on
+        # docker's default bridge (containerNetwork: bridge, chosen for the MTU
+        # -- see hcloud/k3s/helm/act-runner), and the default bridge has no DNS:
+        # a service container started fine and was healthy, then every test
+        # failed with "lookup postgres ... no such host" (run 322). So the
+        # server runs in the job container instead, from the PGDG repo to get
+        # the same major as hcloud. Measured: ~60s including apt.
+        run: |
+          set -eu
+          install -d /usr/share/postgresql-common/pgdg
+          curl -fsSL --retry 5 --retry-all-errors \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "$VERSION_CODENAME")-pgdg main" \
+            > /etc/apt/sources.list.d/pgdg.list
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends postgresql-18 >/dev/null
+          pg_ctlcluster 18 main start
+          su postgres -c "psql -qc \"ALTER USER postgres PASSWORD 'postgres'\""
 
       - name: Set up Go
         uses: actions/setup-go@v5
