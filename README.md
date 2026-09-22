@@ -31,8 +31,9 @@ The target design (schema, multi-currency, IFRS reports, imports, deployment) is
 # Init the project using make
 make init
 
-# Create a new user
-go run ./cmd/cli -c=create-user -u=juanvaldez -e=juanvaldez@gmail.com -p=juanvaldez123 -f="Juan Valdez" -l="Bernbach"
+# Point .env at a PostgreSQL server (see .env.example), then create a user.
+# The password is read from stdin when -p is omitted.
+go run ./cmd/cli create-user -u juanvaldez -e juanvaldez@example.com --display-name "Juan Valdez" --currency TWD
 
 # Use any of the followings to run the server
 #   1. make run
@@ -60,9 +61,8 @@ make help
 #### Backend
 
 - [github.com/go-chi/chi](https://github.com/go-chi/chi)
-- [github.com/jmoiron/sqlx](https://github.com/jmoiron/sqlx)
+- [sqlc.dev](https://sqlc.dev/)
 - [github.com/jackc/pgx](https://github.com/jackc/pgx)
-- [github.com/golang-jwt/jwt](https://github.com/golang-jwt/jwt)
 - [github.com/shopspring/decimal](https://github.com/shopspring/decimal)
 
 #### Frontend

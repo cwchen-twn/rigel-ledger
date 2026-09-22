@@ -1,9 +1,10 @@
 # RigelLedger target architecture
 
-Status: **accepted direction, not yet implemented** (2026-09-22). The code in `internal/`,
-`migrations/` and `web/src/` predates this document. Where they disagree, this document
-describes where the code is going. The app has never been deployed, so nothing here needs
-a data migration path.
+Status: **accepted direction; P1 backend implemented** (2026-09-22). The schema
+(`migrations/000001_init.up.sql`), sqlc data layer, sessions and the book-scoped JSON
+API follow this document. The SolidJS frontend in `web/src/` still targets the old
+API until P1's frontend PR lands. The app has never been deployed, so nothing here
+needs a data migration path.
 
 ## Goals
 
@@ -278,6 +279,35 @@ Family and account setup:
 - **Reconciliation.** The statement's closing balance is checked against the account
   balance at `period_end`, and matched postings become `reconciled`.
 
+### Card purchases: record now, settle later
+
+A foreign-currency card purchase is not final for days: the issuer's rate, the FX fee
+and any cash back arrive with the settlement. The flow is to record it on the day and
+correct the same transaction later. It is covered by
+`TestCardPurchaseEstimatedThenSettled`.
+
+1. **Day 1:** `Travel 300 USD` (base amount pre-filled from the day's rate) against the
+   TWD card for the estimate. Both lines are `uncleared`.
+2. **Settlement:** edit the transaction.
+   - Pin the expense's `base_amount` to what the issuer charged (9,468 TWD, so Visa's
+     31.56 becomes the rate for that purchase). There is no FX gain or loss, because the
+     card is a TWD account.
+   - Add `Fees 142`, and set the card line to -9,610 with status `cleared` and
+     `cleared_on` = the posting date.
+   - Per-purchase cash back is `card +189 / Card rewards -189`. A monthly lump sum is
+     its own transaction.
+   - The audit log keeps the estimate.
+3. **Payment:** a separate transfer, bank to card.
+
+`uncleared` doubles as "estimated": a charge is final the moment it posts. The P4 work
+that makes this nearly automatic:
+
+- an "estimates to finalize" view (uncleared card lines older than a few days);
+- optional `fx_fee_rate` and `cashback_rate` on card accounts, so the form proposes the
+  fee and cash-back lines;
+- statement import matches uncleared lines by date window, amount tolerance and payee,
+  and offers to rewrite the estimate to the statement amount.
+
 ## Firstrade
 
 - `MaxxRK/firstrade-api` is an **unofficial, reverse-engineered** Python library (MIT).
@@ -323,7 +353,7 @@ builds images.
 
 | Phase | Scope |
 |---|---|
-| P1 | Schema reset, sessions, sqlc; books, accounts, multi-currency transactions API and UI; the "All accounts" balances page; the user Settings page |
+| P1 | ~~Schema reset, sessions, sqlc; books, accounts, multi-currency transactions API~~ (done); UI: the "All accounts" balances page, entry, the user Settings page |
 | P2 | ~~Dockerfile, Gitea/GitHub CI and release~~ (done); hcloud chart; deploy and start daily entry |
 | P3 | Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback), book rebase, the three statements with FX revaluation and display-currency translation |
 | P4 | CSV and PDF import, review queue, rules, reconciliation. Confirm whether "future transactions pdf" means futures-broker statements or scheduled transactions |
