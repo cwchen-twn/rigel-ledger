@@ -1,5 +1,6 @@
 export interface MeResponse {
   username: string;
+  main_language: string;
   access_token_left_time: number;
 }
 
@@ -24,8 +25,12 @@ export async function login(username: string, password: string): Promise<string>
     const data = await resp.json() as { username: string };
     return data.username;
   }
-  const text = await resp.text();
-  throw new Error(text || 'Login failed');
+  let errorCode = 'UNKNOWN_ERROR';
+  try {
+    const data = await resp.json() as { error?: string };
+    if (data.error) errorCode = data.error;
+  } catch { /* ignore */ }
+  throw new Error(errorCode);
 }
 
 export async function refreshToken(): Promise<number> {

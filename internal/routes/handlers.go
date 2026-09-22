@@ -13,13 +13,15 @@ import (
 	"github.com/cwc1222/rigelledger/internal/models"
 )
 
-var (
-	ErrUserNotFound      = errors.New("user not found")
-	ErrInvalidPassword   = errors.New("invalid password")
-	ErrFailedToParseForm = errors.New("failed to parse form")
-	ErrFailedToParseJSON = errors.New("failed to parse JSON")
-	ErrPGInsertError     = errors.New("failed to insert into database")
-)
+// writeError sends a structured JSON error response: {"error": "<code>"}.
+// All user-facing error messages are resolved on the frontend via i18n.
+func writeError(w http.ResponseWriter, code string, status int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(struct {
+		Error string `json:"error"`
+	}{code})
+}
 
 // SPAHandler serves the SolidJS SPA shell for all HTML routes.
 // Auth is handled entirely client-side via /api/me.
@@ -40,6 +42,7 @@ func (lr LoginResponse) ToJSONString() (string, error) {
 
 type MeResponse struct {
 	Username            string `json:"username"`
+	MainLanguage        string `json:"main_language"`
 	AccessTokenLeftTime int    `json:"access_token_left_time"`
 }
 
@@ -48,12 +51,18 @@ func (mr MeResponse) ToJSONString() (string, error) {
 	return string(b), err
 }
 
-// MeHandler returns the authenticated user's info from the JWT.
+// MeHandler returns the authenticated user's info including preferred language.
 func (rt *Router) MeHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tokenData, ok := ctx.Value(auth.TokenDataKey).(*auth.TokenData)
 	if !ok {
-		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		writeError(w, "UNAUTHORIZED", http.StatusUnauthorized)
+		return
+	}
+
+	user, err := models.FindByUserName(tokenData.Subject, rt.db)
+	if err != nil {
+		writeError(w, "INTERNAL_ERROR", http.StatusInternalServerError)
 		return
 	}
 
@@ -63,7 +72,8 @@ func (rt *Router) MeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := MeResponse{
-		Username:            tokenData.Subject,
+		Username:            user.Username,
+		MainLanguage:        user.MainLanguage,
 		AccessTokenLeftTime: leftTime,
 	}
 	if err := rt.je.RenderResponse(w, r, resp); err != nil {
@@ -71,24 +81,22 @@ func (rt *Router) MeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// LoginHandler is the handler for the login page
+// LoginHandler authenticates the user and sets JWT cookies.
 // @Summary		Post login page
 // @Description	Returns a JWT token for the user
 // @Tags		root
 // @Accept		application/x-www-form-urlencoded
-// @Produce		plain
-// @Success		200	{string}	string	"JWT token"
-// @Failure		400	{string}	string	"Failed to parse form"
-// @Failure		401	{string}	string	"Invalid password"
-// @Failure		404	{string}	string	"User not found"
-// @Failure		500	{string}	string	"Error occurred while finding user"
-// @Failure		500	{string}	string	"Error occurred while updating last login"
-// @Failure		500	{string}	string	"Failed to generate access token"
+// @Produce		json
+// @Success		200	{object}	LoginResponse
+// @Failure		400	{object}	object{error=string}
+// @Failure		401	{object}	object{error=string}
+// @Failure		404	{object}	object{error=string}
+// @Failure		500	{object}	object{error=string}
 // @Router		/login [post]
 func (rt *Router) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		rt.logger.Error("Failed to parse form", "error", err)
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		writeError(w, "PARSE_ERROR", http.StatusBadRequest)
 		return
 	}
 
@@ -96,19 +104,19 @@ func (rt *Router) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	password := r.FormValue("password")
 
 	user, err := models.FindByUserName(username, rt.db)
-	if err == models.ErrUserNotFound {
+	if errors.Is(err, models.ErrUserNotFound) {
 		rt.logger.Error("User not found", "username", username)
-		http.Error(w, "User not found", http.StatusNotFound)
+		writeError(w, "USER_NOT_FOUND", http.StatusNotFound)
 		return
 	}
 	if err != nil {
 		rt.logger.Error("Error occurred while finding user", "error", err)
-		http.Error(w, "Error occurred while finding user", http.StatusInternalServerError)
+		writeError(w, "INTERNAL_ERROR", http.StatusInternalServerError)
 		return
 	}
 	if err := user.ValidatePassword(password); err != nil {
 		rt.logger.Error("Invalid password", "username", username)
-		http.Error(w, "Invalid password", http.StatusUnauthorized)
+		writeError(w, "INVALID_PASSWORD", http.StatusUnauthorized)
 		return
 	}
 
@@ -117,20 +125,20 @@ func (rt *Router) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	accessToken, err := rt.jwt.Sign(username, nil, auth.AccessTokenLifetime)
 	if err != nil {
 		rt.logger.Error("Failed to generate access token", "error", err)
-		http.Error(w, "Failed to generate access token", http.StatusInternalServerError)
+		writeError(w, "TOKEN_GENERATION_FAILED", http.StatusInternalServerError)
 		return
 	}
 
 	refreshToken, err := rt.jwt.Sign(username, nil, auth.RefreshTokenLifetime)
 	if err != nil {
 		rt.logger.Error("Failed to generate refresh token", "error", err)
-		http.Error(w, "Failed to generate refresh token", http.StatusInternalServerError)
+		writeError(w, "TOKEN_GENERATION_FAILED", http.StatusInternalServerError)
 		return
 	}
 
 	if err := user.UpdateLastLogin(rt.db); err != nil {
 		rt.logger.Error("Error occurred while updating last login", "error", err)
-		http.Error(w, "Error occurred while updating last login", http.StatusInternalServerError)
+		writeError(w, "INTERNAL_ERROR", http.StatusInternalServerError)
 		return
 	}
 
@@ -160,7 +168,6 @@ func (rt *Router) LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (rt *Router) LogoutHandler(w http.ResponseWriter, r *http.Request) {
-	// Clear both access and refresh token cookies
 	http.SetCookie(w, &http.Cookie{
 		Name:     auth.AccessTokenCookieName,
 		Value:    "",
@@ -198,27 +205,24 @@ func (rtr RefreshTokenResponse) ToJSONString() (string, error) {
 
 // RefreshTokenHandler handles token refresh using refresh token
 func (rt *Router) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
-	// Get refresh token from cookie
 	refreshTokenCookie, err := r.Cookie(auth.RefreshTokenCookieName)
 	if err != nil {
 		rt.logger.Error("No refresh token found", "error", err)
-		http.Error(w, "No refresh token", http.StatusUnauthorized)
+		writeError(w, "NO_REFRESH_TOKEN", http.StatusUnauthorized)
 		return
 	}
 
-	// Verify refresh token
 	tokenData, err := rt.jwt.Verify([]byte(refreshTokenCookie.Value))
 	if err != nil {
 		rt.logger.Error("Invalid refresh token", "error", err)
-		http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
+		writeError(w, "INVALID_TOKEN", http.StatusUnauthorized)
 		return
 	}
 
-	// Generate new access token
 	newAccessToken, err := rt.jwt.Sign(tokenData.Subject, nil, auth.AccessTokenLifetime)
 	if err != nil {
 		rt.logger.Error("Failed to generate new access token", "error", err)
-		http.Error(w, "Failed to generate new access token", http.StatusInternalServerError)
+		writeError(w, "TOKEN_GENERATION_FAILED", http.StatusInternalServerError)
 		return
 	}
 
@@ -232,12 +236,11 @@ func (rt *Router) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Now().Add(auth.AccessTokenLifetime),
 	})
 
-	// If the refresh token is expiring in less than 10 minutes, generate a new one
 	if time.Now().After(tokenData.Expiry.Add(-1 * time.Minute * 10)) {
 		newRefreshToken, err := rt.jwt.Sign(tokenData.Subject, nil, auth.RefreshTokenLifetime)
 		if err != nil {
 			rt.logger.Error("Failed to generate new refresh token", "error", err)
-			http.Error(w, "Failed to generate new refresh token", http.StatusInternalServerError)
+			writeError(w, "TOKEN_GENERATION_FAILED", http.StatusInternalServerError)
 			return
 		}
 
@@ -252,19 +255,17 @@ func (rt *Router) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	accessTokenLeftTime := time.Until(tokenData.Expiry).Seconds()
 	rtr := RefreshTokenResponse{
-		AccessTokenLeftTime: int(accessTokenLeftTime),
+		AccessTokenLeftTime: int(time.Until(tokenData.Expiry).Seconds()),
 	}
 
 	if err := rt.je.RenderResponse(w, r, rtr); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 }
 
-// ListTransactionsHandler is the handler for the list transactions page
+// ListTransactionsHandler returns paginated journal entries (DataTables format).
 // @Summary		Get list transactions page
 // @Description	Returns the list transactions page
 // @Tags		transactions
@@ -277,13 +278,13 @@ func (rt *Router) ListTransactionsHandler(w http.ResponseWriter, r *http.Request
 	ctx := r.Context()
 	tokenData, ok := ctx.Value(auth.TokenDataKey).(*auth.TokenData)
 	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, "UNAUTHORIZED", http.StatusUnauthorized)
 		return
 	}
 
 	if err := r.ParseForm(); err != nil {
 		rt.logger.Error("Failed to parse form", "error", err)
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		writeError(w, "PARSE_ERROR", http.StatusBadRequest)
 		return
 	}
 
@@ -298,7 +299,7 @@ func (rt *Router) ListTransactionsHandler(w http.ResponseWriter, r *http.Request
 	}
 	if draw, err := strconv.Atoi(r.FormValue("draw")); err != nil {
 		rt.logger.Error("Failed to parse draw", "error", err)
-		http.Error(w, "Failed to parse draw", http.StatusBadRequest)
+		writeError(w, "PARSE_ERROR", http.StatusBadRequest)
 		return
 	} else {
 		req.Draw = draw
@@ -306,7 +307,7 @@ func (rt *Router) ListTransactionsHandler(w http.ResponseWriter, r *http.Request
 
 	if start, err := strconv.Atoi(r.FormValue("start")); err != nil {
 		rt.logger.Error("Failed to parse start", "error", err)
-		http.Error(w, "Failed to parse start", http.StatusBadRequest)
+		writeError(w, "PARSE_ERROR", http.StatusBadRequest)
 		return
 	} else {
 		req.Start = start
@@ -314,7 +315,7 @@ func (rt *Router) ListTransactionsHandler(w http.ResponseWriter, r *http.Request
 
 	if length, err := strconv.Atoi(r.FormValue("length")); err != nil {
 		rt.logger.Error("Failed to parse length", "error", err)
-		http.Error(w, "Failed to parse length", http.StatusBadRequest)
+		writeError(w, "PARSE_ERROR", http.StatusBadRequest)
 		return
 	} else {
 		req.Length = length
@@ -322,7 +323,7 @@ func (rt *Router) ListTransactionsHandler(w http.ResponseWriter, r *http.Request
 
 	journals, err := models.FindTransactionsByUserID(tokenData.Subject, req, rt.db)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, "DB_ERROR", http.StatusInternalServerError)
 		return
 	}
 
@@ -336,13 +337,13 @@ func (rt *Router) LedgersGetHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tokenData, ok := ctx.Value(auth.TokenDataKey).(*auth.TokenData)
 	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, "UNAUTHORIZED", http.StatusUnauthorized)
 		return
 	}
 
 	ledgers, err := models.FindLedgersByUserID(tokenData.Subject, rt.db)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, "DB_ERROR", http.StatusInternalServerError)
 		return
 	}
 
@@ -355,7 +356,7 @@ func (rt *Router) LedgersGetHandler(w http.ResponseWriter, r *http.Request) {
 func (rt *Router) LedgerTypesHandler(w http.ResponseWriter, r *http.Request) {
 	types, err := models.FindLedgerTypes(rt.db)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, "DB_ERROR", http.StatusInternalServerError)
 		return
 	}
 
@@ -368,7 +369,7 @@ func (rt *Router) LedgerTypesHandler(w http.ResponseWriter, r *http.Request) {
 func (rt *Router) LedgerTypesFirstGradeHandler(w http.ResponseWriter, r *http.Request) {
 	types, err := models.FindLedgerTypesFirstGrade(rt.db)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, "DB_ERROR", http.StatusInternalServerError)
 		return
 	}
 
@@ -381,7 +382,7 @@ func (rt *Router) LedgerTypesFirstGradeHandler(w http.ResponseWriter, r *http.Re
 func (rt *Router) CurrenciesHandler(w http.ResponseWriter, r *http.Request) {
 	currencies, err := models.FindCurrencies(rt.db)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, "DB_ERROR", http.StatusInternalServerError)
 		return
 	}
 
@@ -395,7 +396,7 @@ func (rt *Router) LedgersSaveHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tokenData, ok := ctx.Value(auth.TokenDataKey).(*auth.TokenData)
 	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, "UNAUTHORIZED", http.StatusUnauthorized)
 		return
 	}
 
@@ -403,7 +404,7 @@ func (rt *Router) LedgersSaveHandler(w http.ResponseWriter, r *http.Request) {
 	var ledgers models.Ledgers
 	if err := json.NewDecoder(r.Body).Decode(&ledgers); err != nil {
 		rt.logger.Error("Failed to decode request body", "error", err)
-		http.Error(w, ErrFailedToParseJSON.Error(), http.StatusBadRequest)
+		writeError(w, "PARSE_JSON_ERROR", http.StatusBadRequest)
 		return
 	}
 
@@ -412,8 +413,15 @@ func (rt *Router) LedgersSaveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ledgers.Save(rt.db, tokenData.Subject); err != nil {
-		rt.logger.Error("Failed to insert into database", "error", err)
-		http.Error(w, ErrPGInsertError.Error(), http.StatusInternalServerError)
+		rt.logger.Error("Failed to save ledger", "error", err)
+		switch {
+		case errors.Is(err, models.ErrLedgerNameRequired):
+			writeError(w, "LEDGER_NAME_REQUIRED", http.StatusBadRequest)
+		case errors.Is(err, models.ErrBalanceRequired):
+			writeError(w, "BALANCE_INVALID", http.StatusBadRequest)
+		default:
+			writeError(w, "DB_ERROR", http.StatusInternalServerError)
+		}
 		return
 	}
 }
@@ -422,7 +430,7 @@ func (rt *Router) LedgersEditHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tokenData, ok := ctx.Value(auth.TokenDataKey).(*auth.TokenData)
 	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, "UNAUTHORIZED", http.StatusUnauthorized)
 		return
 	}
 
@@ -430,7 +438,7 @@ func (rt *Router) LedgersEditHandler(w http.ResponseWriter, r *http.Request) {
 	var ledgers models.Ledgers
 	if err := json.NewDecoder(r.Body).Decode(&ledgers); err != nil {
 		rt.logger.Error("Failed to decode request body", "error", err)
-		http.Error(w, ErrFailedToParseJSON.Error(), http.StatusBadRequest)
+		writeError(w, "PARSE_JSON_ERROR", http.StatusBadRequest)
 		return
 	}
 
@@ -439,8 +447,15 @@ func (rt *Router) LedgersEditHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ledgers.Edit(rt.db, tokenData.Subject); err != nil {
-		rt.logger.Error("Failed to insert into database", "error", err)
-		http.Error(w, ErrPGInsertError.Error(), http.StatusInternalServerError)
+		rt.logger.Error("Failed to edit ledger", "error", err)
+		switch {
+		case errors.Is(err, models.ErrLedgerNameRequired):
+			writeError(w, "LEDGER_NAME_REQUIRED", http.StatusBadRequest)
+		case errors.Is(err, models.ErrBalanceRequired):
+			writeError(w, "BALANCE_INVALID", http.StatusBadRequest)
+		default:
+			writeError(w, "DB_ERROR", http.StatusInternalServerError)
+		}
 		return
 	}
 }
@@ -449,24 +464,24 @@ func (rt *Router) LedgersDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tokenData, ok := ctx.Value(auth.TokenDataKey).(*auth.TokenData)
 	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeError(w, "UNAUTHORIZED", http.StatusUnauthorized)
 		return
 	}
 
 	ledgerIDStr := chi.URLParam(r, "ledgerID")
 	if ledgerIDStr == "" {
-		http.Error(w, "Ledger ID is required", http.StatusBadRequest)
+		writeError(w, "LEDGER_ID_REQUIRED", http.StatusBadRequest)
 		return
 	}
 
 	ledgerID, err := strconv.Atoi(ledgerIDStr)
 	if err != nil {
-		http.Error(w, "Invalid ledger ID", http.StatusBadRequest)
+		writeError(w, "INVALID_LEDGER_ID", http.StatusBadRequest)
 		return
 	}
 
 	if err := models.DeleteLedger(ledgerID, tokenData.Subject, rt.db); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, "DB_ERROR", http.StatusInternalServerError)
 		return
 	}
 }

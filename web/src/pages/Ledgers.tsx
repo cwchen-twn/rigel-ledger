@@ -4,9 +4,12 @@ import { Modal } from 'bootstrap';
 import type { Ledger, LedgerType, Currency } from '../types';
 import SearchableSelect, { type SelectOption } from '../components/SearchableSelect';
 import { sideAlert, centerAlert } from '../notifications';
+import { getApiError } from '../api/client';
+import { useI18n } from '../i18n';
 
 export default function Ledgers(): JSXElement {
   const params = useParams<{ username: string }>();
+  const { t } = useI18n();
 
   const [ledgers, { refetch: refetchLedgers }] = createResource(
     () => params.username,
@@ -40,7 +43,10 @@ export default function Ledgers(): JSXElement {
   const [editSaving, setEditSaving] = createSignal(false);
 
   const typeOptions = (): SelectOption[] =>
-    (ledgerTypes() ?? []).map(t => ({ value: t.ledgerTypeID, label: t.typeName }));
+    (ledgerTypes() ?? []).map(lt => ({
+      value: lt.ledgerTypeID,
+      label: t(`ledger_grades.types.${lt.ledgerTypeID}`, {}, lt.typeName),
+    }));
 
   const currencyOptions = (): SelectOption[] =>
     (currencies() ?? []).map(c => ({ value: c.alphabeticCode, label: `${c.alphabeticCode} – ${c.currencyName}` }));
@@ -57,7 +63,7 @@ export default function Ledgers(): JSXElement {
 
   async function createLedger(): Promise<void> {
     if (!newName().trim() || !newTypeID() || !newCurrency()) {
-      await sideAlert.fire({ icon: 'warning', title: 'Please fill all required fields' });
+      await sideAlert.fire({ icon: 'warning', title: t('ledgers.fill_required') });
       return;
     }
     setSaving(true);
@@ -73,10 +79,11 @@ export default function Ledgers(): JSXElement {
         }]),
       });
       if (!resp.ok) {
-        void sideAlert.fire({ icon: 'error', title: 'Error', text: await resp.text() });
+        const code = await getApiError(resp);
+        void sideAlert.fire({ icon: 'error', title: t('common.error'), text: t(`errors.${code}`, {}, t('errors.UNKNOWN_ERROR')) });
         return;
       }
-      void sideAlert.fire({ icon: 'success', title: 'Ledger created' });
+      void sideAlert.fire({ icon: 'success', title: t('ledgers.created') });
       setNewName(''); setNewTypeID(''); setNewCurrency(''); setNewBalance('0.00');
       const el = document.getElementById('new-ledger-modal');
       if (el) Modal.getInstance(el)?.hide();
@@ -102,10 +109,11 @@ export default function Ledgers(): JSXElement {
         }]),
       });
       if (!resp.ok) {
-        void sideAlert.fire({ icon: 'error', title: 'Error', text: await resp.text() });
+        const code = await getApiError(resp);
+        void sideAlert.fire({ icon: 'error', title: t('common.error'), text: t(`errors.${code}`, {}, t('errors.UNKNOWN_ERROR')) });
         return;
       }
-      void sideAlert.fire({ icon: 'success', title: 'Ledger updated' });
+      void sideAlert.fire({ icon: 'success', title: t('ledgers.updated') });
       setEditingID(null);
       refetchLedgers();
     } finally {
@@ -115,34 +123,35 @@ export default function Ledgers(): JSXElement {
 
   async function deleteLedger(id: number): Promise<void> {
     const result = await centerAlert.fire({
-      title: 'Delete ledger?',
-      text: 'This action cannot be undone.',
+      title: t('ledgers.confirm_delete_title'),
+      text: t('ledgers.confirm_delete_text'),
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#dc3545',
-      confirmButtonText: 'Delete',
+      confirmButtonText: t('common.delete'),
     });
     if (!result.isConfirmed) return;
 
     const resp = await fetch(`/${params.username}/api/ledger/${id}`, { method: 'DELETE' });
     if (!resp.ok) {
-      void sideAlert.fire({ icon: 'error', title: 'Error', text: await resp.text() });
+      const code = await getApiError(resp);
+      void sideAlert.fire({ icon: 'error', title: t('common.error'), text: t(`errors.${code}`, {}, t('errors.UNKNOWN_ERROR')) });
       return;
     }
-    void sideAlert.fire({ icon: 'success', title: 'Ledger deleted' });
+    void sideAlert.fire({ icon: 'success', title: t('ledgers.deleted') });
     refetchLedgers();
   }
 
   return (
     <div class="container-fluid py-4">
       <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0">Ledgers</h4>
+        <h4 class="mb-0">{t('ledgers.title')}</h4>
         <button
           class="btn btn-primary btn-sm"
           data-bs-toggle="modal"
           data-bs-target="#new-ledger-modal"
         >
-          <i class="bi bi-plus-lg me-1"></i>New Ledger
+          <i class="bi bi-plus-lg me-1"></i>{t('ledgers.new_ledger')}
         </button>
       </div>
 
@@ -152,13 +161,13 @@ export default function Ledgers(): JSXElement {
             <table class="table table-hover mb-0 align-middle">
               <thead class="table-light">
                 <tr>
-                  <th style="width:80px">Actions</th>
-                  <th>Name</th>
-                  <th>Type</th>
-                  <th>Currency</th>
-                  <th>Balance</th>
-                  <th>Status</th>
-                  <th>Created</th>
+                  <th style="width:80px">{t('ledgers.col_actions')}</th>
+                  <th>{t('ledgers.col_name')}</th>
+                  <th>{t('ledgers.col_type')}</th>
+                  <th>{t('ledgers.col_currency')}</th>
+                  <th>{t('ledgers.col_balance')}</th>
+                  <th>{t('ledgers.col_status')}</th>
+                  <th>{t('ledgers.col_created')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -176,7 +185,7 @@ export default function Ledgers(): JSXElement {
                     each={ledgers()}
                     fallback={
                       <tr>
-                        <td colspan="7" class="text-center text-muted py-4">No ledgers found</td>
+                        <td colspan="7" class="text-center text-muted py-4">{t('ledgers.no_ledgers')}</td>
                       </tr>
                     }
                   >
@@ -189,7 +198,7 @@ export default function Ledgers(): JSXElement {
                                 <button
                                   class="btn btn-sm btn-danger"
                                   onClick={() => deleteLedger(ledger.ledgerID)}
-                                  title="Delete"
+                                  title={t('common.delete')}
                                 >
                                   <i class="bi bi-trash"></i>
                                 </button>
@@ -204,12 +213,14 @@ export default function Ledgers(): JSXElement {
                             </div>
                           </td>
                           <td>{ledger.ledgerName}</td>
-                          <td class="small">{ledger.ledgerType.typeName}</td>
+                          <td class="small">
+                            {t(`ledger_grades.types.${ledger.ledgerTypeID}`, {}, ledger.ledgerType.typeName)}
+                          </td>
                           <td>{ledger.currency}</td>
                           <td class="text-end">{ledger.balance}</td>
                           <td>
                             <span class={`badge ${ledger.ledgerStatus === 1 ? 'bg-success' : 'bg-secondary'}`}>
-                              {ledger.ledgerStatus === 1 ? 'Active' : 'Inactive'}
+                              {ledger.ledgerStatus === 1 ? t('common.active') : t('common.inactive')}
                             </span>
                           </td>
                           <td class="text-muted small">{ledger.createdAt.slice(0, 10)}</td>
@@ -221,7 +232,7 @@ export default function Ledgers(): JSXElement {
                               <div class="p-2 d-flex flex-column gap-2" style="max-width:480px">
                                 <div class="row g-2">
                                   <div class="col-12">
-                                    <label class="form-label small mb-1">Name</label>
+                                    <label class="form-label small mb-1">{t('ledgers.label_name')}</label>
                                     <input
                                       type="text"
                                       class="form-control form-control-sm"
@@ -230,7 +241,7 @@ export default function Ledgers(): JSXElement {
                                     />
                                   </div>
                                   <div class="col-sm-6">
-                                    <label class="form-label small mb-1">Type</label>
+                                    <label class="form-label small mb-1">{t('ledgers.label_type')}</label>
                                     <SearchableSelect
                                       options={typeOptions()}
                                       value={editTypeID()}
@@ -239,7 +250,7 @@ export default function Ledgers(): JSXElement {
                                     />
                                   </div>
                                   <div class="col-sm-6">
-                                    <label class="form-label small mb-1">Currency</label>
+                                    <label class="form-label small mb-1">{t('ledgers.label_currency')}</label>
                                     <SearchableSelect
                                       options={currencyOptions()}
                                       value={editCurrency()}
@@ -248,7 +259,7 @@ export default function Ledgers(): JSXElement {
                                     />
                                   </div>
                                   <div class="col-sm-6">
-                                    <label class="form-label small mb-1">Balance</label>
+                                    <label class="form-label small mb-1">{t('ledgers.label_balance')}</label>
                                     <input
                                       type="number"
                                       class="form-control form-control-sm"
@@ -260,14 +271,14 @@ export default function Ledgers(): JSXElement {
                                     />
                                   </div>
                                   <div class="col-sm-6">
-                                    <label class="form-label small mb-1">Status</label>
+                                    <label class="form-label small mb-1">{t('ledgers.label_status')}</label>
                                     <select
                                       class="form-select form-select-sm"
                                       value={editStatus()}
                                       onChange={e => setEditStatus(parseInt(e.currentTarget.value))}
                                     >
-                                      <option value="1">Active</option>
-                                      <option value="0">Inactive</option>
+                                      <option value="1">{t('common.active')}</option>
+                                      <option value="0">{t('common.inactive')}</option>
                                     </select>
                                   </div>
                                 </div>
@@ -277,12 +288,12 @@ export default function Ledgers(): JSXElement {
                                     onClick={() => saveLedger(ledger)}
                                     disabled={editSaving()}
                                   >
-                                    <Show when={editSaving()} fallback={<>Save</>}>
-                                      <span class="spinner-border spinner-border-sm me-1"></span>Saving…
+                                    <Show when={editSaving()} fallback={<>{t('common.save')}</>}>
+                                      <span class="spinner-border spinner-border-sm me-1"></span>{t('common.saving')}
                                     </Show>
                                   </button>
                                   <button class="btn btn-secondary btn-sm" onClick={() => setEditingID(null)}>
-                                    Cancel
+                                    {t('common.cancel')}
                                   </button>
                                 </div>
                               </div>
@@ -304,41 +315,47 @@ export default function Ledgers(): JSXElement {
         <div class="modal-dialog">
           <div class="modal-content">
             <div class="modal-header">
-              <h5 class="modal-title">New Ledger</h5>
+              <h5 class="modal-title">{t('ledgers.new_ledger')}</h5>
               <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
               <div class="d-flex flex-column gap-3">
                 <div>
-                  <label class="form-label">Name <span class="text-danger">*</span></label>
+                  <label class="form-label">
+                    {t('ledgers.label_name')} <span class="text-danger">*</span>
+                  </label>
                   <input
                     type="text"
                     class="form-control"
                     value={newName()}
                     onInput={e => setNewName(e.currentTarget.value)}
-                    placeholder="e.g. Checking Account"
+                    placeholder={t('ledgers.placeholder_name')}
                   />
                 </div>
                 <div>
-                  <label class="form-label">Type <span class="text-danger">*</span></label>
+                  <label class="form-label">
+                    {t('ledgers.label_type')} <span class="text-danger">*</span>
+                  </label>
                   <SearchableSelect
                     options={typeOptions()}
                     value={newTypeID()}
                     onChange={setNewTypeID}
-                    placeholder="Select ledger type…"
+                    placeholder={t('ledgers.placeholder_type')}
                   />
                 </div>
                 <div>
-                  <label class="form-label">Currency <span class="text-danger">*</span></label>
+                  <label class="form-label">
+                    {t('ledgers.label_currency')} <span class="text-danger">*</span>
+                  </label>
                   <SearchableSelect
                     options={currencyOptions()}
                     value={newCurrency()}
                     onChange={setNewCurrency}
-                    placeholder="Select currency…"
+                    placeholder={t('ledgers.placeholder_currency')}
                   />
                 </div>
                 <div>
-                  <label class="form-label">Initial Balance</label>
+                  <label class="form-label">{t('ledgers.label_initial_balance')}</label>
                   <input
                     type="number"
                     class="form-control"
@@ -351,10 +368,12 @@ export default function Ledgers(): JSXElement {
               </div>
             </div>
             <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                {t('common.cancel')}
+              </button>
               <button type="button" class="btn btn-primary" onClick={createLedger} disabled={saving()}>
-                <Show when={saving()} fallback={<>Create</>}>
-                  <span class="spinner-border spinner-border-sm me-1"></span>Creating…
+                <Show when={saving()} fallback={<>{t('common.create')}</>}>
+                  <span class="spinner-border spinner-border-sm me-1"></span>{t('common.creating')}
                 </Show>
               </button>
             </div>

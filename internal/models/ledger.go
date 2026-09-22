@@ -98,21 +98,15 @@ func FindLedgersByUserID(userID string, conn *sqlx.DB) (Ledgers, error) {
 				ELSE TO_CHAR(l.updated_at, 'YYYY-MM-DD HH24:MI')
 			END updated_at,
 			(SELECT COUNT(*) FROM user_ledger_postings p WHERE p.ledger_id = l.ledger_id) postings_count,
-			CONCAT(t.first_grade, '. ', fg.type_name, ' (', fg.type_name_zh, ')') lt_first_grade,
-			CONCAT(t.second_grade, '. ', sg.type_name, ' (', sg.type_name_zh, ')') lt_second_grade,
-			CONCAT(t.third_grade, '. ', tg.type_name, ' (', tg.type_name_zh, ')') lt_third_grade,
-			CONCAT(t.type_name, ' (', t.type_name_zh, ')') lt_type_name,
-			CASE
-				WHEN t.description_en IS NULL THEN ''
-				ELSE CONCAT(t.description_en, ' (', t.description_zh, ')')
-			END lt_description,
-			t.is_active lt_is_active
+			t.first_grade  lt_first_grade,
+			t.second_grade lt_second_grade,
+			t.third_grade  lt_third_grade,
+			t.type_name    lt_type_name,
+			COALESCE(t.description, '') lt_description,
+			t.is_active    lt_is_active
 		FROM
 			user_ledgers l
 		JOIN ref_ledger_types t USING (ledger_type_id)
-		JOIN ref_ledger_first_grade fg USING (first_grade)
-		JOIN ref_ledger_second_grade sg USING (first_grade, second_grade)
-		JOIN ref_ledger_third_grade tg USING (first_grade, second_grade, third_grade)
 		WHERE
 			l.ledger_owner = $1
 			AND l.ledger_status < 2
@@ -154,20 +148,14 @@ func FindLedgerTypes(conn *sqlx.DB) (LedgerTypes, error) {
 	query := `
 		SELECT
 			ledger_type_id,
-			t.first_grade,
-			t.second_grade,
-			t.third_grade,
-			CONCAT(t.type_name, ' (', t.type_name_zh, ')') type_name,
-			CASE
-				WHEN t.description_en IS NULL THEN ''
-				ELSE CONCAT(t.description_en, ' (', t.description_zh, ')')
-			END description,
+			first_grade,
+			second_grade,
+			third_grade,
+			type_name,
+			COALESCE(description, '') description,
 			is_active
 		FROM
-			ref_ledger_types t
-		JOIN ref_ledger_first_grade fg USING (first_grade)
-		JOIN ref_ledger_second_grade sg USING (first_grade, second_grade)
-		JOIN ref_ledger_third_grade tg USING (first_grade, second_grade, third_grade)
+			ref_ledger_types
 		WHERE
 			is_active = TRUE
 	`
@@ -183,10 +171,10 @@ func FindLedgerTypesFirstGrade(conn *sqlx.DB) (LedgerTypesFirstGrades, error) {
 	query := `
 		SELECT
 			first_grade,
-			CONCAT(fg.type_name, ' (', fg.type_name_zh, ')') type_name,
-			CONCAT(fg.description_en, ' (', fg.description_zh, ')') description
+			type_name,
+			COALESCE(description, '') description
 		FROM
-			ref_ledger_first_grade fg
+			ref_ledger_first_grade
 	`
 	ledgerTypesFirstGrades := LedgerTypesFirstGrades{}
 	err := conn.Select(&ledgerTypesFirstGrades, query)

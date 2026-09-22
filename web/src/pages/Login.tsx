@@ -2,16 +2,17 @@ import { createSignal, createEffect, Show, type JSXElement } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { login } from '../api/auth';
 import { useAuth } from '../stores/auth';
+import { useI18n } from '../i18n';
 
 export default function Login(): JSXElement {
   const navigate = useNavigate();
   const { auth, refetch } = useAuth();
+  const { t } = useI18n();
   const [username, setUsername] = createSignal('');
   const [password, setPassword] = createSignal('');
-  const [error, setError] = createSignal('');
+  const [errorCode, setErrorCode] = createSignal('');
   const [submitting, setSubmitting] = createSignal(false);
 
-  // Redirect if already authenticated
   createEffect(() => {
     const authData = auth();
     if (!auth.loading && authData) {
@@ -26,7 +27,7 @@ export default function Login(): JSXElement {
     if (!username().trim() || !password()) return;
 
     setSubmitting(true);
-    setError('');
+    setErrorCode('');
 
     try {
       const loggedInAs = await login(username(), password());
@@ -35,7 +36,7 @@ export default function Login(): JSXElement {
       sessionStorage.removeItem('redirectAfterLogin');
       navigate(redirect, { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setErrorCode(err instanceof Error ? err.message : 'UNKNOWN_ERROR');
     } finally {
       setSubmitting(false);
     }
@@ -47,13 +48,13 @@ export default function Login(): JSXElement {
         <div class="card-body p-4">
           <div class="text-center mb-4">
             <i class="bi bi-gem fs-1 text-primary"></i>
-            <h4 class="mt-2 mb-0">RigelLedger</h4>
-            <p class="text-muted small mt-1">Personal Finance Management</p>
+            <h4 class="mt-2 mb-0">{t('app.name')}</h4>
+            <p class="text-muted small mt-1">{t('app.tagline')}</p>
           </div>
 
           <form onSubmit={handleSubmit} noValidate>
             <div class="mb-3">
-              <label class="form-label" for="username">Username</label>
+              <label class="form-label" for="username">{t('auth.username')}</label>
               <input
                 id="username"
                 type="text"
@@ -66,7 +67,7 @@ export default function Login(): JSXElement {
               />
             </div>
             <div class="mb-3">
-              <label class="form-label" for="password">Password</label>
+              <label class="form-label" for="password">{t('auth.password')}</label>
               <input
                 id="password"
                 type="password"
@@ -79,16 +80,16 @@ export default function Login(): JSXElement {
               />
             </div>
 
-            <Show when={error()}>
+            <Show when={errorCode()}>
               <div class="alert alert-danger py-2 small mb-3" role="alert">
-                {error()}
+                {t(`errors.${errorCode()}`, {}, t('errors.UNKNOWN_ERROR'))}
               </div>
             </Show>
 
             <button type="submit" class="btn btn-primary w-100" disabled={submitting()}>
-              <Show when={submitting()} fallback={<>Sign In</>}>
+              <Show when={submitting()} fallback={<>{t('auth.sign_in')}</>}>
                 <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                Signing in…
+                {t('auth.signing_in')}
               </Show>
             </button>
           </form>

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-RigelLedger is a personal finance management web application built with Go (backend) and server-rendered HTML templates (frontend). It supports double-entry bookkeeping with multi-currency and multilingual (English/Chinese) ledger types.
+RigelLedger is a personal finance management web application built with Go (backend) and SolidJS (frontend). It supports double-entry bookkeeping with multi-currency and multilingual (English/Chinese) ledger types.
 
 ## Common Commands
 
@@ -52,8 +52,9 @@ internal/
   routes/           # Route definitions and HTTP handlers
 web/
   efs.go            # Embeds static/ and templates/ into the binary
+  src/              # SolidJS app (components, pages, stores, API client)
   static/           # Vendored JS/CSS libraries
-  templates/        # Go html/template files
+  templates/        # Thin Go html/template shell — renders <div id="app"> only
 migrations/         # golang-migrate SQL files (numbered pairs)
 api/                # Generated Swagger output (do not edit manually)
 ```
@@ -76,7 +77,7 @@ Queries use `sqlx`. Financial values use `shopspring/decimal` throughout — nev
 
 ### Frontend
 
-Templates use Go's `html/template` with a base layout (`web/templates/partials/base.tmpl`). Pages use Alpine.js for interactivity and Bootstrap 5.3 for styling. DataTables handles server-side pagination via `POST /{username}/api/transactions`. All vendored libraries are embedded into the binary via `web/efs.go`.
+The frontend is a SolidJS SPA. Go's `html/template` serves only as a thin shell — `web/templates/app.tmpl` renders a single `<div id="app"></div>` that SolidJS mounts into. There are no multi-page server-rendered views; all UI lives in `web/src/`. The Go template layer has no user-facing content and does not need to participate in i18n or any UI logic.
 
 ## Configuration
 

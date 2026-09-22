@@ -1,25 +1,22 @@
 import { A, useLocation } from '@solidjs/router';
 import { type JSXElement } from 'solid-js';
+import { Offcanvas } from 'bootstrap';
+import { useI18n } from '../i18n';
 
 interface Props {
   username: string;
 }
 
-interface NavItem {
-  path: string;
-  label: string;
-  icon: string;
-}
-
-const NAV_ITEMS: NavItem[] = [
-  { path: '/', label: 'Home', icon: 'bi-house' },
-  { path: '/ledgers', label: 'Ledgers', icon: 'bi-journal-text' },
-  { path: '/reports', label: 'Reports', icon: 'bi-bar-chart' },
-  { path: '/settings', label: 'Settings', icon: 'bi-gear' },
-];
-
 export default function Sidebar(props: Props): JSXElement {
   const location = useLocation();
+  const { t } = useI18n();
+
+  const navItems = () => [
+    { path: '/',        label: t('nav.home'),     icon: 'bi-house' },
+    { path: '/ledgers', label: t('nav.ledgers'),  icon: 'bi-journal-text' },
+    { path: '/reports', label: t('nav.reports'),  icon: 'bi-bar-chart' },
+    { path: '/settings',label: t('nav.settings'), icon: 'bi-gear' },
+  ];
 
   function isActive(path: string): boolean {
     const fullPath = `/${props.username}${path === '/' ? '' : path}`;
@@ -27,14 +24,19 @@ export default function Sidebar(props: Props): JSXElement {
     return location.pathname.startsWith(fullPath);
   }
 
-  const navContent = () => (
+  function closeOffcanvas(): void {
+    const el = document.getElementById('mobile-sidebar');
+    if (el) Offcanvas.getInstance(el)?.hide();
+  }
+
+  const navContent = (withClose = false) => (
     <ul class="nav nav-pills flex-column mb-auto">
-      {NAV_ITEMS.map(item => (
+      {navItems().map(item => (
         <li class="nav-item">
           <A
             href={`/${props.username}${item.path}`}
             class={`nav-link ${isActive(item.path) ? 'active' : 'link-body-emphasis'}`}
-            data-bs-dismiss="offcanvas"
+            onClick={withClose ? closeOffcanvas : undefined}
           >
             <i class={`bi ${item.icon} me-2`}></i>
             {item.label}
@@ -51,9 +53,13 @@ export default function Sidebar(props: Props): JSXElement {
         <i class="bi bi-person-circle fs-5"></i>
         <strong class="small">{props.username}</strong>
       </div>
-      <a href="/logout" class="btn btn-outline-danger btn-sm w-100">
-        <i class="bi bi-box-arrow-right me-1"></i>Logout
-      </a>
+      <button
+        type="button"
+        class="btn btn-outline-danger btn-sm w-100"
+        onClick={() => { window.location.href = '/logout'; }}
+      >
+        <i class="bi bi-box-arrow-right me-1"></i>{t('nav.logout')}
+      </button>
     </>
   );
 
@@ -66,7 +72,7 @@ export default function Sidebar(props: Props): JSXElement {
       >
         <div class="d-flex align-items-center mb-3 text-decoration-none">
           <i class="bi bi-gem me-2 fs-5 text-primary"></i>
-          <span class="fw-bold">RigelLedger</span>
+          <span class="fw-bold">{t('app.name')}</span>
         </div>
         <hr />
         {navContent()}
@@ -76,7 +82,7 @@ export default function Sidebar(props: Props): JSXElement {
       {/* Mobile topbar */}
       <nav class="d-md-none navbar bg-body-tertiary border-bottom px-3" style="position:sticky;top:0;z-index:100">
         <span class="navbar-brand mb-0">
-          <i class="bi bi-gem me-2 text-primary"></i>RigelLedger
+          <i class="bi bi-gem me-2 text-primary"></i>{t('app.name')}
         </span>
         <button
           class="btn btn-sm btn-outline-secondary"
@@ -92,12 +98,12 @@ export default function Sidebar(props: Props): JSXElement {
       <div class="offcanvas offcanvas-start d-md-none" id="mobile-sidebar" tabindex="-1">
         <div class="offcanvas-header">
           <h5 class="offcanvas-title">
-            <i class="bi bi-gem me-2 text-primary"></i>RigelLedger
+            <i class="bi bi-gem me-2 text-primary"></i>{t('app.name')}
           </h5>
           <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
         </div>
         <div class="offcanvas-body d-flex flex-column">
-          {navContent()}
+          {navContent(/* withClose */ true)}
           {footerContent()}
         </div>
       </div>
