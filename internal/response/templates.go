@@ -15,7 +15,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/cwc1222/rigelledger/internal/auth"
+	"github.com/cwchen-twn/rigel-ledger/internal/auth"
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
@@ -25,7 +25,7 @@ var printer = message.NewPrinter(language.English)
 
 var copyrightDeclaration = fmt.Sprintf(`
 &copy; 2024 - %d Catopia de Chen Antúnez E.A.S. Paraguay —
-<a href="https://github.com/cwc1222/rigelledger/blob/main/LICENSE">MIT Licensed</a>
+<a href="https://github.com/cwchen-twn/rigel-ledger/blob/main/LICENSE">MIT Licensed</a>
 `, time.Now().Year())
 
 // generateNonce creates a cryptographically secure random nonce

@@ -497,7 +497,7 @@ wheels = [
 ]
 
 [[package]]
-name = "rigelledger"
+name = "rigel-ledger"
 version = "0.1.0"
 source = { virtual = "." }
 

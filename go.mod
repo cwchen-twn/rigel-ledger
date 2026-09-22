@@ -1,4 +1,4 @@
-module github.com/cwc1222/rigelledger
+module github.com/cwchen-twn/rigel-ledger
 
 go 1.26.3
 

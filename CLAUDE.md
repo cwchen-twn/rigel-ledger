@@ -40,7 +40,7 @@ To run a single test: `go test -run TestName ./internal/auth/`
 ### Package Structure
 
 ```
-cmd/rigelledger/    # HTTP server entry point
+cmd/rigel-ledger/    # HTTP server entry point
 cmd/cli/            # Admin CLI (user creation)
 internal/
   application.go    # App bootstrap: config → DB → HTTP server

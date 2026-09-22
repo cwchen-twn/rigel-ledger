@@ -13,7 +13,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
 
-	"github.com/cwc1222/rigelledger/migrations"
+	"github.com/cwchen-twn/rigel-ledger/migrations"
 )
 
 type Postgres struct {

@@ -11,9 +11,9 @@ import (
 	"github.com/go-chi/httplog/v3"
 	"github.com/jmoiron/sqlx"
 
-	"github.com/cwc1222/rigelledger/internal/auth"
-	"github.com/cwc1222/rigelledger/internal/response"
-	"github.com/cwc1222/rigelledger/web"
+	"github.com/cwchen-twn/rigel-ledger/internal/auth"
+	"github.com/cwchen-twn/rigel-ledger/internal/response"
+	"github.com/cwchen-twn/rigel-ledger/web"
 )
 
 type RouterConfig struct {

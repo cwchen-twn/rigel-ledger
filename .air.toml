@@ -3,7 +3,7 @@ tmp_dir = "tmp"
 
 [build]
   cmd = "make build/dev/go"
-  entrypoint = "/tmp/bin/rigelledger"
+  entrypoint = "/tmp/bin/rigel-ledger"
   delay = 100
   exclude_dir = ["web", "tmp"]
   include_ext = ["go", "sql"]

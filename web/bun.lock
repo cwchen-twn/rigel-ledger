@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "rigelledger-web",
+      "name": "rigel-ledger-web",
       "dependencies": {
         "@solidjs/router": "^0.15.3",
         "bootstrap": "^5.3.6",

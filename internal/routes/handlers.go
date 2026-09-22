@@ -9,8 +9,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/cwc1222/rigelledger/internal/auth"
-	"github.com/cwc1222/rigelledger/internal/models"
+	"github.com/cwchen-twn/rigel-ledger/internal/auth"
+	"github.com/cwchen-twn/rigel-ledger/internal/models"
 )
 
 // writeError sends a structured JSON error response: {"error": "<code>"}.

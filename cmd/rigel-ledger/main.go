@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/cwc1222/rigelledger/internal"
+	"github.com/cwchen-twn/rigel-ledger/internal"
 )
 
 func main() {

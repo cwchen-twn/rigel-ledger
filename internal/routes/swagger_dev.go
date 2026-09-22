@@ -6,7 +6,7 @@ package routes
 import (
 	"fmt"
 
-	_ "github.com/cwc1222/rigelledger/api"
+	_ "github.com/cwchen-twn/rigel-ledger/api"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 

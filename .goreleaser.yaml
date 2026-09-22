@@ -1,11 +1,11 @@
-# GoReleaser configuration for rigelledger
+# GoReleaser configuration for rigel-ledger
 
 version: 2
 
 builds:
-  - id: rigelledger
-    binary: rigelledger
-    main: ./cmd/rigelledger
+  - id: rigel-ledger
+    binary: rigel-ledger
+    main: ./cmd/rigel-ledger
     goos:
       - linux
       - darwin
@@ -20,9 +20,9 @@ builds:
       - -X main.date={{.Date}}
 
 archives:
-  - id: rigelledger
-    ids: [rigelledger]
-    name_template: "rigelledger_{{.Version}}_{{.Os}}_{{.Arch}}"
+  - id: rigel-ledger
+    ids: [rigel-ledger]
+    name_template: "rigel-ledger_{{.Version}}_{{.Os}}_{{.Arch}}"
     formats: [tar.gz]
     files:
       - README.md
@@ -60,8 +60,8 @@ checksum:
 
 # dockers:
 #   - image_templates:
-#       - "rigelledger:{{.Version}}"
-#       - "rigelledger:latest"
+#       - "rigel-ledger:{{.Version}}"
+#       - "rigel-ledger:latest"
 #     dockerfile: Dockerfile
 #     use: buildx
 #     build_flag_templates:

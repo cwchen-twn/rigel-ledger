@@ -15,7 +15,7 @@ help:
 ##init: Initialize the project, including go modules and uv packages
 .PHONY: init
 init:
-	@if [ ! -f go.mod ]; then go mod init github.com/cwc1222/rigelledger; else echo "Project exists, skipping go mod init"; fi
+	@if [ ! -f go.mod ]; then go mod init github.com/cwchen-twn/rigel-ledger; else echo "Project exists, skipping go mod init"; fi
 	@go mod tidy
 	@go mod verify
 	@go mod download
@@ -115,14 +115,14 @@ test/cover:
 ##build/dev: Build the application for development
 .PHONY: build/dev
 build/dev: frontend/build/dev
-	@CGO_ENABLED=0 go build -tags "dev" -gcflags=all="-N -l" -o=$(BUILD_DIR)/rigelledger ./cmd/rigelledger
+	@CGO_ENABLED=0 go build -tags "dev" -gcflags=all="-N -l" -o=$(BUILD_DIR)/rigel-ledger ./cmd/rigel-ledger
 	@echo "Development build finished"
-	du -sh $(BUILD_DIR)/rigelledger
+	du -sh $(BUILD_DIR)/rigel-ledger
 
 ##build/dev/go: Rebuild only the Go binary (used by Air during live reload)
 .PHONY: build/dev/go
 build/dev/go:
-	@CGO_ENABLED=0 go build -tags "dev" -gcflags=all="-N -l" -o=$(BUILD_DIR)/rigelledger ./cmd/rigelledger
+	@CGO_ENABLED=0 go build -tags "dev" -gcflags=all="-N -l" -o=$(BUILD_DIR)/rigel-ledger ./cmd/rigel-ledger
 	@echo "Go build finished"
 
 ##build/prod: Build the application for production
@@ -131,9 +131,9 @@ build/prod: frontend/build/prod
 	@echo "Building production version... $(APP_VERSION)"
 	@CGO_ENABLED=0 GOOS=linux go build -tags "prod" -a -installsuffix cgo \
 		-ldflags "-s -w -extldflags '-static'" \
-		-o=$(BUILD_DIR)/rigelledger.$(APP_VERSION) ./cmd/rigelledger
+		-o=$(BUILD_DIR)/rigel-ledger.$(APP_VERSION) ./cmd/rigel-ledger
 	@echo "Production build finished"
-	@du -sh $(BUILD_DIR)/rigelledger.$(APP_VERSION)
+	@du -sh $(BUILD_DIR)/rigel-ledger.$(APP_VERSION)
 
 ##build/compare: Compare development vs production build sizes
 .PHONY: build/compare
@@ -144,17 +144,17 @@ build/compare:
 	@make build/prod > /dev/null 2>&1
 	@echo "\nSize comparison:"
 	@echo "Development build, with default go build flags and swagger enabled:"
-	@du -sh $(BUILD_DIR)/rigelledger
+	@du -sh $(BUILD_DIR)/rigel-ledger
 	@echo "Minimized build for production, including build tags and static linking:"
-	@du -sh $(BUILD_DIR)/rigelledger.$(APP_VERSION)
+	@du -sh $(BUILD_DIR)/rigel-ledger.$(APP_VERSION)
 
 ##checkbuilt: Analyze the built binary using go-size-analyzer
 .PHONY: checkbuilt
 checkbuilt:
-	@if [ -f $(BUILD_DIR)/rigelledger ]; then \
-		go run github.com/Zxilly/go-size-analyzer/cmd/gsa@v1.12.0 $(BUILD_DIR)/rigelledger; \
+	@if [ -f $(BUILD_DIR)/rigel-ledger ]; then \
+		go run github.com/Zxilly/go-size-analyzer/cmd/gsa@v1.12.0 $(BUILD_DIR)/rigel-ledger; \
 	else \
-		echo "Error: $(BUILD_DIR)/rigelledger not found, please build the development binary first"; \
+		echo "Error: $(BUILD_DIR)/rigel-ledger not found, please build the development binary first"; \
 		echo "To build the development binary, run: make build/dev"; \
 		exit 1; \
 	fi
@@ -162,10 +162,10 @@ checkbuilt:
 ##checkbuilt/prod: Analyze the built binary using go-size-analyzer
 .PHONY: checkbuilt/prod
 checkbuilt/prod:
-	@if [ -f $(BUILD_DIR)/rigelledger.$(APP_VERSION) ]; then \
-		go run github.com/Zxilly/go-size-analyzer/cmd/gsa@v1.12.0 $(BUILD_DIR)/rigelledger.$(APP_VERSION); \
+	@if [ -f $(BUILD_DIR)/rigel-ledger.$(APP_VERSION) ]; then \
+		go run github.com/Zxilly/go-size-analyzer/cmd/gsa@v1.12.0 $(BUILD_DIR)/rigel-ledger.$(APP_VERSION); \
 	else \
-		echo "Error: $(BUILD_DIR)/rigelledger.$(APP_VERSION) not found, please build the production binary first"; \
+		echo "Error: $(BUILD_DIR)/rigel-ledger.$(APP_VERSION) not found, please build the production binary first"; \
 		echo "To build the production binary, run: make build/prod"; \
 		exit 1; \
 	fi
@@ -173,7 +173,7 @@ checkbuilt/prod:
 ##run: Build and run the application for development
 .PHONY: run
 run: build/dev
-	$(BUILD_DIR)/rigelledger
+	$(BUILD_DIR)/rigel-ledger
 
 ##run/live: Run with live reload using Air for development
 .PHONY: run/live
@@ -184,7 +184,7 @@ run/live: frontend/build/dev
 .PHONY: run/livedebug
 run/livedebug: frontend/build/dev
 	(cd web && bun run build:watch) & VITE_PID=$$!; go run github.com/air-verse/air@latest -c .air.toml \
-		--build.full_bin "dlv exec $(BUILD_DIR)/rigelledger --listen=127.0.0.1:2345 --headless=true --api-version=2 --accept-multiclient --continue --log -- "; kill $$VITE_PID 2>/dev/null
+		--build.full_bin "dlv exec $(BUILD_DIR)/rigel-ledger --listen=127.0.0.1:2345 --headless=true --api-version=2 --accept-multiclient --continue --log -- "; kill $$VITE_PID 2>/dev/null
 
 ##swag: Generate swagger documentation
 .PHONY: swag

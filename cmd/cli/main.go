@@ -9,8 +9,8 @@ import (
 	flag "github.com/spf13/pflag"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/cwc1222/rigelledger/internal"
-	"github.com/cwc1222/rigelledger/internal/models"
+	"github.com/cwchen-twn/rigel-ledger/internal"
+	"github.com/cwchen-twn/rigel-ledger/internal/models"
 )
 
 var (
