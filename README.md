@@ -68,10 +68,9 @@ make help
 #### Frontend
 
 - [solidjs.com](https://www.solidjs.com/) and [@solidjs/router](https://github.com/solidjs/solid-router)
-- [getbootstrap.com](https://getbootstrap.com/docs/5.3/getting-started/introduction/)
-- [icons.getbootstrap.com](https://icons.getbootstrap.com/)
-- [github.com/sweetalert2/sweetalert2](https://github.com/sweetalert2/sweetalert2/)
-- [github.com/iamkun/dayjs](https://github.com/iamkun/dayjs/)
+- [tailwindcss.com](https://tailwindcss.com/) (v4) with the design language of [ui.shadcn.com](https://ui.shadcn.com/)
+- [kobalte.dev](https://kobalte.dev/) (accessible primitives) and [lucide.dev](https://lucide.dev/) icons
+- [github.com/royNiladri/js-big-decimal](https://github.com/royNiladri/js-big-decimal/) and [github.com/iamkun/dayjs](https://github.com/iamkun/dayjs/)
 - [vite.dev](https://vite.dev/) and [bun.sh](https://bun.sh/) (build tooling)
 
 ### Go Tools

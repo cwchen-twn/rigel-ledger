@@ -2,8 +2,7 @@
 
 Status: **accepted direction; P1 backend implemented** (2026-09-22). The schema
 (`migrations/000001_init.up.sql`), sqlc data layer, sessions and the book-scoped JSON
-API follow this document. The SolidJS frontend in `web/src/` still targets the old
-API until P1's frontend PR lands. The app has never been deployed, so nothing here
+API follow this document, and so does the SolidJS frontend. The app has never been deployed, so nothing here
 needs a data migration path.
 
 ## Goals
@@ -35,7 +34,16 @@ SolidJS PWA (web)   Flutter (later)     firstrade-sync CronJob (Python)
   htmx: with htmx, every endpoint would have to be written twice, once as HTML fragments
   and once as JSON for mobile. SolidStart was rejected because it needs a Node SSR server
   next to Go.
-- Keep Bootstrap 5.
+- **UI: SolidJS + Tailwind v4 + Kobalte, in shadcn/ui's design.** shadcn/ui itself is
+  React-only; switching to React for it was considered and declined to keep Solid.
+  Instead the shadcn look lives in this repo, the same copy-in way shadcn works:
+  - design tokens as CSS variables (`web/src/styles/globals.css`), with dark mode as one
+    class on `<html>`;
+  - our own components in `web/src/components/ui/`, using `cva` variants and `cn()`;
+  - Kobalte (Solid's counterpart of Radix) only where accessibility is hard: Dialog/Sheet,
+    Combobox, DropdownMenu and Toast. Selects and checkboxes are native elements.
+
+  Bootstrap is gone.
 - **PWA first.** It covers phone entry and receipt photos. Build Flutter only if a native
   feature is actually needed.
 
@@ -353,7 +361,7 @@ builds images.
 
 | Phase | Scope |
 |---|---|
-| P1 | ~~Schema reset, sessions, sqlc; books, accounts, multi-currency transactions API~~ (done); UI: the "All accounts" balances page, entry, the user Settings page |
+| P1 | ~~Schema reset, sessions, sqlc; books, accounts, multi-currency transactions API and UI; the "All accounts" balances page; the user Settings page~~ (done) |
 | P2 | ~~Dockerfile, Gitea/GitHub CI and release~~ (done); hcloud chart; deploy and start daily entry |
 | P3 | Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback), book rebase, the three statements with FX revaluation and display-currency translation |
 | P4 | CSV and PDF import, review queue, rules, reconciliation. Confirm whether "future transactions pdf" means futures-broker statements or scheduled transactions |
