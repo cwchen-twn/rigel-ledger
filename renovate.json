@@ -1,0 +1,84 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "timezone": "America/Asuncion",
+  "dependencyDashboard": true,
+  "enabledManagers": [
+    "gomod",
+    "bun",
+    "npm",
+    "dockerfile",
+    "github-actions",
+    "pre-commit",
+    "pep621"
+  ],
+  "pre-commit": {
+    "enabled": true
+  },
+  "postUpdateOptions": [
+    "gomodTidy"
+  ],
+  "rangeStrategy": "pin",
+  "minimumReleaseAge": "3 days",
+  "prConcurrentLimit": 10,
+  "prHourlyLimit": 0,
+  "prCreation": "immediate",
+  "semanticCommits": "enabled",
+  "semanticCommitType": "chore",
+  "semanticCommitScope": "deps",
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+  "ignorePaths": [
+    "**/node_modules/**"
+  ],
+  "packageRules": [
+    {
+      "description": "The Go toolchain is pinned in go.mod (go directive, read by setup-go in both CI forges) and in the Dockerfile build stage. Move them in one PR so CI and the image never build with different compilers.",
+      "matchDepNames": [
+        "go",
+        "golang"
+      ],
+      "groupName": "go toolchain"
+    },
+    {
+      "description": "Bun is pinned in web/package.json packageManager (read by setup-bun in both CI forges) and in the Dockerfile web stage. Same reasoning as the Go toolchain.",
+      "matchDepNames": [
+        "bun",
+        "oven/bun"
+      ],
+      "groupName": "bun toolchain"
+    },
+    {
+      "description": "golang.org/x/* release together and usually need to move together.",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "golang.org/x/**"
+      ],
+      "groupName": "golang.org/x"
+    },
+    {
+      "description": "Routine frontend minor/patch bumps in one PR.",
+      "matchManagers": [
+        "bun",
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "frontend minor and patch"
+    },
+    {
+      "description": "Keep the .gitea and .github copies of the same action on the same version.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "ci actions"
+    }
+  ]
+}
