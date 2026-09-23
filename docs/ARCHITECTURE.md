@@ -17,6 +17,7 @@ needs a data migration path.
 - Stock and futures investments: 永豐 via its official Shioaji API, Taiwan holdings via
   集保 e存摺, Firstrade via its unofficial library.
 - Per-user settings (language, display currency, ...) that can be changed at any time.
+- A yearly tax workbook for Taiwan and Paraguay, later (designed in Tax; P7).
 - Packaged as a container, deployed by the hcloud repo.
 
 ## Shape
@@ -599,6 +600,83 @@ that makes this nearly automatic:
 - statement import matches uncleared lines by date window, amount tolerance and payee,
   and offers to rewrite the estimate to the statement amount.
 
+## Tax: Taiwan and Paraguay (designed, not built)
+
+The goal is **a yearly tax workbook per taxpayer and country**. It gathers income by tax
+category, deductions with their evidence, tax already withheld, and capital gains, in
+the country's currency. The workbook is handed to the official software (Taiwan's 綜所稅
+filing software, with its pre-filled data) or to a contador in Paraguay. **The ledger
+prepares and cross-checks; it does not file.** The design needs only a few hooks, and
+most of them are already there.
+
+### What the ledger must record so the workbook is possible
+
+- **Who the income belongs to.**
+  - Tax is per person, not per book. A `person` tag kind names the taxpayer on
+    transactions, the same tags as "who spent it".
+  - `tax_profiles(user_or_person, jurisdiction TW|PY, residency, filing_unit)` records
+    where each person files. Taiwan's household filing (夫妻合併申報, with separate
+    computation choices) is a filing unit, not a book.
+- **What each line is for tax.**
+  - `tax_categories(jurisdiction, year, key)` define the categories. Examples:
+    - Taiwan: 薪資所得, 利息所得, 股利所得, 財產交易所得, deductible 保險費/醫藥費/捐贈/房租;
+    - Paraguay: the IRP categories for personal services and for capital income.
+  - A mapping `account -> category` per jurisdiction, with a per-posting override. The
+    salary account maps once; an odd line can say otherwise.
+- **Tax paid in advance is an asset, not an expense.**
+  - Withholding on salary, on dividends (for example US withholding on Firstrade
+    dividends) and on interest goes to a `tax_withheld` asset (tax receivable) per
+    jurisdiction.
+  - The final assessment moves the year's liability to the tax expense. The refund or
+    payment settles the difference.
+  - Foreign tax paid is kept separately so it can be claimed as a credit where the rules
+    allow.
+- **Evidence.**
+  - Deductions need proof: receipts and e-invoices (attachments), insurance premiums (the
+    policies module), donations.
+  - The workbook lists each deduction with its attachment, so nothing is claimed without
+    a document.
+- **Capital gains** reuse the holdings rules.
+  - Cost basis is weighted average today, FIFO lots in P5. The method is chosen per
+    jurisdiction, because the country's rule wins over the ledger's default.
+  - Transaction taxes already paid on sales (such as Taiwan's securities and futures
+    transaction taxes) are their own expense lines, and the workbook lists them.
+- **The country's currency and the country's rate.**
+  - Taiwan reports in TWD, Paraguay in PYG. Foreign income is translated with the rate
+    source each tax authority requires.
+  - That source is another `prices.source` (for example a central-bank or tax-authority
+    rate), not the ledger's own scraped rate.
+  - Stored postings keep their historical base amounts. The workbook is a separate
+    translation, the same way the display currency is.
+
+### Rules are data, per year
+
+- Rates, brackets, thresholds and limits change every year. They include Taiwan's
+  basic-income (最低稅負) thresholds for overseas income, the dividend-taxation options,
+  and deduction caps.
+- They live in versioned files, one per jurisdiction and year, e.g.
+  `tax/rules/tw/2026.yaml`. They are reviewed by a person and never hard-coded.
+- **Nothing in this section is tax advice**, and the figures are deliberately absent.
+  Each year's file is filled from the official source and checked against what the
+  authority pre-fills.
+
+### Cross-border points to confirm before building
+
+- **Taiwan residents** include overseas income in the basic-income (AMT) computation
+  above a threshold. Paraguay and US income is overseas income here. Confirm the current
+  rule and threshold.
+- **Paraguay's IRP** (Ley 6380) has separate treatment for personal-service income and
+  for capital income. Whether a given foreign-source item is taxable there, and at which
+  rate, needs a contador's confirmation.
+- **Credits for foreign tax paid** (US dividend withholding, Paraguayan tax on
+  Taiwan-source items or the reverse) depend on each country's rules and any treaty.
+  Record the facts now; decide the treatment later.
+
+### What stays out
+
+- **Filing, e-signing and payment** belong to the official channels.
+- **Tax optimisation advice.** The workbook shows numbers and where they came from.
+
 ## Deployment
 
 hcloud keeps every chart local under `k3s/helm/`. It has no OCI chart registry and
@@ -639,3 +717,4 @@ builds images.
 | P4 | **Sync and review**: import API with `import_rows` kinds, `source_accounts`, review queue, rules, matching (pending/posted, transfers, invoices, order emails), assertions, challenges; receipt attachments (upload, camera, optional local OCR); the tw-sync runner (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
 | P5 | Securities and futures: py-sync (Shioaji daily, Firstrade), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, 永豐 deposits, Banco Continental (if its export is not enough). Recurring list and subscription templates. (Points, average cost and the security commodity itself are done.) |
 | P6 | PWA polish, then Flutter if a native feature is needed |
+| P7 | **Tax workbooks (TW, PY)**: `person` tags and `tax_profiles`; tax categories and account mappings per jurisdiction; `tax_withheld` accounts and foreign-tax-paid records; per-year rule files; workbook export (income by category, deductions with evidence, withholding, capital gains in the country's currency and rate). Needs P3 reports, P4 attachments and P5 lots. Prepares and cross-checks; does not file. |
