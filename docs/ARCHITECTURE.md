@@ -712,7 +712,7 @@ builds images.
 | Phase | Scope |
 |---|---|
 | P1 | ~~Schema reset, sessions, sqlc; books, accounts, multi-currency transactions API and UI; the "All accounts" balances page; the user Settings page~~ (done) |
-| P2 | ~~Dockerfile, Gitea/GitHub CI and release~~ (done); hcloud chart; deploy and start daily entry |
+| P2 | ~~Dockerfile, Gitea/GitHub CI and release~~ (done); ~~probes (`/livez`, `/readyz`) and the hcloud chart `k3s/helm/rigel-ledger` (tailnet-only ipAllowList, own Postgres role, in the nightly backup)~~ (written, hcloud #90); first release `v0.1.0`, deploy, and start daily entry |
 | P3 | Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency), book rebase, the three statements bound to closing rates with `rates_used`, display-currency translation, tag (trip) report |
 | P4 | **Sync and review**: import API with `import_rows` kinds, `source_accounts`, review queue, rules, matching (pending/posted, transfers, invoices, order emails), assertions, challenges; receipt attachments (upload, camera, optional local OCR); the tw-sync runner (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
 | P5 | Securities and futures: py-sync (Shioaji daily, Firstrade), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, 永豐 deposits, Banco Continental (if its export is not enough). Recurring list and subscription templates. (Points, average cost and the security commodity itself are done.) |
