@@ -391,7 +391,8 @@ moves across unchanged.
 
 ## Data sources and sync
 
-Decided 2026-09-23 against thirteen sources the household actually uses. The reference
+Decided 2026-09-23 against the sources the household actually uses (fifteen, with
+Paraguay and email added the same day). The reference
 is [TedLin1993/all-set-tw](https://github.com/TedLin1993/all-set-tw) (MIT), a self-hosted
 Taiwan finance hub whose connectors this design reuses.
 
@@ -421,6 +422,8 @@ Taiwan finance hub whose connectors this design reuses.
 | 11 | 電子發票載具 | carrier invoices with line items | all-set-tw `einvoice` (app login). The MOF's own API route could not be verified | reuse |
 | 12 | 集保 e存摺 | settlement-bank balances; TW stocks, ETF and funds, holdings and trades across brokers | all-set-tw `tdcc` (device OTP on first login) | reuse; **source of truth for TW holdings** |
 | 13 | Firstrade | trades, positions, value, history | `MaxxRK/firstrade-api` (unofficial Python; TOTP, saved cookies); its CSV export is the fallback | new (Python) |
+| 14 | Banco Continental (Paraguay) | USD account, PYG account, PYG credit card | no known API or open-source connector; start from its online-banking statement export (format to be checked), then a browser connector in the tw-sync shape if the export is poor | new |
+| 15 | Gmail | order confirmations, receipts, subscription renewals, bank/card alert emails | IMAP, read-only, one label (see Email below) | new |
 
 What is known about the sources, and what is not:
 
@@ -437,6 +440,13 @@ What is known about the sources, and what is not:
     trading day after the close, or history is lost.
 - Consolidating 國泰 securities and futures into 永豐 (planned) turns rows 5–6 into
   Shioaji too.
+- **Banco Continental** needs no model change.
+  - It maps to three accounts: an asset in USD, an asset in PYG, and a liability in PYG
+    for the card. PYG has zero minor units, which the schema already handles.
+  - A USD purchase on the PYG card follows the card-settlement flow, the same as a
+    foreign charge on a Taiwan card.
+  - Whether these live in the TWD book or a separate PYG book is a household choice.
+    One book works; reports translate.
 
 ### Runners
 
@@ -503,12 +513,53 @@ in one review queue.
     resumes.
   - The runner never bypasses a security check.
 
+### Receipts
+
+- A receipt photo or PDF can be attached to a transaction when it is entered, or later.
+  On a phone the file input opens the camera.
+- Storage is the planned `attachments` table:
+  - `bytea` in PostgreSQL, so the nightly `pg_dump` backs it up with the books;
+  - de-duplicated by SHA-256;
+  - images downscaled in the browser before upload, and a size cap per file.
+- **Optional local OCR** can suggest date, amount and seller for a new entry. It runs in
+  the cluster; receipts never go to a cloud service.
+- Synced evidence attaches the same way: an order email, an e-invoice or a statement page
+  becomes an attachment of the transaction it matched.
+
+### Email (Gmail) as a source
+
+Email is **evidence**, like e-invoices: it enriches and proposes, it does not post.
+
+- **Access: IMAP with a Google app password**, read-only, on one Gmail label (e.g.
+  `rigel`) that a Gmail filter fills.
+  - The Gmail API is the alternative, but a personal OAuth app left in "Testing" issues
+    refresh tokens that expire after 7 days. Publishing it needs Google verification for
+    the restricted read scope.
+  - The app password lives in the runner's SOPS secret like every other credential.
+- **Parsing is local.**
+  - Many merchants embed schema.org `Order`/`Invoice` markup, which is read first.
+  - Next come per-sender parsers (card alert emails, app stores, airlines, e-commerce).
+  - Anything else is left for review.
+  - No mail content goes to an external model.
+- **What it produces:**
+  - **Card alert emails** (刷卡通知 and similar) become pending card rows the moment the
+    charge happens, which is the earliest estimate in the card-settlement flow.
+  - **Order confirmations and receipts** match an existing card transaction on amount,
+    date and merchant, and attach the email (as an attachment) and its line items. They
+    create nothing when matched.
+  - **Subscriptions.** Renewal emails, plus recurring card charges from the same
+    merchant at a steady interval, feed a **recurring list**: merchant, amount, cadence,
+    next date, and price-change alerts. This later drives recurring-transaction templates.
+- The runner is a `mail` connector in tw-sync. IMAP is plain Node, so no browser is
+  needed.
+
 ### Security and risk
 
 - **Credentials** live in the SOPS/age k8s secret mounted only into the runner pods:
-  bank and app logins, the Shioaji key (Account permission only, IP-scoped) and the
-  Firstrade TOTP secret. They are never in the database, a log, or `raw`.
-- **Local-only rule.** Statements, invoices and CAPTCHA images never leave the cluster.
+  bank and app logins, the Shioaji key (Account permission only, IP-scoped), the
+  Firstrade TOTP secret and the Gmail app password. They are never in the database, a log, or `raw`.
+- **Local-only rule.** Statements, invoices, receipts, emails and CAPTCHA images never
+  leave the cluster.
   The only outbound traffic is the login to the institution itself. The app is
   tailnet-only.
 - **Caveats, stated plainly.**
@@ -585,6 +636,6 @@ builds images.
 | P1 | ~~Schema reset, sessions, sqlc; books, accounts, multi-currency transactions API and UI; the "All accounts" balances page; the user Settings page~~ (done) |
 | P2 | ~~Dockerfile, Gitea/GitHub CI and release~~ (done); hcloud chart; deploy and start daily entry |
 | P3 | Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency), book rebase, the three statements bound to closing rates with `rates_used`, display-currency translation, tag (trip) report |
-| P4 | **Sync and review**: import API with `import_rows` kinds, `source_accounts`, review queue, rules, matching (pending/posted, transfers, invoices), assertions, challenges; the tw-sync runner (國泰世華, 永豐 card, 集保 e存摺, 電子發票); CSV/PDF fallback |
-| P5 | Securities and futures: py-sync (Shioaji daily, Firstrade), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, 永豐 deposits. (Points, average cost and the security commodity itself are done.) |
+| P4 | **Sync and review**: import API with `import_rows` kinds, `source_accounts`, review queue, rules, matching (pending/posted, transfers, invoices, order emails), assertions, challenges; receipt attachments (upload, camera, optional local OCR); the tw-sync runner (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
+| P5 | Securities and futures: py-sync (Shioaji daily, Firstrade), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, 永豐 deposits, Banco Continental (if its export is not enough). Recurring list and subscription templates. (Points, average cost and the security commodity itself are done.) |
 | P6 | PWA polish, then Flutter if a native feature is needed |
