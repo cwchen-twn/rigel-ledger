@@ -61,6 +61,9 @@ Keep the SQL PostgreSQL-14 compatible (local dev); CI and hcloud run 18.
 - **Book scoping**: every domain table carries `book_id` (or reaches it through
   its parent), and every query filters by it. Access is resolved once per request
   into `ledger.Access`; never trust an id from the client without the book filter.
+- **Lock date covers `prices`.** Rates are global, so `check_price_lock` freezes a rate
+  for any book that uses either currency and is locked on or after its date. Anything
+  new that feeds a closed period's statements needs the same protection.
 - **Translations are not data.** Store stable keys; names live in
   `web/src/i18n/*.json`.
 

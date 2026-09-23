@@ -76,7 +76,10 @@ repo (`web/src/components/ui/`), not in node_modules, and we change them freely.
 - `api/client.ts` is the only place that calls `fetch`; it adds the
   `X-Rigel-Client` CSRF header and throws `ApiError`. Keep `api/types.ts` in step
   with `internal/routes/dto.go`.
-- `useSession()` holds the user, currencies, and applies language/theme live;
+- `useSession()` holds the user and `commodities()` (everything an account can hold),
+  with `currencies()` = ISO money only (base, display currency, rates), plus `kind()`,
+  `decimals()`; it applies language/theme live. Pick the right list for each select.
+  `<Money>` prints miles and shares as units ("9,500 EVA"), not as currency;
   `useBook()` holds the current book, accounts, roles (`canEdit`, `isOwner`).
   Hide or disable write controls for viewers; the server enforces it anyway.
 

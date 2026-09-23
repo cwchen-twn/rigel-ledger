@@ -145,8 +145,9 @@ users(id, username, email, password_hash, display_name, is_admin,
 sessions(id, user_id, token_hash, kind web|api, label, expires_at, last_used_at)
 books(id, name, base_currency, lock_date, dividend_cf_class, ...)
 book_members(book_id, user_id, role owner|editor|viewer)      PK(book_id, user_id)
-commodities(id, kind currency|security, code, name, quote_currency,
-            exchange_mic, decimals)        -- every ISO 4217 code seeded as currency
+commodities(code, kind currency|security|points, name, decimals,
+            quote_currency, exchange_mic, contract_size)
+            -- every ISO 4217 code seeded; "XNAS:AAPL", "MILES:EVA" added at runtime
 prices(commodity_id, quote_id, date, rate NUMERIC, source manual|er-api|fawaz|...)
       UNIQUE(commodity_id, quote_id, date, source)  -- manual wins on read
 accounts(id, book_id, parent_id, name, code NULL, class, commodity_id NULL,
@@ -155,10 +156,12 @@ accounts(id, book_id, parent_id, name, code NULL, class, commodity_id NULL,
 transactions(id, book_id, date, payee, memo, source, external_id, import_row_id,
              created_by, updated_by, ...)   UNIQUE(book_id, source, external_id)
 postings(id, transaction_id, account_id, commodity_id, amount NUMERIC signed,
-         base_amount NUMERIC signed, quantity NULL, unit_cost NULL,
+         base_amount NUMERIC signed, unit_cost NULL,
+         -- amount is units of the account's commodity: TWD, shares, miles
          status uncleared|cleared|reconciled, cleared_on, memo)
   -- deferred constraint trigger: SUM(base_amount) = 0 per txn on I/U/D
   -- trigger: commodity = account.commodity when set; date > book.lock_date
+  -- prices trigger: no rate on or before the lock date of a book using it
 tags(id, book_id, name, kind);  transaction_tags(transaction_id, tag_id)
 attachments(id, book_id, sha256, filename, mime, bytes BYTEA, transaction_id NULL)
 import_batches(id, book_id, account_id, source, parser, attachment_id,
@@ -241,7 +244,7 @@ Family and account setup:
   closing rate, and the difference is FX gain or loss (IAS 21).
 - **Listed securities at fair value through profit or loss** (IFRS 9 FVTPL), so there is
   no OCI.
-  - Fair value = quantity x latest price on or before the date x FX rate.
+  - Fair value = units held x latest price on or before the date x FX rate.
   - Unrealised gains are **computed in reports only** and never posted as journal entries.
 - **Balance sheet** as of a date, split into current and non-current (IAS 1). Equity is
   opening balance + retained earnings + current-period result.
@@ -253,11 +256,119 @@ Family and account setup:
     proceeds, cost, gain) allocates its cash movement pro rata.
   - Income and expense counter-legs default to operating.
   - Where dividends and interest go is a per-book setting, since IAS 7 allows either.
-- **Realised gains** use FIFO over prior buy postings, which carry `quantity` and
-  `unit_cost`. When a sale is entered, Go proposes the cost-release and gain lines, so the
-  stored postings remain the only truth. There is no separate lots table.
+- **Realised gains** release cost at the **weighted average** of what the account holds
+  (implemented). A sale's cost line is computed by the server and the gain line is
+  entered against it, so the stored postings remain the only truth. There is no lots
+  table. FIFO lots for US tax reporting are a P5 addition, driven by `unit_cost`.
 - **Futures-broker statements** are recorded as a margin account (asset) plus daily
   settlement P&L postings.
+
+## Holdings, valuation and what stays out of the ledger
+
+Decisions from reviewing the schema against securities, futures, miles, insurance and
+memberships (2026-09-23).
+
+### How accounts, transactions and postings relate
+
+```
+account      a bucket that holds ONE commodity     "Visa card (TWD)", "Travel", "EVA miles"
+transaction  one event: date, payee, memo, tags    "EVA award ticket, 2026-09-23"
+posting      one leg of that event                 EVA miles  -10,500 miles (cost -6,300)
+                                                   Visa card   -2,000 TWD
+                                                   Travel      +8,300 TWD
+```
+
+- A transaction has two or more postings. Each posting belongs to exactly one account.
+- The postings' `base_amount`s sum to exactly zero; the database refuses anything else.
+- An account's balance is the sum of its postings up to a date.
+- `amount` is always in the account's commodity: TWD, shares or miles.
+- There are no from/to columns, because real events have more legs than two: a
+  paycheck, a card charge with fee and cash back, a miles ticket with tax.
+- Status lives on the posting: a card payment clears on two statements separately.
+
+### Securities, futures and points are commodities
+
+| Kind | Examples | Price | `base_amount` means |
+|---|---|---|---|
+| `currency` | TWD, USD, PYG | exchange rates | translated value |
+| `security` | `XNAS:AAPL`, `XTAF:TX` | quotes in `quote_currency` | cost |
+| `points` | `MILES:EVA`, `PTS:CATHAY` | none, by design | cost |
+
+**Coming in:**
+- A buy with a unit price is priced as units × `unit_cost` × the quote-currency rate.
+- Anything else needs its cost entered. Zero is fine for miles earned.
+
+**Going out** (miles spent, shares sold): the server releases the weighted-average cost
+of what the account holds, and exactly the remaining cost when everything goes.
+- The editor fetches the same figure from `GET /accounts/{id}/cost`, and "Put the
+  remainder here" fills the balancing line.
+- Example ticket: 10,500 of 20,000 miles bought for 12,000 TWD leave at 6,300, and
+  Travel is 6,300 + 2,000 tax = 8,300.
+
+**Card points to miles:** `Points -X (base -cost) / Miles +Y (base +cost)`. The cost
+moves across unchanged.
+
+**Futures** carry `contract_size` (TX = 200).
+- Their balance-sheet value is **margin plus unrealised P&L**.
+- Contract value (units × size × price) is **exposure**: shown beside the position,
+  never added to assets. Adding it would overstate net worth many times over.
+
+### Market prices and the display currency (P3, P5)
+
+- The same `prices` table holds exchange rates and share quotes.
+- A scheduler fetches:
+  - quotes for every security with a non-zero holding, from the Firstrade sync, TWSE's
+    open API for Taiwan listings, and an end-of-day source such as Stooq for the rest;
+  - rates for every book's currencies plus every user's `display_currency`.
+- Value shown = units × latest price on or before the date × rate to the base currency.
+  Converting to the display currency multiplies once more by the base→display rate at
+  the same date.
+- The display currency is a view. Changing it touches no stored amount.
+
+### A balance sheet bound to its date's rates (P3)
+
+- The report "as of D" converts foreign cash and debts, and securities at fair value, at
+  the **latest rate on or before D**. Points and property stay at cost.
+- The difference from historical base amounts is a computed unrealised-FX or valuation
+  line (IAS 21, IFRS 9).
+- The income statement stays at transaction-date rates, which are already stored.
+- The report returns the exact rates it used, so every statement shows its inputs.
+- **Implemented now:** `prices` obeys the lock date. No rate dated on or before the lock
+  date of a book that uses either currency can be inserted, changed or deleted.
+  Otherwise, correcting a March rate in September would silently rewrite March's closed
+  balance sheet.
+
+### Tags
+
+- Tags are for questions that cut across payment methods, like "what did Japan 2026
+  cost?".
+- A trip report sums the **expense postings** of tagged transactions by category. Cash,
+  bank, card and miles all count, the miles at their cost.
+- Tags also cover "who spent it" and projects.
+- Tags attach to the whole transaction. Per-posting tags are the known extension, if one
+  statement import ever needs splitting.
+- The report itself is P3; filtering the transaction list by tag works today.
+
+### Insurance: the money here, the paperwork elsewhere
+
+- **Term, health and car premiums:** an expense, or prepaid and spread over the
+  coverage period if precision matters.
+- **Savings-type or USD policies (儲蓄險):** an asset in the policy's currency.
+  - Premiums go into it.
+  - Periodic revaluation brings it to the insurer's cash value, with the difference to
+    an insurance gain or loss.
+  - The cost of cover is the part that is not cash value.
+- **Claims:** income, or a reduction of the expense they cover.
+- **Out of the ledger:** policy numbers, coverage, beneficiaries, renewals and
+  documents are a later "policies" module in this app. It would share users, books and
+  login, and link to the asset account, but it is not bookkeeping.
+
+### Frequent-flyer status: out of the ledger
+
+- Tier, qualifying segments and status expiry cannot be spent, so they are not value.
+- The **award-miles balance** is a points commodity above. Status tracking is a separate
+  tool, or a small "memberships" module later.
+- Tagging flights by airline already gives a segment count.
 
 ## Backend choices
 
@@ -363,7 +474,7 @@ builds images.
 |---|---|
 | P1 | ~~Schema reset, sessions, sqlc; books, accounts, multi-currency transactions API and UI; the "All accounts" balances page; the user Settings page~~ (done) |
 | P2 | ~~Dockerfile, Gitea/GitHub CI and release~~ (done); hcloud chart; deploy and start daily entry |
-| P3 | Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback), book rebase, the three statements with FX revaluation and display-currency translation |
+| P3 | Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency), book rebase, the three statements bound to closing rates with `rates_used`, display-currency translation, tag (trip) report |
 | P4 | CSV and PDF import, review queue, rules, reconciliation. Confirm whether "future transactions pdf" means futures-broker statements or scheduled transactions |
-| P5 | Securities: FIFO realised gains, price scheduler, Firstrade CronJob |
+| P5 | Securities: quote scheduler (Firstrade, TWSE, end-of-day source), fair value and futures exposure in reports, FIFO lots for tax, Firstrade CronJob. (Points, average cost and the security commodity itself are done.) |
 | P6 | PWA polish, then Flutter if a native feature is needed |

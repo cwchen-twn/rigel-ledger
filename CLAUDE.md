@@ -78,6 +78,9 @@ api/                # Generated Swagger output (do not edit manually)
 
 - Postings are signed (debit > 0). `amount` is in the posting's commodity; `base_amount` is in the book's base currency. A foreign line takes the client's `base_amount` or is converted via `RateOn` (direct, inverse, or crossed through USD, newest price on or before the date).
 - A residue of at most one base minor unit is booked to the `fx_gain_loss` account; anything larger is `unbalanced`.
+- Commodities are `currency` (ISO seed), `security` (`XNAS:AAPL`, quoted in `quote_currency`, futures carry `contract_size`) or `points` (`MILES:EVA`, never priced). For the last two, `amount` is units and `base_amount` is cost: a buy with `unit_cost` is priced via the quote rate; units leaving an asset account go at weighted-average cost (`costBasis`, excluding the transaction being edited); anything else must state its cost (`cost_required`).
+- `validCurrency` means ISO money only (book base, display currency, rate quote); `validCommodity` is anything an account can hold. The commodity cache is dropped on `CreateCommodity`.
+- `prices` obeys the lock date too: a rate on or before the lock date of any book using either side is frozen (trigger `prices_lock`).
 - Go validates first for friendly field errors; the triggers in `000001_init.up.sql` enforce the same rules for any writer. A trigger's `CONSTRAINT` name becomes the API error code (see `ledger.translate`).
 - No stored balances: `Balances` sums postings and rolls up the account tree in Go.
 - New books are seeded from `personalTemplate` in `template.go`; account names are i18n keys (`account.template.<key>`) until renamed.
