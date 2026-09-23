@@ -309,3 +309,44 @@ func TestShellAndUnknownRoutes(t *testing.T) {
 		t.Fatalf("unknown api route = %d %s", res.StatusCode, b)
 	}
 }
+
+func TestIdentityAndCommoditiesAPI(t *testing.T) {
+	f := newAPI(t)
+	alice := f.browser("alice")
+
+	res, b := alice.do("PATCH", "/api/me/account", map[string]string{"username": "alicia", "email": "a@example.com", "current_password": "nope"})
+	if res.StatusCode != 422 || errorCode(t, b) != "invalid_input" {
+		t.Fatalf("wrong password = %d %s", res.StatusCode, b)
+	}
+	var me UserDTO
+	alice.json("PATCH", "/api/me/account", map[string]string{"username": "alicia", "email": "a@example.com", "current_password": "correct horse"}, 200, &me)
+	if me.Username != "alicia" {
+		t.Fatalf("me = %+v", me)
+	}
+	// The session survives the rename.
+	alice.json("GET", "/api/me", nil, 200, &me)
+
+	var book BookDTO
+	alice.json("POST", "/api/books", map[string]string{"name": "B", "base_currency": "TWD"}, 201, &book)
+	var c CommodityDTO
+	alice.json("POST", fmt.Sprintf("/api/books/%d/commodities", book.ID),
+		map[string]any{"code": "MILES:EVA", "kind": "points", "name": "EVA miles"}, 201, &c)
+	if c.Kind != "points" || c.Decimals != 0 || c.QuoteCurrency != nil {
+		t.Fatalf("commodity = %+v", c)
+	}
+	var all []CommodityDTO
+	alice.json("GET", "/api/commodities", nil, 200, &all)
+	if all[0].Kind != "currency" || all[len(all)-1].Code != "MILES:EVA" {
+		t.Fatalf("commodities order: first %+v last %+v", all[0], all[len(all)-1])
+	}
+
+	var acct AccountDTO
+	alice.json("POST", fmt.Sprintf("/api/books/%d/accounts", book.ID),
+		map[string]any{"class": "asset", "name": "EVA miles", "commodity": "MILES:EVA",
+			"opening_balance": map[string]any{"amount": "5000", "base_amount": "3000", "date": "2026-01-01"}}, 201, &acct)
+	var cb CostBasisDTO
+	alice.json("GET", fmt.Sprintf("/api/books/%d/accounts/%d/cost?as_of=2026-02-01", book.ID, acct.ID), nil, 200, &cb)
+	if cb.Quantity.String() != "5000" || cb.UnitCost.String() != "0.6" {
+		t.Fatalf("cost basis = %+v", cb)
+	}
+}

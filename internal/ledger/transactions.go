@@ -56,6 +56,7 @@ func (s *Service) writeLinesAndTags(ctx context.Context, q *db.Queries, a Access
 	if err != nil {
 		return err
 	}
+	lc.excludeTxn = txnID
 	lines, err := s.prepareLines(ctx, q, lc, in.Lines)
 	if err != nil {
 		return err

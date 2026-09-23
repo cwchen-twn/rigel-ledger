@@ -51,3 +51,15 @@ FROM postings p
 JOIN transactions t ON t.id = p.transaction_id
 WHERE t.book_id = @book_id AND t.date <= @as_of
 GROUP BY p.account_id, p.commodity;
+
+-- name: AccountCostBasis :one
+-- What an account holds and what it cost, up to a date: the input to average
+-- cost when miles, points or shares leave it. Excludes one transaction, so
+-- editing a redemption does not count the redemption itself.
+SELECT coalesce(sum(p.amount), 0)::numeric      AS quantity,
+       coalesce(sum(p.base_amount), 0)::numeric AS cost
+FROM postings p
+JOIN transactions t ON t.id = p.transaction_id
+WHERE p.account_id = @account_id
+  AND t.date <= @as_of
+  AND t.id <> @exclude_transaction_id;

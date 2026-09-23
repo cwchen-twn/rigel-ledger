@@ -85,6 +85,35 @@ type CurrencyDTO struct {
 	Decimals int16  `json:"decimals"`
 }
 
+// CommodityDTO is anything an account can hold: a currency, a security or points.
+type CommodityDTO struct {
+	Code          string           `json:"code"`
+	Kind          db.CommodityKind `json:"kind"`
+	Name          string           `json:"name"`
+	Decimals      int16            `json:"decimals"`
+	QuoteCurrency *string          `json:"quote_currency"`
+	ExchangeMIC   *string          `json:"exchange_mic"`
+	ContractSize  *decimal.Decimal `json:"contract_size" swaggertype:"string"`
+}
+
+func commodityDTO(c db.Commodity) CommodityDTO {
+	var cs *decimal.Decimal
+	if c.ContractSize.Valid {
+		v := c.ContractSize.Decimal
+		cs = &v
+	}
+	return CommodityDTO{
+		Code: c.Code, Kind: c.Kind, Name: c.Name, Decimals: c.Decimals,
+		QuoteCurrency: c.QuoteCurrency, ExchangeMIC: c.ExchangeMic, ContractSize: cs,
+	}
+}
+
+type CostBasisDTO struct {
+	Quantity decimal.Decimal `json:"quantity" swaggertype:"string"`
+	Cost     decimal.Decimal `json:"cost" swaggertype:"string"`
+	UnitCost decimal.Decimal `json:"unit_cost" swaggertype:"string"`
+}
+
 type BookDTO struct {
 	ID                      int64         `json:"id"`
 	Name                    string        `json:"name"`
@@ -137,6 +166,7 @@ type PostingDTO struct {
 	Commodity  string           `json:"commodity"`
 	Amount     decimal.Decimal  `json:"amount" swaggertype:"string"`
 	BaseAmount decimal.Decimal  `json:"base_amount" swaggertype:"string"`
+	UnitCost   *decimal.Decimal `json:"unit_cost" swaggertype:"string"`
 	Status     db.PostingStatus `json:"status"`
 	ClearedOn  *Date            `json:"cleared_on" swaggertype:"string" format:"date"`
 	Memo       string           `json:"memo"`
@@ -161,6 +191,10 @@ func transactionDTO(v ledger.TransactionView) TransactionDTO {
 			ID: p.ID, AccountID: p.AccountID, Commodity: p.Commodity, Amount: p.Amount,
 			BaseAmount: p.BaseAmount, Status: p.Status, ClearedOn: datePtr(p.ClearedOn), Memo: p.Memo,
 		}
+		if p.UnitCost.Valid {
+			v := p.UnitCost.Decimal
+			ps[i].UnitCost = &v
+		}
 	}
 	return TransactionDTO{
 		ID: v.ID, Date: Date{v.Date}, Payee: v.Payee, Memo: v.Memo, Source: v.Source,
@@ -173,6 +207,7 @@ type LineInputDTO struct {
 	Commodity  string           `json:"commodity,omitempty"`
 	Amount     decimal.Decimal  `json:"amount" swaggertype:"string"`
 	BaseAmount *decimal.Decimal `json:"base_amount,omitempty" swaggertype:"string"`
+	UnitCost   *decimal.Decimal `json:"unit_cost,omitempty" swaggertype:"string"`
 	Status     db.PostingStatus `json:"status,omitempty"`
 	ClearedOn  *Date            `json:"cleared_on,omitempty" swaggertype:"string" format:"date"`
 	Memo       string           `json:"memo,omitempty"`
@@ -191,7 +226,7 @@ func (in TransactionInputDTO) toLedger() ledger.TransactionInput {
 	for i, l := range in.Lines {
 		lines[i] = ledger.LineInput{
 			AccountID: l.AccountID, Commodity: l.Commodity, Amount: l.Amount, BaseAmount: l.BaseAmount,
-			Status: l.Status, ClearedOn: l.ClearedOn.timePtr(), Memo: l.Memo,
+			UnitCost: l.UnitCost, Status: l.Status, ClearedOn: l.ClearedOn.timePtr(), Memo: l.Memo,
 		}
 	}
 	return ledger.TransactionInput{Date: in.Date.Time, Payee: in.Payee, Memo: in.Memo, Tags: in.Tags, Lines: lines}

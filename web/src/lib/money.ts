@@ -18,12 +18,16 @@ export function parseAmount(input: string): string | null {
 export const add = (a: string, b: string): string => bigDecimal.add(a || '0', b || '0');
 export const sub = (a: string, b: string): string => bigDecimal.subtract(a || '0', b || '0');
 export const mul = (a: string, b: string): string => bigDecimal.multiply(a || '0', b || '0');
+/** Division needs a precision; 18 places matches the server's rate division. */
+export const div = (a: string, b: string, places = 18): string => bigDecimal.divide(a || '0', b, places);
 // js-big-decimal negates "0" to "-0", which Intl then prints as "-NT$0.00".
 export const neg = (a: string): string => (bigDecimal.compareTo(a || '0', '0') === 0 ? '0' : bigDecimal.negate(a));
 export const abs = (a: string): string => bigDecimal.abs(a || '0');
 export const cmp = (a: string, b: string): number => bigDecimal.compareTo(a || '0', b || '0');
 export const isZero = (a: string): boolean => cmp(a, '0') === 0;
 export const sum = (xs: string[]): string => xs.reduce((acc, x) => add(acc, x), '0');
+/** "8300.00" -> "8300", for values written back into an input. */
+export const strip = (a: string): string => bigDecimal.stripTrailingZero(a || '0');
 
 /** Round half away from zero, matching shopspring/decimal's Round on the server. */
 export function round(a: string, places: number): string {

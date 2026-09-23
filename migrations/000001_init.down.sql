@@ -13,6 +13,8 @@ DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS commodities;
 
 DROP FUNCTION IF EXISTS audit_row();
+DROP FUNCTION IF EXISTS prices_lock_trigger();
+DROP FUNCTION IF EXISTS check_price_lock(TEXT, TEXT, DATE);
 DROP FUNCTION IF EXISTS postings_lock_trigger();
 DROP FUNCTION IF EXISTS transactions_lock_trigger();
 DROP FUNCTION IF EXISTS check_lock_date(BIGINT, DATE);

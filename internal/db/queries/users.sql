@@ -32,3 +32,7 @@ UPDATE users SET last_login_at = now() WHERE id = $1;
 
 -- name: SetDefaultBookIfUnset :exec
 UPDATE users SET default_book_id = $2 WHERE id = $1 AND default_book_id IS NULL;
+
+-- name: UpdateUserIdentity :one
+UPDATE users SET username = @username, email = @email WHERE id = @id
+RETURNING *;

@@ -12,7 +12,7 @@ import { toast } from '~/components/ui/toast';
 import { useI18n } from '~/i18n';
 import { cn } from '~/lib/cn';
 import { today } from '~/lib/dates';
-import { abs, cmp, isZero, minorUnit, mul, neg, parseAmount, round, sub, sum } from '~/lib/money';
+import { abs, cmp, div, isZero, minorUnit, mul, neg, parseAmount, round, strip, sub, sum } from '~/lib/money';
 import { useBook } from '~/stores/book';
 import { useSession } from '~/stores/session';
 
@@ -40,6 +40,8 @@ interface Line {
   commodity: string;
   /** Base-currency magnitude typed by the user; takes the amount's sign. */
   baseOverride: string;
+  /** Securities: price per unit in the quote currency. */
+  unitCost: string;
   cleared: boolean;
   clearedOn: string | null;
   memo: string;
@@ -47,7 +49,7 @@ interface Line {
 
 let lineKey = 0;
 const emptyLine = (commodity: string): Line => ({
-  key: ++lineKey, accountId: null, debit: '', credit: '', commodity, baseOverride: '', cleared: false, clearedOn: null, memo: '',
+  key: ++lineKey, accountId: null, debit: '', credit: '', commodity, baseOverride: '', unitCost: '', cleared: false, clearedOn: null, memo: '',
 });
 
 export function TransactionSheet(props: {
@@ -58,7 +60,7 @@ export function TransactionSheet(props: {
   onSaved: () => void;
 }) {
   const { t, te, fieldErrors } = useI18n();
-  const { currencies, decimals } = useSession();
+  const { currencies, commodities, commodity, kind, decimals } = useSession();
   const book = useBook();
   const base = () => book.book()?.base_currency ?? 'USD';
 
@@ -109,6 +111,7 @@ export function TransactionSheet(props: {
                 // Keep the stored base amount for foreign lines, so an edit
                 // does not silently re-rate them.
                 baseOverride: p.commodity !== base() ? abs(p.base_amount) : '',
+                unitCost: p.unit_cost ?? '',
                 cleared: p.status !== 'uncleared',
                 clearedOn: p.cleared_on,
                 memo: p.memo,
@@ -166,11 +169,19 @@ export function TransactionSheet(props: {
     return isZero(a) ? null : a;
   };
 
-  // Fetch the rate for every foreign currency used on the date.
+  // Fetch the rate for every foreign currency used on the date (for a
+  // security, its quote currency).
   createEffect(() => {
     const d = date();
     const b = base();
-    const needed = new Set(effectiveLines().map(lineCommodity).filter((c) => c && c !== b));
+    const needed = new Set(
+      effectiveLines()
+        .map((l) => {
+          const c = lineCommodity(l);
+          return kind(c) === 'security' ? commodity(c)?.quote_currency ?? '' : kind(c) === 'currency' ? c : '';
+        })
+        .filter((c) => c && c !== b),
+    );
     for (const c of needed) {
       const key = `${c}|${d}`;
       if (key in rates()) continue;
@@ -182,7 +193,28 @@ export function TransactionSheet(props: {
     }
   });
 
-  const rateFor = (commodity: string) => rates()[`${commodity}|${date()}`] ?? null;
+  const rateFor = (code: string) => rates()[`${code}|${date()}`] ?? null;
+
+  // Average cost of what an account holds, for miles spent and shares sold --
+  // the same figure the server will use. The edited transaction is excluded.
+  const [costs, setCosts] = createSignal<Record<string, { quantity: string; cost: string } | null>>({});
+  const costKey = (accountId: number) => `${accountId}|${date()}`;
+  createEffect(() => {
+    const d = date();
+    for (const l of effectiveLines()) {
+      const a = acct(l.accountId);
+      const amt = lineAmount(l);
+      if (!a || !amt || cmp(amt, '0') >= 0 || kind(lineCommodity(l)) === 'currency') continue;
+      if (a.class !== 'asset' && a.class !== 'liability') continue;
+      const key = costKey(a.id);
+      if (key in costs()) continue;
+      setCosts((c) => ({ ...c, [key]: null }));
+      api
+        .costBasis(book.id(), a.id, d, props.transaction?.id)
+        .then((cb) => setCosts((c) => ({ ...c, [key]: cb })))
+        .catch(() => undefined);
+    }
+  });
 
   /** The line's base amount, or null when it cannot be known (no rate, no override). */
   const lineBase = (l: Line): string | null => {
@@ -191,9 +223,38 @@ export function TransactionSheet(props: {
     const c = lineCommodity(l);
     if (c === base()) return a;
     const o = parseAmount(l.baseOverride);
-    if (o) return cmp(a, '0') < 0 ? neg(abs(o)) : abs(o);
-    const r = rateFor(c);
-    return r ? round(mul(a, r), decimals(base())) : null;
+    if (o !== null) return cmp(a, '0') < 0 ? neg(abs(o)) : abs(o);
+    const k = kind(c);
+    if (k === 'currency') {
+      const r = rateFor(c);
+      return r ? round(mul(a, r), decimals(base())) : null;
+    }
+    // Shares bought at a unit price in their quote currency.
+    const uc = parseAmount(l.unitCost);
+    const quote = commodity(c)?.quote_currency;
+    if (k === 'security' && uc && quote && cmp(a, '0') > 0) {
+      const r = quote === base() ? '1' : rateFor(quote);
+      return r ? round(mul(mul(a, uc), r), decimals(base())) : null;
+    }
+    // Miles spent, shares sold: at average cost (all of it when all is spent).
+    const cb = l.accountId ? costs()[costKey(l.accountId)] : null;
+    if (cmp(a, '0') < 0 && cb && cmp(cb.quantity, '0') > 0) {
+      if (cmp(abs(a), cb.quantity) === 0) return neg(cb.cost);
+      return round(div(mul(a, cb.cost), cb.quantity), decimals(base()));
+    }
+    return null;
+  };
+
+  /** Why a line has no base amount yet: a missing rate, or a cost only the user knows. */
+  const missingReason = (l: Line) =>
+    kind(lineCommodity(l)) === 'currency' ? t('transactions.rate_missing') : t('transactions.cost_required');
+
+  /** Set a base-currency line so the transaction balances ("put the rest here"). */
+  const fillRemainder = (i: number) => {
+    const l = lines[i];
+    const rest = strip(sub(lineBase(l) ?? '0', imbalance()));
+    const pos = cmp(rest, '0') >= 0;
+    setLines(i, { debit: pos && !isZero(rest) ? rest : '', credit: pos ? '' : abs(rest) });
   };
 
   const activeLines = () => effectiveLines().filter((l) => lineAmount(l) !== null);
@@ -216,7 +277,8 @@ export function TransactionSheet(props: {
       const c = lineCommodity(l);
       const input: LineInput = { account_id: l.accountId ?? 0, amount: lineAmount(l)! };
       if (!a?.commodity) input.commodity = c;
-      if (c !== base() && parseAmount(l.baseOverride)) input.base_amount = lineBase(l)!;
+      if (c !== base() && parseAmount(l.baseOverride) !== null) input.base_amount = lineBase(l)!;
+      if (kind(c) === 'security' && parseAmount(l.unitCost)) input.unit_cost = parseAmount(l.unitCost)!;
       if (l.cleared) {
         input.status = 'cleared';
         input.cleared_on = l.clearedOn ?? today();
@@ -373,7 +435,7 @@ export function TransactionSheet(props: {
                         invalid={!!err(`lines[${i()}].amount`)} />
                       <Show when={!acct(line.accountId)?.commodity} fallback={<span class="flex items-center text-sm text-muted-foreground">{c()}</span>}>
                         <Select value={line.commodity} onChange={(e) => set('commodity', e.currentTarget.value)}>
-                          <For each={currencies() ?? []}>{(cur) => <option value={cur.code}>{cur.code}</option>}</For>
+                          <For each={commodities() ?? []}>{(cur) => <option value={cur.code}>{cur.code}</option>}</For>
                         </Select>
                       </Show>
                     </div>
@@ -389,9 +451,20 @@ export function TransactionSheet(props: {
                             invalid={!!err(`lines[${i()}].base_amount`)}
                           />
                         </label>
-                        <Show when={lineBase(line) === null}>
-                          <span class="text-destructive">{t('transactions.rate_missing')}</span>
+                        <Show when={kind(c()) === 'security' && cmp(lineAmount(line) ?? '0', '0') > 0}>
+                          <label class="flex items-center gap-2">
+                            {t('transactions.unit_cost')} ({commodity(c())?.quote_currency})
+                            <MoneyInput class="h-7 w-24" value={line.unitCost} onInput={(e) => set('unitCost', e.currentTarget.value)} />
+                          </label>
                         </Show>
+                        <Show when={lineBase(line) === null}>
+                          <span class="text-destructive">{missingReason(line)}</span>
+                        </Show>
+                      </Show>
+                      <Show when={c() === base() && !balanced() && !unknownBase() && line.accountId}>
+                        <button type="button" class="underline-offset-2 hover:underline" onClick={() => fillRemainder(i())}>
+                          {t('transactions.fill_remainder')}
+                        </button>
                       </Show>
                       <Checkbox checked={line.cleared} onChange={(e) => set('cleared', e.currentTarget.checked)} label={t('transactions.cleared')} />
                       <input
@@ -423,7 +496,7 @@ export function TransactionSheet(props: {
             <Money amount={imbalance()} currency={base()} />
           </Show>
           <Show when={unknownBase()}>
-            <span>{t('transactions.rate_missing')}</span>
+            <span>{t('transactions.base_missing')}</span>
           </Show>
         </div>
         <Show when={err('lines')}>

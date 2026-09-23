@@ -23,6 +23,16 @@ definitions:
     - CfClassOperating
     - CfClassInvesting
     - CfClassFinancing
+  db.CommodityKind:
+    enum:
+    - currency
+    - security
+    - points
+    type: string
+    x-enum-varnames:
+    - CommodityKindCurrency
+    - CommodityKindSecurity
+    - CommodityKindPoints
   db.MemberRole:
     enum:
     - viewer
@@ -144,6 +154,32 @@ definitions:
       commodity:
         type: string
     type: object
+  routes.CommodityDTO:
+    properties:
+      code:
+        type: string
+      contract_size:
+        type: string
+      decimals:
+        type: integer
+      exchange_mic:
+        type: string
+      kind:
+        $ref: '#/definitions/db.CommodityKind'
+      name:
+        type: string
+      quote_currency:
+        type: string
+    type: object
+  routes.CostBasisDTO:
+    properties:
+      cost:
+        type: string
+      quantity:
+        type: string
+      unit_cost:
+        type: string
+    type: object
   routes.CurrencyDTO:
     properties:
       code:
@@ -170,6 +206,8 @@ definitions:
         type: string
       status:
         $ref: '#/definitions/db.PostingStatus'
+      unit_cost:
+        type: string
     type: object
   routes.MemberDTO:
     properties:
@@ -201,6 +239,8 @@ definitions:
         type: string
       status:
         $ref: '#/definitions/db.PostingStatus'
+      unit_cost:
+        type: string
     type: object
   routes.PriceDTO:
     properties:
@@ -348,6 +388,32 @@ definitions:
       base_currency:
         type: string
       name:
+        type: string
+    type: object
+  routes.createCommodityRequest:
+    properties:
+      code:
+        type: string
+      contract_size:
+        type: string
+      decimals:
+        type: integer
+      exchange_mic:
+        type: string
+      kind:
+        $ref: '#/definitions/db.CommodityKind'
+      name:
+        type: string
+      quote_currency:
+        type: string
+    type: object
+  routes.identityRequest:
+    properties:
+      current_password:
+        type: string
+      email:
+        type: string
+      username:
         type: string
     type: object
   routes.loginRequest:
@@ -700,6 +766,37 @@ paths:
       summary: Archive or restore an account
       tags:
       - accounts
+  /api/books/{bookID}/accounts/{accountID}/cost:
+    get:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: account id
+        in: path
+        name: accountID
+        required: true
+        type: integer
+      - description: YYYY-MM-DD, default today
+        in: query
+        name: as_of
+        type: string
+      - description: transaction id to leave out (the one being edited)
+        in: query
+        name: exclude
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.CostBasisDTO'
+      summary: What an account holds and what it cost (average cost input)
+      tags:
+      - accounts
   /api/books/{bookID}/balances:
     get:
       parameters:
@@ -722,6 +819,38 @@ paths:
       summary: Every account's balance as of a date (debit > 0), rolled up the tree
       tags:
       - reports
+  /api/books/{bookID}/commodities:
+    post:
+      consumes:
+      - application/json
+      description: Commodities are global like rates; the book only authorises the
+        caller.
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: commodity
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.createCommodityRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/routes.CommodityDTO'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Add a security or a points programme (editor of this book)
+      tags:
+      - reference
   /api/books/{bookID}/members:
     get:
       parameters:
@@ -1081,6 +1210,20 @@ paths:
       summary: Replace a transaction's header, lines and tags
       tags:
       - transactions
+  /api/commodities:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/routes.CommodityDTO'
+            type: array
+      summary: 'Everything an account can hold: currencies, securities, points'
+      tags:
+      - reference
   /api/currencies:
     get:
       produces:
@@ -1105,6 +1248,35 @@ paths:
           schema:
             $ref: '#/definitions/routes.UserDTO'
       summary: The signed-in user and their settings
+      tags:
+      - me
+  /api/me/account:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: identity
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.identityRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.UserDTO'
+        "409":
+          description: username or email taken
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Change username and email (needs the current password)
       tags:
       - me
   /api/me/password:

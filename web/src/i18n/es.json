@@ -132,7 +132,11 @@
     "uncleared": "Pendiente",
     "opening": "Saldo inicial",
     "split_needed": "Esta entrada necesita la vista de desglose.",
-    "lines": "{count} líneas"
+    "lines": "{count} líneas",
+    "unit_cost": "Precio unitario",
+    "cost_required": "Introduce el coste (0 para millas ganadas)",
+    "base_missing": "Algunas líneas aún no tienen importe base",
+    "fill_remainder": "Poner aquí el resto"
   },
   "accounts": {
     "title": "Cuentas",
@@ -168,6 +172,7 @@
     "general": "General",
     "name": "Nombre",
     "base_currency": "Moneda base",
+    "base_currency_hint": "Se fija al crear el libro; cambiarla luego es un recálculo explícito.",
     "lock_date": "Fecha de cierre",
     "lock_date_hint": "Nada en o antes de esta fecha puede cambiarse.",
     "cf_choice": "Intereses y dividendos en flujo de caja",
@@ -184,7 +189,19 @@
     "add_rate": "Añadir tipo",
     "rate": "Tipo",
     "source": "Fuente",
-    "no_rates": "Aún no hay tipos."
+    "no_rates": "Aún no hay tipos.",
+    "commodities": "Valores y puntos",
+    "commodities_hint": "Acciones y futuros cotizan en una moneda. Millas y puntos no tienen precio: se llevan a su coste. Compartido por todos los libros.",
+    "kind": "Tipo",
+    "kind_points": "Millas / puntos",
+    "kind_security": "Valor",
+    "kind_currency": "Moneda",
+    "code_hint": "NAMESPACE:SÍMBOLO, p. ej. MILES:EVA, XNAS:AAPL, XTAF:TX",
+    "quote_currency": "Moneda de cotización",
+    "contract_size": "Tamaño del contrato",
+    "contract_size_hint": "Solo futuros: unidades por contrato (TX = 200). Se muestra como exposición, nunca como valor del activo.",
+    "add_commodity": "Añadir",
+    "no_commodities": "Ninguno todavía."
   },
   "settings": {
     "title": "Ajustes",
@@ -204,7 +221,35 @@
     "current_password": "Contraseña actual",
     "new_password": "Nueva contraseña",
     "change_password": "Cambiar contraseña",
-    "password_changed": "Contraseña cambiada. Se cerró la sesión en otros dispositivos."
+    "password_changed": "Contraseña cambiada. Se cerró la sesión en otros dispositivos.",
+    "identity": "Acceso",
+    "email": "Correo electrónico",
+    "identity_saved": "Usuario y correo actualizados"
+  },
+  "field": {
+    "no_holdings": "Nada en cartera en esta fecha",
+    "exceeds_holdings": "Más de lo que tiene la cuenta",
+    "cost_required": "Introduce el coste",
+    "unpriced": "Se lleva a coste; no tiene precio",
+    "taken": "Ya está en uso",
+    "required": "Obligatorio",
+    "not_found": "No encontrado",
+    "placeholder": "Es una cuenta de grupo",
+    "archived": "Archivada",
+    "mismatch": "Moneda incorrecta para esta cuenta",
+    "unknown": "Desconocido",
+    "zero": "No puede ser cero",
+    "too_precise": "Demasiados decimales",
+    "sign": "Debe tener el mismo signo",
+    "rate_missing": "Sin tipo para esta fecha: introduce el importe base",
+    "invalid": "No válido",
+    "too_few": "Añade al menos dos líneas",
+    "unbalanced": "No cuadra",
+    "too_short": "Demasiado corta",
+    "wrong": "Incorrecta",
+    "class_mismatch": "Debe coincidir con el tipo del padre",
+    "has_postings": "Tiene transacciones",
+    "same": "Deben ser distintas"
   },
   "languages": {
     "en": "English",
@@ -241,26 +286,6 @@
     "account_parent": "Esa cuenta padre no está permitida",
     "invalid_reference": "Algo a lo que hace referencia no existe",
     "bad_json": "Solicitud mal formada"
-  },
-  "field": {
-    "required": "Obligatorio",
-    "not_found": "No encontrado",
-    "placeholder": "Es una cuenta de grupo",
-    "archived": "Archivada",
-    "mismatch": "Moneda incorrecta para esta cuenta",
-    "unknown": "Desconocido",
-    "zero": "No puede ser cero",
-    "too_precise": "Demasiados decimales",
-    "sign": "Debe tener el mismo signo",
-    "rate_missing": "Sin tipo para esta fecha: introduce el importe base",
-    "invalid": "No válido",
-    "too_few": "Añade al menos dos líneas",
-    "unbalanced": "No cuadra",
-    "too_short": "Demasiado corta",
-    "wrong": "Incorrecta",
-    "class_mismatch": "Debe coincidir con el tipo del padre",
-    "has_postings": "Tiene transacciones",
-    "same": "Deben ser distintas"
   },
   "account": {
     "template": {

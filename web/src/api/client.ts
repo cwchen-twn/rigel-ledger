@@ -63,7 +63,11 @@ export const api = {
   updateSettings: (s: T.Settings) => patch<T.User>('/api/me/settings', s),
   changePassword: (current_password: string, new_password: string) =>
     post<void>('/api/me/password', { current_password, new_password }),
+  updateIdentity: (username: string, email: string, current_password: string) =>
+    patch<T.User>('/api/me/account', { username, email, current_password }),
   currencies: () => get<T.Currency[]>('/api/currencies'),
+  commodities: () => get<T.Commodity[]>('/api/commodities'),
+  createCommodity: (id: number, c: T.CommodityInput) => post<T.Commodity>(`${book(id)}/commodities`, c),
 
   books: () => get<T.Book[]>('/api/books'),
   createBook: (name: string, base_currency: string) => post<T.Book>('/api/books', { name, base_currency }),
@@ -86,6 +90,8 @@ export const api = {
   archiveAccount: (id: number, accountId: number, archived: boolean) =>
     post<T.Account>(`${book(id)}/accounts/${accountId}/archive`, { archived }),
   deleteAccount: (id: number, accountId: number) => del(`${book(id)}/accounts/${accountId}`),
+  costBasis: (id: number, accountId: number, asOf: string, exclude?: number) =>
+    get<T.CostBasis>(`${book(id)}/accounts/${accountId}/cost${qs({ as_of: asOf, exclude })}`),
 
   transactions: (id: number, f: { from?: string; to?: string; account?: number; q?: string; tag?: string; cursor?: string; limit?: number }) =>
     get<T.TransactionPage>(`${book(id)}/transactions${qs(f)}`),

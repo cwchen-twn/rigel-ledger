@@ -16,9 +16,9 @@ DELETE FROM transactions WHERE book_id = $1 AND id = $2;
 
 -- name: CreatePosting :one
 INSERT INTO postings (transaction_id, account_id, position, commodity, amount, base_amount,
-                      quantity, unit_cost, status, cleared_on, memo)
+                      unit_cost, status, cleared_on, memo)
 VALUES (@transaction_id, @account_id, @position, @commodity, @amount, @base_amount,
-        sqlc.narg(quantity), sqlc.narg(unit_cost), @status, sqlc.narg(cleared_on), @memo)
+        sqlc.narg(unit_cost), @status, sqlc.narg(cleared_on), @memo)
 RETURNING *;
 
 -- name: DeletePostings :exec

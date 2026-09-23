@@ -254,3 +254,31 @@ func TestAuditTrail(t *testing.T) {
 		t.Fatalf("audit rows = %d by %v, want 3 by %d", n, by, f.userID)
 	}
 }
+
+// A rate inside a locked period is frozen for books that use its currencies,
+// so a corrected old rate cannot move a closed balance sheet.
+func TestPriceLockTrigger(t *testing.T) {
+	f := setupSchema(t)
+	if _, err := f.store.Pool.Exec(f.ctx, `INSERT INTO prices (commodity, quote, date, rate) VALUES ('USD', 'TWD', '2026-06-01', 32)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.store.Pool.Exec(f.ctx, `UPDATE books SET lock_date = '2026-06-30' WHERE id = $1`, f.bookID); err != nil {
+		t.Fatal(err)
+	}
+	_, err := f.store.Pool.Exec(f.ctx, `UPDATE prices SET rate = 33 WHERE commodity = 'USD' AND quote = 'TWD'`)
+	wantConstraint(t, err, "book_locked")
+	_, err = f.store.Pool.Exec(f.ctx, `INSERT INTO prices (commodity, quote, date, rate) VALUES ('USD', 'TWD', '2026-05-01', 31)`)
+	wantConstraint(t, err, "book_locked")
+	_, err = f.store.Pool.Exec(f.ctx, `DELETE FROM prices WHERE commodity = 'USD'`)
+	wantConstraint(t, err, "book_locked")
+
+	// After the lock date, or for currencies no locked book uses, rates are free.
+	for _, q := range []string{
+		`INSERT INTO prices (commodity, quote, date, rate) VALUES ('USD', 'TWD', '2026-07-01', 32.5)`,
+		`INSERT INTO prices (commodity, quote, date, rate) VALUES ('EUR', 'JPY', '2026-01-01', 160)`,
+	} {
+		if _, err := f.store.Pool.Exec(f.ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+}

@@ -24,7 +24,7 @@ function timeZones(): string[] {
 
 export default function UserSettings() {
   const { t, te, fieldErrors } = useI18n();
-  const { user, currencies, saveSettings } = useSession();
+  const { user, currencies, saveSettings, setUser: mutateUser } = useSession();
   const [books] = createResource(() => api.books());
 
   const [displayName, setDisplayName] = createSignal('');
@@ -64,6 +64,29 @@ export default function UserSettings() {
       toast.error(te(err));
     } finally {
       setBusy(false);
+    }
+  };
+
+  // ---- sign-in identity ----
+  const [username, setUsername] = createSignal('');
+  const [email, setEmail] = createSignal('');
+  const [idPassword, setIdPassword] = createSignal('');
+  const [idErrors, setIdErrors] = createSignal<Record<string, string>>({});
+  createEffect(on(user, (u) => {
+    if (!u) return;
+    setUsername(u.username);
+    setEmail(u.email);
+  }, { defer: false }));
+  const saveIdentity = async (e: Event) => {
+    e.preventDefault();
+    try {
+      mutateUser(await api.updateIdentity(username(), email(), idPassword()));
+      setIdPassword('');
+      setIdErrors({});
+      toast.success(t('settings.identity_saved'));
+    } catch (err) {
+      setIdErrors(fieldErrors(err));
+      toast.error(te(err));
     }
   };
 
@@ -128,6 +151,26 @@ export default function UserSettings() {
               </Field>
               <div class="sm:col-span-2">
                 <Button type="submit" disabled={busy()}>{busy() ? t('common.saving') : t('common.save')}</Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>{t('settings.identity')}</CardTitle></CardHeader>
+          <CardContent>
+            <form class="grid gap-4 sm:grid-cols-3" onSubmit={saveIdentity}>
+              <Field label={t('auth.username')} error={idErrors().username}>
+                <Input autocomplete="username" required value={username()} onInput={(e) => setUsername(e.currentTarget.value)} />
+              </Field>
+              <Field label={t('settings.email')} error={idErrors().email}>
+                <Input type="email" autocomplete="email" required value={email()} onInput={(e) => setEmail(e.currentTarget.value)} />
+              </Field>
+              <Field label={t('settings.current_password')} error={idErrors().current_password}>
+                <Input type="password" autocomplete="current-password" required value={idPassword()} onInput={(e) => setIdPassword(e.currentTarget.value)} />
+              </Field>
+              <div class="sm:col-span-3">
+                <Button type="submit" variant="outline">{t('common.save')}</Button>
               </div>
             </form>
           </CardContent>

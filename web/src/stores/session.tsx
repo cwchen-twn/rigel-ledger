@@ -1,16 +1,24 @@
 import { useNavigate } from '@solidjs/router';
 import { createContext, createEffect, createResource, onCleanup, useContext, type ParentComponent, type Resource } from 'solid-js';
 import { api, ApiError, setUnauthenticatedHandler } from '~/api/client';
-import type { Currency, Settings, Theme, User } from '~/api/types';
+import type { Commodity, CommodityKind, Settings, Theme, User } from '~/api/types';
 import { useI18n } from '~/i18n';
 
 interface Session {
   user: Resource<User | null>;
-  currencies: Resource<Currency[]>;
+  /** Everything an account can hold: currencies, securities, points. */
+  commodities: Resource<Commodity[]>;
+  refetchCommodities: () => void;
+  /** ISO currencies only: book base, display currency, exchange rates. */
+  currencies: () => Commodity[] | undefined;
+  commodity: (code: string) => Commodity | undefined;
+  kind: (code: string) => CommodityKind;
   decimals: (code: string) => number;
   login: (username: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
   saveSettings: (s: Settings) => Promise<User>;
+  /** Replace the signed-in user after an update elsewhere (identity change). */
+  setUser: (u: User) => void;
 }
 
 const Ctx = createContext<Session>();
@@ -36,7 +44,9 @@ export const SessionProvider: ParentComponent = (props) => {
   const navigate = useNavigate();
   const { setLocale } = useI18n();
   const [user, { mutate }] = createResource(fetchMe);
-  const [currencies] = createResource(() => api.currencies());
+  const [commodities, { refetch: refetchCommodities }] = createResource(() => api.commodities());
+  const currencies = () => commodities()?.filter((c) => c.kind === 'currency');
+  const commodity = (code: string) => commodities()?.find((c) => c.code === code);
 
   setUnauthenticatedHandler(() => {
     mutate(null);
@@ -55,11 +65,16 @@ export const SessionProvider: ParentComponent = (props) => {
   media.addEventListener('change', onMedia);
   onCleanup(() => media.removeEventListener('change', onMedia));
 
-  const decimals = (code: string) => currencies()?.find((c) => c.code === code)?.decimals ?? 2;
+  const decimals = (code: string) => commodity(code)?.decimals ?? 2;
+  const kind = (code: string): CommodityKind => commodity(code)?.kind ?? 'currency';
 
   const session: Session = {
     user,
+    commodities,
+    refetchCommodities,
     currencies,
+    commodity,
+    kind,
     decimals,
     async login(username, password) {
       const { user: u } = await api.login(username, password);
@@ -79,6 +94,7 @@ export const SessionProvider: ParentComponent = (props) => {
       mutate(u);
       return u;
     },
+    setUser: (u) => mutate(u),
   };
 
   return <Ctx.Provider value={session}>{props.children}</Ctx.Provider>;

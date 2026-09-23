@@ -87,8 +87,8 @@ func (s *Service) CreateAccount(ctx context.Context, a Access, in AccountInput) 
 			}
 			c := strings.ToUpper(*in.Commodity)
 			in.Commodity = &c
-			if err := s.validCurrency(ctx, c); err != nil {
-				return fieldError("commodity", "unknown", "unknown currency %q", c)
+			if _, err := s.validCommodity(ctx, c); err != nil {
+				return err
 			}
 		} else {
 			in.Commodity = nil

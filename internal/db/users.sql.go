@@ -152,6 +152,41 @@ func (q *Queries) TouchUserLogin(ctx context.Context, id int64) error {
 	return err
 }
 
+const updateUserIdentity = `-- name: UpdateUserIdentity :one
+UPDATE users SET username = $1, email = $2 WHERE id = $3
+RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at
+`
+
+type UpdateUserIdentityParams struct {
+	Username string
+	Email    string
+	ID       int64
+}
+
+func (q *Queries) UpdateUserIdentity(ctx context.Context, arg UpdateUserIdentityParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserIdentity, arg.Username, arg.Email, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.PasswordHash,
+		&i.DisplayName,
+		&i.IsAdmin,
+		&i.IsActive,
+		&i.Language,
+		&i.DisplayCurrency,
+		&i.Timezone,
+		&i.DateFormat,
+		&i.Theme,
+		&i.DefaultBookID,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateUserPassword = `-- name: UpdateUserPassword :exec
 UPDATE users SET password_hash = $2 WHERE id = $1
 `

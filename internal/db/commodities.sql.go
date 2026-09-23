@@ -7,10 +7,51 @@ package db
 
 import (
 	"context"
+
+	"github.com/shopspring/decimal"
 )
 
+const createCommodity = `-- name: CreateCommodity :one
+INSERT INTO commodities (code, kind, name, decimals, quote_currency, exchange_mic, contract_size)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING code, kind, name, decimals, quote_currency, exchange_mic, contract_size
+`
+
+type CreateCommodityParams struct {
+	Code          string
+	Kind          CommodityKind
+	Name          string
+	Decimals      int16
+	QuoteCurrency *string
+	ExchangeMic   *string
+	ContractSize  decimal.NullDecimal
+}
+
+func (q *Queries) CreateCommodity(ctx context.Context, arg CreateCommodityParams) (Commodity, error) {
+	row := q.db.QueryRow(ctx, createCommodity,
+		arg.Code,
+		arg.Kind,
+		arg.Name,
+		arg.Decimals,
+		arg.QuoteCurrency,
+		arg.ExchangeMic,
+		arg.ContractSize,
+	)
+	var i Commodity
+	err := row.Scan(
+		&i.Code,
+		&i.Kind,
+		&i.Name,
+		&i.Decimals,
+		&i.QuoteCurrency,
+		&i.ExchangeMic,
+		&i.ContractSize,
+	)
+	return i, err
+}
+
 const getCommodity = `-- name: GetCommodity :one
-SELECT code, kind, name, decimals, quote_currency, exchange_mic FROM commodities WHERE code = $1
+SELECT code, kind, name, decimals, quote_currency, exchange_mic, contract_size FROM commodities WHERE code = $1
 `
 
 func (q *Queries) GetCommodity(ctx context.Context, code string) (Commodity, error) {
@@ -23,12 +64,46 @@ func (q *Queries) GetCommodity(ctx context.Context, code string) (Commodity, err
 		&i.Decimals,
 		&i.QuoteCurrency,
 		&i.ExchangeMic,
+		&i.ContractSize,
 	)
 	return i, err
 }
 
+const listCommodities = `-- name: ListCommodities :many
+SELECT code, kind, name, decimals, quote_currency, exchange_mic, contract_size FROM commodities ORDER BY (kind <> 'currency'), kind, code
+`
+
+// Everything an account can hold: currencies first, then securities and points.
+func (q *Queries) ListCommodities(ctx context.Context) ([]Commodity, error) {
+	rows, err := q.db.Query(ctx, listCommodities)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Commodity{}
+	for rows.Next() {
+		var i Commodity
+		if err := rows.Scan(
+			&i.Code,
+			&i.Kind,
+			&i.Name,
+			&i.Decimals,
+			&i.QuoteCurrency,
+			&i.ExchangeMic,
+			&i.ContractSize,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCurrencies = `-- name: ListCurrencies :many
-SELECT code, kind, name, decimals, quote_currency, exchange_mic FROM commodities WHERE kind = 'currency' ORDER BY code
+SELECT code, kind, name, decimals, quote_currency, exchange_mic, contract_size FROM commodities WHERE kind = 'currency' ORDER BY code
 `
 
 func (q *Queries) ListCurrencies(ctx context.Context) ([]Commodity, error) {
@@ -47,6 +122,7 @@ func (q *Queries) ListCurrencies(ctx context.Context) ([]Commodity, error) {
 			&i.Decimals,
 			&i.QuoteCurrency,
 			&i.ExchangeMic,
+			&i.ContractSize,
 		); err != nil {
 			return nil, err
 		}

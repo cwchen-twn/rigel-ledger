@@ -185,6 +185,9 @@ func (h *handlers) deleteAccount(w http.ResponseWriter, r *http.Request) {
 
 // ---- transactions ----
 
+// todayUTC is the default "as of" date for reports and rates.
+func todayUTC() time.Time { return time.Now().UTC().Truncate(24 * time.Hour) }
+
 func queryDate(r *http.Request, name string) (*time.Time, bool) {
 	v := r.URL.Query().Get(name)
 	if v == "" {
@@ -391,7 +394,7 @@ func (h *handlers) balances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if asOf == nil {
-		today := time.Now().UTC().Truncate(24 * time.Hour)
+		today := todayUTC()
 		asOf = &today
 	}
 	b, err := h.svc.Balances(r.Context(), access(r), *asOf)
@@ -506,7 +509,7 @@ func (h *handlers) rate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if on == nil {
-		today := time.Now().UTC().Truncate(24 * time.Hour)
+		today := todayUTC()
 		on = &today
 	}
 	rate, found, err := h.svc.Rate(r.Context(), from, to, *on)

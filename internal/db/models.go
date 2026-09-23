@@ -127,6 +127,7 @@ type CommodityKind string
 const (
 	CommodityKindCurrency CommodityKind = "currency"
 	CommodityKindSecurity CommodityKind = "security"
+	CommodityKindPoints   CommodityKind = "points"
 )
 
 func (e *CommodityKind) Scan(src interface{}) error {
@@ -167,7 +168,8 @@ func (ns NullCommodityKind) Value() (driver.Value, error) {
 func (e CommodityKind) Valid() bool {
 	switch e {
 	case CommodityKindCurrency,
-		CommodityKindSecurity:
+		CommodityKindSecurity,
+		CommodityKindPoints:
 		return true
 	}
 	return false
@@ -334,6 +336,7 @@ type Commodity struct {
 	Decimals      int16
 	QuoteCurrency *string
 	ExchangeMic   *string
+	ContractSize  decimal.NullDecimal
 }
 
 type Posting struct {
@@ -344,7 +347,6 @@ type Posting struct {
 	Commodity     string
 	Amount        decimal.Decimal
 	BaseAmount    decimal.Decimal
-	Quantity      decimal.NullDecimal
 	UnitCost      decimal.NullDecimal
 	Status        PostingStatus
 	ClearedOn     *time.Time

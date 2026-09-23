@@ -1,7 +1,7 @@
 import { Trash2 } from 'lucide-solid';
 import { createEffect, createResource, createSignal, For, on, Show } from 'solid-js';
 import { api } from '~/api/client';
-import type { CfClass, Role } from '~/api/types';
+import type { CfClass, CommodityKind, Role } from '~/api/types';
 import { PageHeader } from '~/components/AppShell';
 import { MoneyInput } from '~/components/Money';
 import { Button } from '~/components/ui/button';
@@ -19,7 +19,7 @@ const ROLES: Role[] = ['owner', 'editor', 'viewer'];
 
 export default function BookSettings() {
   const { t, te, fieldErrors } = useI18n();
-  const { user, currencies } = useSession();
+  const { user, currencies, commodities, refetchCommodities } = useSession();
   const book = useBook();
 
   // ---- general ----
@@ -79,6 +79,30 @@ export default function BookSettings() {
     }
   };
 
+  // ---- securities and points ----
+  const [cKind, setCKind] = createSignal<Exclude<CommodityKind, 'currency'>>('points');
+  const [cCode, setCCode] = createSignal('');
+  const [cName, setCName] = createSignal('');
+  const [cQuote, setCQuote] = createSignal('USD');
+  const [cSize, setCSize] = createSignal('');
+  const [cErrors, setCErrors] = createSignal<Record<string, string>>({});
+  const owned = () => (commodities() ?? []).filter((c) => c.kind !== 'currency');
+  const addCommodity = async (e: Event) => {
+    e.preventDefault();
+    try {
+      await api.createCommodity(book.id(), {
+        code: cCode(), kind: cKind(), name: cName(),
+        ...(cKind() === 'security' ? { quote_currency: cQuote(), contract_size: parseAmount(cSize()) } : {}),
+      });
+      setCCode(''); setCName(''); setCSize(''); setCErrors({});
+      refetchCommodities();
+      toast.success(t('common.saved'));
+    } catch (err) {
+      setCErrors(fieldErrors(err));
+      toast.error(te(err));
+    }
+  };
+
   const currencyOptions = () => <For each={currencies() ?? []}>{(c) => <option value={c.code}>{c.code}</option>}</For>;
 
   return (
@@ -92,7 +116,7 @@ export default function BookSettings() {
               <Field label={t('book.name')} error={errors().name}>
                 <Input required disabled={!book.isOwner()} value={name()} onInput={(e) => setName(e.currentTarget.value)} />
               </Field>
-              <Field label={t('book.base_currency')} hint={t('accounts.commodity_hint')}>
+              <Field label={t('book.base_currency')} hint={t('book.base_currency_hint')}>
                 <Input disabled value={book.book()?.base_currency ?? ''} />
               </Field>
               <Field label={t('book.lock_date')} hint={t('book.lock_date_hint')}>
@@ -158,6 +182,58 @@ export default function BookSettings() {
                 </Field>
                 <Button type="submit">{t('book.add_member')}</Button>
               </form>
+            </Show>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('book.commodities')}</CardTitle>
+            <CardDescription>{t('book.commodities_hint')}</CardDescription>
+          </CardHeader>
+          <CardContent class="grid gap-4">
+            <Show when={book.canEdit()}>
+              <form class="grid gap-2 sm:grid-cols-[11rem_1fr_1fr]" onSubmit={addCommodity}>
+                <Field label={t('book.kind')}>
+                  <Select value={cKind()} onChange={(e) => setCKind(e.currentTarget.value as 'security' | 'points')}>
+                    <option value="points">{t('book.kind_points')}</option>
+                    <option value="security">{t('book.kind_security')}</option>
+                  </Select>
+                </Field>
+                <Field label={t('accounts.code')} error={cErrors().code} hint={t('book.code_hint')}>
+                  <Input required placeholder={cKind() === 'points' ? 'MILES:EVA' : 'XNAS:AAPL'} value={cCode()} onInput={(e) => setCCode(e.currentTarget.value)} />
+                </Field>
+                <Field label={t('book.name')} error={cErrors().name}>
+                  <Input required value={cName()} onInput={(e) => setCName(e.currentTarget.value)} />
+                </Field>
+                <Show when={cKind() === 'security'}>
+                  <Field label={t('book.quote_currency')} error={cErrors().quote_currency}>
+                    <Select value={cQuote()} onChange={(e) => setCQuote(e.currentTarget.value)}>{currencyOptions()}</Select>
+                  </Field>
+                  <Field label={t('book.contract_size')} hint={t('book.contract_size_hint')} error={cErrors().contract_size} class="sm:col-span-2">
+                    <MoneyInput placeholder={t('common.optional')} value={cSize()} onInput={(e) => setCSize(e.currentTarget.value)} />
+                  </Field>
+                </Show>
+                <div class="sm:col-span-3"><Button type="submit">{t('book.add_commodity')}</Button></div>
+              </form>
+            </Show>
+            <Show when={owned().length} fallback={<p class="text-sm text-muted-foreground">{t('book.no_commodities')}</p>}>
+              <Table>
+                <tbody>
+                  <For each={owned()}>
+                    {(c) => (
+                      <tr class={trClass}>
+                        <td class={`${tdClass} font-medium`}>{c.code}</td>
+                        <td class={tdClass}>{c.name}</td>
+                        <td class={tdClass}><Badge variant="outline">{t(`book.kind_${c.kind}`)}</Badge></td>
+                        <td class={`${tdClass} text-muted-foreground`}>
+                          {c.quote_currency ?? ''}{c.contract_size ? ` · ×${c.contract_size}` : ''}
+                        </td>
+                      </tr>
+                    )}
+                  </For>
+                </tbody>
+              </Table>
             </Show>
           </CardContent>
         </Card>

@@ -37,10 +37,10 @@ func (q *Queries) ClearTransactionTags(ctx context.Context, transactionID int64)
 
 const createPosting = `-- name: CreatePosting :one
 INSERT INTO postings (transaction_id, account_id, position, commodity, amount, base_amount,
-                      quantity, unit_cost, status, cleared_on, memo)
+                      unit_cost, status, cleared_on, memo)
 VALUES ($1, $2, $3, $4, $5, $6,
-        $7, $8, $9, $10, $11)
-RETURNING id, transaction_id, account_id, position, commodity, amount, base_amount, quantity, unit_cost, status, cleared_on, memo
+        $7, $8, $9, $10)
+RETURNING id, transaction_id, account_id, position, commodity, amount, base_amount, unit_cost, status, cleared_on, memo
 `
 
 type CreatePostingParams struct {
@@ -50,7 +50,6 @@ type CreatePostingParams struct {
 	Commodity     string
 	Amount        decimal.Decimal
 	BaseAmount    decimal.Decimal
-	Quantity      decimal.NullDecimal
 	UnitCost      decimal.NullDecimal
 	Status        PostingStatus
 	ClearedOn     *time.Time
@@ -65,7 +64,6 @@ func (q *Queries) CreatePosting(ctx context.Context, arg CreatePostingParams) (P
 		arg.Commodity,
 		arg.Amount,
 		arg.BaseAmount,
-		arg.Quantity,
 		arg.UnitCost,
 		arg.Status,
 		arg.ClearedOn,
@@ -80,7 +78,6 @@ func (q *Queries) CreatePosting(ctx context.Context, arg CreatePostingParams) (P
 		&i.Commodity,
 		&i.Amount,
 		&i.BaseAmount,
-		&i.Quantity,
 		&i.UnitCost,
 		&i.Status,
 		&i.ClearedOn,
@@ -187,7 +184,7 @@ func (q *Queries) GetTransaction(ctx context.Context, arg GetTransactionParams) 
 }
 
 const listPostings = `-- name: ListPostings :many
-SELECT id, transaction_id, account_id, position, commodity, amount, base_amount, quantity, unit_cost, status, cleared_on, memo FROM postings WHERE transaction_id = ANY($1::bigint[])
+SELECT id, transaction_id, account_id, position, commodity, amount, base_amount, unit_cost, status, cleared_on, memo FROM postings WHERE transaction_id = ANY($1::bigint[])
 ORDER BY transaction_id, position, id
 `
 
@@ -208,7 +205,6 @@ func (q *Queries) ListPostings(ctx context.Context, transactionIds []int64) ([]P
 			&i.Commodity,
 			&i.Amount,
 			&i.BaseAmount,
-			&i.Quantity,
 			&i.UnitCost,
 			&i.Status,
 			&i.ClearedOn,

@@ -2,6 +2,8 @@ package ledger
 
 import (
 	"context"
+	"errors"
+	"regexp"
 	"strings"
 	"time"
 
@@ -189,16 +191,22 @@ type PriceInput struct {
 	Rate      decimal.Decimal
 }
 
-// AddPrice records a manual rate. Rates are global facts shared by every
-// book, so any editor of any book may add one.
+// AddPrice records a manual rate or share price. Prices are global facts
+// shared by every book, so any editor of any book may add one.
 func (s *Service) AddPrice(ctx context.Context, a Access, in PriceInput) (db.Price, error) {
 	if err := a.require(db.MemberRoleEditor); err != nil {
 		return db.Price{}, err
 	}
 	in.Commodity = strings.ToUpper(strings.TrimSpace(in.Commodity))
 	in.Quote = strings.ToUpper(strings.TrimSpace(in.Quote))
-	if err := s.validCurrency(ctx, in.Commodity); err != nil {
-		return db.Price{}, fieldError("commodity", "unknown", "unknown currency %q", in.Commodity)
+	// A currency or a security (a share price in its quote currency). Points
+	// have no market price: they are carried at cost.
+	c, err := s.validCommodity(ctx, in.Commodity)
+	if err != nil {
+		return db.Price{}, err
+	}
+	if c.Kind == db.CommodityKindPoints {
+		return db.Price{}, fieldError("commodity", "unpriced", "%s is carried at cost and has no market price", in.Commodity)
 	}
 	if err := s.validCurrency(ctx, in.Quote); err != nil {
 		return db.Price{}, fieldError("quote", "unknown", "unknown currency %q", in.Quote)
@@ -236,4 +244,38 @@ func (s *Service) DeletePrice(ctx context.Context, a Access, id int64) error {
 // Rate answers the entry form's "what rate applies" question.
 func (s *Service) Rate(ctx context.Context, from, to string, on time.Time) (decimal.Decimal, bool, error) {
 	return RateOn(ctx, s.store.Queries, strings.ToUpper(from), strings.ToUpper(to), on)
+}
+
+// Same rule as the users.username CHECK in the schema.
+var usernamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{1,49}$`)
+
+// UpdateIdentity changes the sign-in name and email. The current password is
+// required because the username is what the next login uses. Nothing refers
+// to a username (foreign keys use users.id), so a rename is safe.
+func (s *Service) UpdateIdentity(ctx context.Context, user db.User, currentPassword, username, email string) (db.User, error) {
+	if !auth.CheckPassword(user.PasswordHash, currentPassword) {
+		return db.User{}, fieldError("current_password", "wrong", "the current password is wrong")
+	}
+	username = strings.ToLower(strings.TrimSpace(username))
+	email = strings.TrimSpace(email)
+	if !usernamePattern.MatchString(username) {
+		return db.User{}, fieldError("username", "invalid", "2-50 characters: a-z, 0-9, dot, dash, underscore")
+	}
+	if !strings.Contains(email, "@") || strings.ContainsAny(email, " \t") {
+		return db.User{}, fieldError("email", "invalid", "not an email address")
+	}
+	u, err := s.store.UpdateUserIdentity(ctx, db.UpdateUserIdentityParams{ID: user.ID, Username: username, Email: email})
+	if err != nil {
+		err = translate(err, "user")
+		var le *Error
+		if errors.As(err, &le) && le.Code == "duplicate" {
+			field := "username"
+			if strings.Contains(le.Message, "email") {
+				field = "email"
+			}
+			return db.User{}, &Error{Kind: KindConflict, Code: "duplicate", Message: le.Message, Fields: map[string]string{field: "taken"}}
+		}
+		return db.User{}, err
+	}
+	return u, nil
 }

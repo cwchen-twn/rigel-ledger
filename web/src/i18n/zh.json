@@ -132,7 +132,11 @@
     "uncleared": "未入帳",
     "opening": "期初餘額",
     "split_needed": "這筆需使用分錄模式編輯。",
-    "lines": "{count} 行"
+    "lines": "{count} 行",
+    "unit_cost": "單價",
+    "cost_required": "請輸入成本（賺取的哩程填 0）",
+    "base_missing": "部分行尚無本位幣金額",
+    "fill_remainder": "將差額填入此行"
   },
   "accounts": {
     "title": "科目",
@@ -168,6 +172,7 @@
     "general": "一般",
     "name": "名稱",
     "base_currency": "本位幣",
+    "base_currency_hint": "建立帳本時決定；日後變更需執行重新換算。",
     "lock_date": "鎖帳日",
     "lock_date_hint": "此日期（含）以前的交易不可再修改。",
     "cf_choice": "利息與股利的現金流量分類",
@@ -184,7 +189,19 @@
     "add_rate": "新增匯率",
     "rate": "匯率",
     "source": "來源",
-    "no_rates": "尚無匯率。"
+    "no_rates": "尚無匯率。",
+    "commodities": "證券與點數",
+    "commodities_hint": "股票與期貨以報價幣別計價；哩程與信用卡點數沒有市價，以取得成本入帳。所有帳本共用。",
+    "kind": "種類",
+    "kind_points": "哩程／點數",
+    "kind_security": "證券",
+    "kind_currency": "貨幣",
+    "code_hint": "格式 NAMESPACE:SYMBOL，例如 MILES:EVA、XNAS:AAPL、XTAF:TX",
+    "quote_currency": "報價幣別",
+    "contract_size": "契約乘數",
+    "contract_size_hint": "僅期貨：每口單位數（台指期 = 200）。僅作為曝險顯示，不計入資產價值。",
+    "add_commodity": "新增",
+    "no_commodities": "尚未新增。"
   },
   "settings": {
     "title": "個人設定",
@@ -204,7 +221,35 @@
     "current_password": "目前密碼",
     "new_password": "新密碼",
     "change_password": "變更密碼",
-    "password_changed": "密碼已變更，其他裝置已登出。"
+    "password_changed": "密碼已變更，其他裝置已登出。",
+    "identity": "登入資訊",
+    "email": "電子郵件",
+    "identity_saved": "已更新使用者名稱與電子郵件"
+  },
+  "field": {
+    "no_holdings": "此日期無持有",
+    "exceeds_holdings": "超過帳戶持有數量",
+    "cost_required": "請輸入成本",
+    "unpriced": "以成本入帳，無市價",
+    "taken": "已被使用",
+    "required": "必填",
+    "not_found": "找不到",
+    "placeholder": "這是群組科目",
+    "archived": "已封存",
+    "mismatch": "此科目的幣別不符",
+    "unknown": "未知",
+    "zero": "不可為零",
+    "too_precise": "小數位數過多",
+    "sign": "正負號需一致",
+    "rate_missing": "此日期無匯率：請輸入本位幣金額",
+    "invalid": "無效",
+    "too_few": "至少兩行",
+    "unbalanced": "不平衡",
+    "too_short": "太短",
+    "wrong": "不正確",
+    "class_mismatch": "需與上層科目類型相同",
+    "has_postings": "已有交易",
+    "same": "不可相同"
   },
   "languages": {
     "en": "English",
@@ -241,26 +286,6 @@
     "account_parent": "不可使用此上層科目",
     "invalid_reference": "參照的項目不存在",
     "bad_json": "請求格式錯誤"
-  },
-  "field": {
-    "required": "必填",
-    "not_found": "找不到",
-    "placeholder": "這是群組科目",
-    "archived": "已封存",
-    "mismatch": "此科目的幣別不符",
-    "unknown": "未知",
-    "zero": "不可為零",
-    "too_precise": "小數位數過多",
-    "sign": "正負號需一致",
-    "rate_missing": "此日期無匯率：請輸入本位幣金額",
-    "invalid": "無效",
-    "too_few": "至少兩行",
-    "unbalanced": "不平衡",
-    "too_short": "太短",
-    "wrong": "不正確",
-    "class_mismatch": "需與上層科目類型相同",
-    "has_postings": "已有交易",
-    "same": "不可相同"
   },
   "account": {
     "template": {

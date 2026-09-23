@@ -132,7 +132,11 @@
     "uncleared": "Uncleared",
     "opening": "Opening balance",
     "split_needed": "This entry needs the split view.",
-    "lines": "{count} lines"
+    "lines": "{count} lines",
+    "unit_cost": "Unit price",
+    "cost_required": "Enter the cost (0 for miles earned)",
+    "base_missing": "Some lines have no base amount yet",
+    "fill_remainder": "Put the remainder here"
   },
   "accounts": {
     "title": "Accounts",
@@ -168,6 +172,7 @@
     "general": "General",
     "name": "Name",
     "base_currency": "Base currency",
+    "base_currency_hint": "Fixed when the book is created; changing it later is an explicit rebase.",
     "lock_date": "Lock date",
     "lock_date_hint": "Nothing on or before this date can be changed.",
     "cf_choice": "Interest and dividends in cash flow",
@@ -184,7 +189,19 @@
     "add_rate": "Add rate",
     "rate": "Rate",
     "source": "Source",
-    "no_rates": "No rates yet."
+    "no_rates": "No rates yet.",
+    "commodities": "Securities and points",
+    "commodities_hint": "Shares and futures are priced in a quote currency. Miles and card points have no price: they are carried at what they cost. Shared by every book.",
+    "kind": "Kind",
+    "kind_points": "Miles / points",
+    "kind_security": "Security",
+    "kind_currency": "Currency",
+    "code_hint": "NAMESPACE:SYMBOL, e.g. MILES:EVA, XNAS:AAPL, XTAF:TX",
+    "quote_currency": "Quote currency",
+    "contract_size": "Contract size",
+    "contract_size_hint": "Futures only: units per contract (TX = 200). Shown as exposure, never as asset value.",
+    "add_commodity": "Add",
+    "no_commodities": "None yet."
   },
   "settings": {
     "title": "Settings",
@@ -204,7 +221,35 @@
     "current_password": "Current password",
     "new_password": "New password",
     "change_password": "Change password",
-    "password_changed": "Password changed. Other devices were signed out."
+    "password_changed": "Password changed. Other devices were signed out.",
+    "identity": "Sign-in",
+    "email": "Email",
+    "identity_saved": "Username and email updated"
+  },
+  "field": {
+    "no_holdings": "Nothing held on this date",
+    "exceeds_holdings": "More than the account holds",
+    "cost_required": "Enter the cost",
+    "unpriced": "Carried at cost; has no price",
+    "taken": "Already in use",
+    "required": "Required",
+    "not_found": "Not found",
+    "placeholder": "This is a group account",
+    "archived": "Archived",
+    "mismatch": "Wrong currency for this account",
+    "unknown": "Unknown",
+    "zero": "Must not be zero",
+    "too_precise": "Too many decimals",
+    "sign": "Must have the same sign",
+    "rate_missing": "No rate for this date: enter the base amount",
+    "invalid": "Invalid",
+    "too_few": "Add at least two lines",
+    "unbalanced": "Does not balance",
+    "too_short": "Too short",
+    "wrong": "Incorrect",
+    "class_mismatch": "Must match the parent's type",
+    "has_postings": "Has transactions",
+    "same": "Must differ"
   },
   "languages": {
     "en": "English",
@@ -241,26 +286,6 @@
     "account_parent": "That parent is not allowed",
     "invalid_reference": "Something it refers to does not exist",
     "bad_json": "Malformed request"
-  },
-  "field": {
-    "required": "Required",
-    "not_found": "Not found",
-    "placeholder": "This is a group account",
-    "archived": "Archived",
-    "mismatch": "Wrong currency for this account",
-    "unknown": "Unknown",
-    "zero": "Must not be zero",
-    "too_precise": "Too many decimals",
-    "sign": "Must have the same sign",
-    "rate_missing": "No rate for this date: enter the base amount",
-    "invalid": "Invalid",
-    "too_few": "Add at least two lines",
-    "unbalanced": "Does not balance",
-    "too_short": "Too short",
-    "wrong": "Incorrect",
-    "class_mismatch": "Must match the parent's type",
-    "has_postings": "Has transactions",
-    "same": "Must differ"
   },
   "account": {
     "template": {

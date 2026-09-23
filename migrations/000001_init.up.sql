@@ -21,7 +21,9 @@ CREATE TYPE cf_class       AS ENUM ('operating', 'investing', 'financing');
 -- Order matters: roles compare with < and >=.
 CREATE TYPE member_role    AS ENUM ('viewer', 'editor', 'owner');
 CREATE TYPE posting_status AS ENUM ('uncleared', 'cleared', 'reconciled');
-CREATE TYPE commodity_kind AS ENUM ('currency', 'security');
+-- currency: ISO 4217. security: shares, ETFs, futures -- priced in a quote currency.
+-- points: airline miles, card points -- no market price, carried at cost.
+CREATE TYPE commodity_kind AS ENUM ('currency', 'security', 'points');
 
 CREATE FUNCTION set_updated_at() RETURNS trigger AS $$
 BEGIN
@@ -31,19 +33,31 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ---------------------------------------------------------------------------
--- Commodities: every currency, and (from P5) securities
+-- Commodities: every currency, securities, and loyalty points
 -- ---------------------------------------------------------------------------
 
+-- An account holds exactly one commodity, and a posting's `amount` is in it:
+-- TWD for a bank account, shares for a brokerage position, miles for a
+-- frequent-flyer balance. `base_amount` is always the book-currency value
+-- (for securities and points: what they cost).
 CREATE TABLE commodities (
-    -- ISO 4217 code for currencies; "<MIC>:<symbol>" for securities.
+    -- ISO 4217 for currencies; "<NAMESPACE>:<SYMBOL>" otherwise, e.g.
+    -- "XNAS:AAPL", "XTAF:TX" (TAIEX future), "MILES:EVA", "PTS:CATHAY".
     code           TEXT PRIMARY KEY,
     kind           commodity_kind NOT NULL,
     name           TEXT NOT NULL,
     decimals       SMALLINT NOT NULL CHECK (decimals BETWEEN 0 AND 8),
+    -- Securities only: the currency their price is quoted in.
     quote_currency TEXT REFERENCES commodities (code),
     exchange_mic   TEXT,
+    -- Futures only: units of the underlying per contract (TX = 200). Contract
+    -- value is exposure, shown beside the position -- never the asset value,
+    -- which is margin plus unrealised P&L.
+    contract_size  NUMERIC CHECK (contract_size > 0),
     CHECK (kind <> 'currency' OR code ~ '^[A-Z]{3}$'),
-    CHECK (kind <> 'security' OR quote_currency IS NOT NULL)
+    CHECK (kind = 'currency' OR code ~ '^[A-Z0-9]+:[A-Z0-9._-]+$'),
+    CHECK ((kind = 'security') = (quote_currency IS NOT NULL)),
+    CHECK (kind = 'security' OR contract_size IS NULL)
 );
 
 -- ---------------------------------------------------------------------------
@@ -239,8 +253,8 @@ CREATE TABLE postings (
     amount         NUMERIC(24, 8) NOT NULL,
     -- amount translated into the book's base currency at the transaction-date rate.
     base_amount    NUMERIC(24, 8) NOT NULL,
-    -- Securities (P5): quantity is in `commodity`, unit_cost in its quote currency.
-    quantity       NUMERIC(24, 8),
+    -- Securities: the price paid per unit in the quote currency (USD per share),
+    -- kept for tax cost basis. The quantity is `amount` itself.
     unit_cost      NUMERIC(24, 8),
     status         posting_status NOT NULL DEFAULT 'uncleared',
     cleared_on     DATE,
@@ -396,6 +410,43 @@ $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER postings_lock BEFORE INSERT OR UPDATE OR DELETE ON postings
     FOR EACH ROW EXECUTE FUNCTION postings_lock_trigger();
+
+-- Rates are global, but a locked period's statements must not move when an
+-- old rate is corrected. A rate is frozen if any book locked on or after its
+-- date uses either side of it -- as base currency or in one of its accounts.
+-- (Cross rates through USD are covered: USD->TWD involves TWD.)
+CREATE FUNCTION check_price_lock(p_commodity TEXT, p_quote TEXT, p_date DATE) RETURNS void AS $$
+DECLARE
+    lock DATE;
+BEGIN
+    SELECT max(b.lock_date) INTO lock
+    FROM books b
+    WHERE b.lock_date >= p_date
+      AND (b.base_currency IN (p_commodity, p_quote)
+           OR EXISTS (SELECT 1 FROM accounts a
+                      WHERE a.book_id = b.id AND a.commodity IN (p_commodity, p_quote)));
+    IF lock IS NOT NULL THEN
+        RAISE EXCEPTION 'a book using % or % is locked up to %', p_commodity, p_quote, lock
+            USING ERRCODE = 'check_violation', CONSTRAINT = 'book_locked';
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE FUNCTION prices_lock_trigger() RETURNS trigger AS $$
+BEGIN
+    IF TG_OP IN ('UPDATE', 'DELETE') THEN
+        PERFORM check_price_lock(OLD.commodity, OLD.quote, OLD.date);
+    END IF;
+    IF TG_OP IN ('INSERT', 'UPDATE') THEN
+        PERFORM check_price_lock(NEW.commodity, NEW.quote, NEW.date);
+        RETURN NEW;
+    END IF;
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER prices_lock BEFORE INSERT OR UPDATE OR DELETE ON prices
+    FOR EACH ROW EXECUTE FUNCTION prices_lock_trigger();
 
 -- ---------------------------------------------------------------------------
 -- Tags ("who spent it", trips, projects)

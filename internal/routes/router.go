@@ -81,6 +81,7 @@ func New(d Deps) http.Handler {
 	r.Route("/api", func(r chi.Router) {
 		r.Post("/auth/login", h.login)
 		r.Get("/currencies", h.currencies)
+		r.Get("/commodities", h.commodities)
 
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireUser(writeAuthError))
@@ -88,6 +89,7 @@ func New(d Deps) http.Handler {
 			r.Get("/me", h.me)
 			r.Patch("/me/settings", h.updateSettings)
 			r.Post("/me/password", h.changePassword)
+			r.Patch("/me/account", h.updateIdentity)
 
 			r.Get("/books", h.listBooks)
 			r.Post("/books", h.createBook)
@@ -106,6 +108,8 @@ func New(d Deps) http.Handler {
 				r.Patch("/accounts/{accountID}", h.updateAccount)
 				r.Post("/accounts/{accountID}/archive", h.archiveAccount)
 				r.Delete("/accounts/{accountID}", h.deleteAccount)
+				r.Get("/accounts/{accountID}/cost", h.costBasis)
+				r.Post("/commodities", h.createCommodity)
 
 				r.Get("/transactions", h.listTransactions)
 				r.Post("/transactions", h.createTransaction)

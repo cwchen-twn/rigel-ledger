@@ -28,6 +28,31 @@ export interface Currency {
   decimals: number;
 }
 
+export type CommodityKind = 'currency' | 'security' | 'points';
+
+/** Anything an account can hold. Securities carry a quote currency; points carry nothing (valued at cost). */
+export interface Commodity extends Currency {
+  kind: CommodityKind;
+  quote_currency: string | null;
+  exchange_mic: string | null;
+  contract_size: string | null;
+}
+
+export interface CommodityInput {
+  code: string;
+  kind: 'security' | 'points';
+  name: string;
+  decimals?: number;
+  quote_currency?: string | null;
+  contract_size?: string | null;
+}
+
+export interface CostBasis {
+  quantity: string;
+  cost: string;
+  unit_cost: string;
+}
+
 export interface Book {
   id: number;
   name: string;
@@ -65,6 +90,7 @@ export interface Posting {
   commodity: string;
   amount: string;
   base_amount: string;
+  unit_cost: string | null;
   status: PostingStatus;
   cleared_on: string | null;
   memo: string;
@@ -92,6 +118,7 @@ export interface LineInput {
   commodity?: string;
   amount: string;
   base_amount?: string;
+  unit_cost?: string;
   status?: PostingStatus;
   cleared_on?: string;
   memo?: string;

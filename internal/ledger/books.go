@@ -75,15 +75,30 @@ func (s *Service) ListBooks(ctx context.Context, userID int64) ([]BookWithRole, 
 	return out, nil
 }
 
+// validCurrency accepts ISO currencies only: a book's base, a display
+// currency and both sides of an exchange rate must be money, not miles.
 func (s *Service) validCurrency(ctx context.Context, code string) error {
-	decs, err := s.commodityDecimals(ctx)
+	m, err := s.commodityMap(ctx)
 	if err != nil {
 		return err
 	}
-	if _, ok := decs[code]; !ok {
+	if c, ok := m[code]; !ok || c.Kind != db.CommodityKindCurrency {
 		return fieldError("base_currency", "unknown", "unknown currency %q", code)
 	}
 	return nil
+}
+
+// validCommodity accepts anything an account can hold.
+func (s *Service) validCommodity(ctx context.Context, code string) (db.Commodity, error) {
+	m, err := s.commodityMap(ctx)
+	if err != nil {
+		return db.Commodity{}, err
+	}
+	c, ok := m[code]
+	if !ok {
+		return db.Commodity{}, fieldError("commodity", "unknown", "unknown commodity %q", code)
+	}
+	return c, nil
 }
 
 // CreateBook creates a book owned by the user and seeds the personal chart of

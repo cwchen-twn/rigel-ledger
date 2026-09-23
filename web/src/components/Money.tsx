@@ -1,13 +1,18 @@
 import { splitProps, type JSX } from 'solid-js';
 import { useI18n } from '~/i18n';
 import { cn } from '~/lib/cn';
-import { cmp, formatMoney } from '~/lib/money';
+import { cmp, formatMoney, formatNumber } from '~/lib/money';
 import { useSession } from '~/stores/session';
 
 /** A formatted amount. Negative values are shown in the destructive colour when `signed`. */
 export function Money(props: { amount: string; currency: string; signed?: boolean; class?: string }) {
   const { intl } = useI18n();
-  const { decimals } = useSession();
+  const { decimals, kind } = useSession();
+  // Miles and shares are not money: show the units with their code.
+  const text = () =>
+    kind(props.currency) === 'currency'
+      ? formatMoney(props.amount, props.currency, intl(), decimals(props.currency))
+      : `${formatNumber(props.amount, intl(), decimals(props.currency))} ${props.currency.split(':').pop()}`;
   return (
     <span
       class={cn(
@@ -16,7 +21,7 @@ export function Money(props: { amount: string; currency: string; signed?: boolea
         props.class,
       )}
     >
-      {formatMoney(props.amount, props.currency, intl(), decimals(props.currency))}
+      {text()}
     </span>
   );
 }

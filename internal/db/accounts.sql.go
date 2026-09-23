@@ -12,6 +12,37 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const accountCostBasis = `-- name: AccountCostBasis :one
+SELECT coalesce(sum(p.amount), 0)::numeric      AS quantity,
+       coalesce(sum(p.base_amount), 0)::numeric AS cost
+FROM postings p
+JOIN transactions t ON t.id = p.transaction_id
+WHERE p.account_id = $1
+  AND t.date <= $2
+  AND t.id <> $3
+`
+
+type AccountCostBasisParams struct {
+	AccountID            int64
+	AsOf                 time.Time
+	ExcludeTransactionID int64
+}
+
+type AccountCostBasisRow struct {
+	Quantity decimal.Decimal
+	Cost     decimal.Decimal
+}
+
+// What an account holds and what it cost, up to a date: the input to average
+// cost when miles, points or shares leave it. Excludes one transaction, so
+// editing a redemption does not count the redemption itself.
+func (q *Queries) AccountCostBasis(ctx context.Context, arg AccountCostBasisParams) (AccountCostBasisRow, error) {
+	row := q.db.QueryRow(ctx, accountCostBasis, arg.AccountID, arg.AsOf, arg.ExcludeTransactionID)
+	var i AccountCostBasisRow
+	err := row.Scan(&i.Quantity, &i.Cost)
+	return i, err
+}
+
 const accountHasChildren = `-- name: AccountHasChildren :one
 SELECT EXISTS (SELECT 1 FROM accounts WHERE parent_id = $1)
 `

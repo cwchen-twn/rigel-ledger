@@ -394,6 +394,53 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/books/{bookID}/accounts/{accountID}/cost": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "What an account holds and what it cost (average cost input)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "account id",
+                        "name": "accountID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "YYYY-MM-DD, default today",
+                        "name": "as_of",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "transaction id to leave out (the one being edited)",
+                        "name": "exclude",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.CostBasisDTO"
+                        }
+                    }
+                }
+            }
+        },
         "/api/books/{bookID}/balances": {
             "get": {
                 "produces": [
@@ -423,6 +470,53 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/routes.BalancesDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/commodities": {
+            "post": {
+                "description": "Commodities are global like rates; the book only authorises the caller.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reference"
+                ],
+                "summary": "Add a security or a points programme (editor of this book)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "commodity",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.createCommodityRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/routes.CommodityDTO"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     }
                 }
@@ -970,6 +1064,28 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/commodities": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reference"
+                ],
+                "summary": "Everything an account can hold: currencies, securities, points",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/routes.CommodityDTO"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/currencies": {
             "get": {
                 "produces": [
@@ -1006,6 +1122,51 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/routes.UserDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/account": {
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "Change username and email (needs the current password)",
+                "parameters": [
+                    {
+                        "description": "identity",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.identityRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.UserDTO"
+                        }
+                    },
+                    "409": {
+                        "description": "username or email taken",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     }
                 }
@@ -1113,6 +1274,19 @@ const docTemplate = `{
                 "CfClassOperating",
                 "CfClassInvesting",
                 "CfClassFinancing"
+            ]
+        },
+        "db.CommodityKind": {
+            "type": "string",
+            "enum": [
+                "currency",
+                "security",
+                "points"
+            ],
+            "x-enum-varnames": [
+                "CommodityKindCurrency",
+                "CommodityKindSecurity",
+                "CommodityKindPoints"
             ]
         },
         "db.MemberRole": {
@@ -1295,6 +1469,46 @@ const docTemplate = `{
                 }
             }
         },
+        "routes.CommodityDTO": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "contract_size": {
+                    "type": "string"
+                },
+                "decimals": {
+                    "type": "integer"
+                },
+                "exchange_mic": {
+                    "type": "string"
+                },
+                "kind": {
+                    "$ref": "#/definitions/db.CommodityKind"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "quote_currency": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.CostBasisDTO": {
+            "type": "object",
+            "properties": {
+                "cost": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "string"
+                },
+                "unit_cost": {
+                    "type": "string"
+                }
+            }
+        },
         "routes.CurrencyDTO": {
             "type": "object",
             "properties": {
@@ -1333,6 +1547,9 @@ const docTemplate = `{
                 },
                 "status": {
                     "$ref": "#/definitions/db.PostingStatus"
+                },
+                "unit_cost": {
+                    "type": "string"
                 }
             }
         },
@@ -1380,6 +1597,9 @@ const docTemplate = `{
                 },
                 "status": {
                     "$ref": "#/definitions/db.PostingStatus"
+                },
+                "unit_cost": {
+                    "type": "string"
                 }
             }
         },
@@ -1604,6 +1824,46 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.createCommodityRequest": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "contract_size": {
+                    "type": "string"
+                },
+                "decimals": {
+                    "type": "integer"
+                },
+                "exchange_mic": {
+                    "type": "string"
+                },
+                "kind": {
+                    "$ref": "#/definitions/db.CommodityKind"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "quote_currency": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.identityRequest": {
+            "type": "object",
+            "properties": {
+                "current_password": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "username": {
                     "type": "string"
                 }
             }

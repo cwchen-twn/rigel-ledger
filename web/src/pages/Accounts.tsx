@@ -28,7 +28,7 @@ function AccountDialog(props: {
   cls: AccountClass; // new top-level of
 }) {
   const { t, te, fieldErrors } = useI18n();
-  const { currencies } = useSession();
+  const { commodities } = useSession();
   const book = useBook();
   const base = () => book.book()?.base_currency ?? 'USD';
 
@@ -150,7 +150,7 @@ function AccountDialog(props: {
           <Show when={holdsCommodity(cls())}>
             <Field label={t('accounts.commodity')} hint={t('accounts.commodity_hint')} error={errors().commodity}>
               <Select value={commodity()} disabled={editing()} onChange={(e) => setCommodity(e.currentTarget.value)}>
-                <For each={currencies() ?? []}>{(c) => <option value={c.code}>{c.code} · {c.name}</option>}</For>
+                <For each={commodities() ?? []}>{(c) => <option value={c.code}>{c.code} · {c.name}</option>}</For>
               </Select>
             </Field>
           </Show>

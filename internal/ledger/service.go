@@ -14,33 +14,61 @@ import (
 type Service struct {
 	store *db.Store
 
-	decimalsOnce sync.Once
-	decimals     map[string]int32
-	decimalsErr  error
+	mu          sync.RWMutex
+	commodities map[string]db.Commodity // nil until loaded; reset when one is created
 }
 
 func NewService(store *db.Store) *Service {
 	return &Service{store: store}
 }
 
-// commodityDecimals is the minor-unit count per commodity code, loaded once:
-// the ISO list only changes with a migration.
+// commodityMap is every commodity by code. Currencies only change with a
+// migration, but securities and points are created at runtime, so the cache
+// is dropped whenever CreateCommodity adds one.
+func (s *Service) commodityMap(ctx context.Context) (map[string]db.Commodity, error) {
+	s.mu.RLock()
+	m := s.commodities
+	s.mu.RUnlock()
+	if m != nil {
+		return m, nil
+	}
+	rows, err := s.store.ListCommodities(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m = make(map[string]db.Commodity, len(rows))
+	for _, c := range rows {
+		m[c.Code] = c
+	}
+	s.mu.Lock()
+	s.commodities = m
+	s.mu.Unlock()
+	return m, nil
+}
+
+func (s *Service) invalidateCommodities() {
+	s.mu.Lock()
+	s.commodities = nil
+	s.mu.Unlock()
+}
+
+// commodityDecimals is the minor-unit count per commodity code.
 func (s *Service) commodityDecimals(ctx context.Context) (map[string]int32, error) {
-	s.decimalsOnce.Do(func() {
-		rows, err := s.store.ListCurrencies(ctx)
-		if err != nil {
-			s.decimalsErr = err
-			return
-		}
-		m := make(map[string]int32, len(rows))
-		for _, c := range rows {
-			m[c.Code] = int32(c.Decimals)
-		}
-		s.decimals = m
-	})
-	return s.decimals, s.decimalsErr
+	m, err := s.commodityMap(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]int32, len(m))
+	for code, c := range m {
+		out[code] = int32(c.Decimals)
+	}
+	return out, nil
 }
 
 func (s *Service) Currencies(ctx context.Context) ([]db.Commodity, error) {
 	return s.store.ListCurrencies(ctx)
+}
+
+func (s *Service) Commodities(ctx context.Context) ([]db.Commodity, error) {
+	return s.store.ListCommodities(ctx)
 }

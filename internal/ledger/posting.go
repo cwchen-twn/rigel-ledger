@@ -13,26 +13,39 @@ import (
 // LineInput is one posting as a client sends it. Amount is signed (debit > 0)
 // and in Commodity. BaseAmount may be given for a foreign line to pin the
 // rate the user actually got; otherwise it is derived from prices.
+//
+// For securities and points the amount is units (shares, miles) and
+// base_amount is their cost; see resolveLine for how a missing one is found.
 type LineInput struct {
 	AccountID  int64
 	Commodity  string
 	Amount     decimal.Decimal
 	BaseAmount *decimal.Decimal
-	Status     db.PostingStatus
-	ClearedOn  *time.Time
-	Memo       string
+	// Securities: price per unit in the quote currency (USD per share).
+	UnitCost  *decimal.Decimal
+	Status    db.PostingStatus
+	ClearedOn *time.Time
+	Memo      string
 }
 
 // lineContext is what resolving a line needs to know about its book.
 type lineContext struct {
-	book     db.Book
-	accounts map[int64]db.Account
-	decimals map[string]int32
-	date     time.Time
+	book        db.Book
+	accounts    map[int64]db.Account
+	decimals    map[string]int32
+	commodities map[string]db.Commodity
+	date        time.Time
+	// The transaction being rewritten, left out of average cost so an edited
+	// redemption does not count itself.
+	excludeTxn int64
 }
 
 func (s *Service) newLineContext(ctx context.Context, q *db.Queries, book db.Book, date time.Time) (*lineContext, error) {
 	decs, err := s.commodityDecimals(ctx)
+	if err != nil {
+		return nil, err
+	}
+	comms, err := s.commodityMap(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +57,7 @@ func (s *Service) newLineContext(ctx context.Context, q *db.Queries, book db.Boo
 	for _, a := range accts {
 		m[a.ID] = a
 	}
-	return &lineContext{book: book, accounts: m, decimals: decs, date: date}, nil
+	return &lineContext{book: book, accounts: m, decimals: decs, commodities: comms, date: date}, nil
 }
 
 func hasPrecision(d decimal.Decimal, places int32) bool {
@@ -89,6 +102,7 @@ func (s *Service) resolveLine(ctx context.Context, q *db.Queries, lc *lineContex
 
 	base := lc.book.BaseCurrency
 	basePlaces := lc.decimals[base]
+	kind := lc.commodities[commodity].Kind
 	var baseAmount decimal.Decimal
 	switch {
 	case commodity == base:
@@ -101,7 +115,7 @@ func (s *Service) resolveLine(ctx context.Context, q *db.Queries, lc *lineContex
 		if baseAmount.Sign()*in.Amount.Sign() < 0 {
 			return db.CreatePostingParams{}, fieldError(f("base_amount"), "sign", "base_amount must have the same sign as amount")
 		}
-	default:
+	case kind == db.CommodityKindCurrency:
 		rate, ok, err := RateOn(ctx, q, commodity, base, lc.date)
 		if err != nil {
 			return db.CreatePostingParams{}, err
@@ -111,6 +125,42 @@ func (s *Service) resolveLine(ctx context.Context, q *db.Queries, lc *lineContex
 				"no %s/%s rate on or before %s; enter the base amount or add a rate", commodity, base, lc.date.Format(time.DateOnly))
 		}
 		baseAmount = in.Amount.Mul(rate).Round(basePlaces)
+	case kind == db.CommodityKindSecurity && in.UnitCost != nil && in.Amount.IsPositive():
+		// A purchase: units x price in the quote currency x that currency's rate.
+		quote := *lc.commodities[commodity].QuoteCurrency
+		rate, ok, err := RateOn(ctx, q, quote, base, lc.date)
+		if err != nil {
+			return db.CreatePostingParams{}, err
+		}
+		if !ok {
+			return db.CreatePostingParams{}, fieldError(f("base_amount"), "rate_missing",
+				"no %s/%s rate on or before %s", quote, base, lc.date.Format(time.DateOnly))
+		}
+		baseAmount = in.Amount.Mul(*in.UnitCost).Mul(rate).Round(basePlaces)
+	case in.Amount.IsNegative() && holdsCommodity(a.Class):
+		// Miles spent, points converted, shares sold: they leave at average
+		// cost. Taking the whole balance takes the whole cost, so no residue
+		// is stranded in the account.
+		cb, err := costBasis(ctx, q, a.ID, lc.date, lc.excludeTxn)
+		if err != nil {
+			return db.CreatePostingParams{}, err
+		}
+		if !cb.Quantity.IsPositive() {
+			return db.CreatePostingParams{}, fieldError(f("amount"), "no_holdings", "account %d holds no %s on %s", a.ID, commodity, lc.date.Format(time.DateOnly))
+		}
+		if in.Amount.Abs().GreaterThan(cb.Quantity) {
+			return db.CreatePostingParams{}, fieldError(f("amount"), "exceeds_holdings", "account %d holds only %s %s", a.ID, cb.Quantity.String(), commodity)
+		}
+		if in.Amount.Abs().Equal(cb.Quantity) {
+			baseAmount = cb.Cost.Neg()
+		} else {
+			baseAmount = in.Amount.Mul(cb.Cost).DivRound(cb.Quantity, basePlaces)
+		}
+	default:
+		// Acquiring miles or shares, or an income/expense line in them: only
+		// the user knows the cost (zero is fine for miles earned).
+		return db.CreatePostingParams{}, fieldError(f("base_amount"), "cost_required",
+			"enter what the %s cost in %s (0 for miles earned)", commodity, base)
 	}
 
 	status := in.Status
@@ -127,6 +177,7 @@ func (s *Service) resolveLine(ctx context.Context, q *db.Queries, lc *lineContex
 		Commodity:  commodity,
 		Amount:     in.Amount,
 		BaseAmount: baseAmount,
+		UnitCost:   nullDecimal(in.UnitCost),
 		Status:     status,
 		ClearedOn:  in.ClearedOn,
 		Memo:       in.Memo,
@@ -185,3 +236,10 @@ func (s *Service) prepareLines(ctx context.Context, q *db.Queries, lc *lineConte
 }
 
 func ptr[T any](v T) *T { return &v }
+
+func nullDecimal(d *decimal.Decimal) decimal.NullDecimal {
+	if d == nil {
+		return decimal.NullDecimal{}
+	}
+	return decimal.NullDecimal{Decimal: *d, Valid: true}
+}
