@@ -12,9 +12,10 @@ needs a data migration path.
 - Balance sheet, income statement and cash flow statement.
 - Multi-currency (TWD, USD, PYG, ...) with exchange rates updated automatically.
 - Daily manual entry from web and phone.
-- Import credit card, bank and futures-broker PDF statements. Parsing stays local, and no
-  statement data leaves the cluster.
-- Stock investments, including Firstrade sync.
+- Sync Taiwan banks, cards, brokers, futures and e-invoices, and Firstrade, with statement
+  import as the fallback. No statement data leaves the cluster (see Data sources and sync).
+- Stock and futures investments: 永豐 via its official Shioaji API, Taiwan holdings via
+  集保 e存摺, Firstrade via its unofficial library.
 - Per-user settings (language, display currency, ...) that can be changed at any time.
 - Packaged as a container, deployed by the hcloud repo.
 
@@ -27,7 +28,9 @@ Go binary  -- chi JSON API, embedded SolidJS SPA, migrations on start,
         |     in-process scheduler (exchange rates, prices)
         |
    +----+-----------------+----------------------+
-SolidJS PWA (web)   Flutter (later)     firstrade-sync CronJob (Python)
+SolidJS PWA (web)   Flutter (later)     sync runners (CronJobs):
+                                          tw-sync (Node, all-set-tw connectors)
+                                          py-sync (Python: Shioaji, Firstrade)
 ```
 
 - **One JSON API for every client.** This is why the web stays a SolidJS SPA rather than
@@ -164,9 +167,12 @@ postings(id, transaction_id, account_id, commodity_id, amount NUMERIC signed,
   -- prices trigger: no rate on or before the lock date of a book using it
 tags(id, book_id, name, kind);  transaction_tags(transaction_id, tag_id)
 attachments(id, book_id, sha256, filename, mime, bytes BYTEA, transaction_id NULL)
+source_accounts(book_id, connector, external_id, account_id)       -- P4 sync mapping
+balance_assertions(account_id, date, amount, source)               -- P4 reconciliation
 import_batches(id, book_id, account_id, source, parser, attachment_id,
                period_start, period_end, statement_closing_balance)
-import_rows(id, batch_id, date, amount, currency, description, raw JSONB,
+import_rows(id, batch_id, kind transaction|balance|holding|bill|invoice|trade|settlement|margin,
+            date, amount, currency, description, raw JSONB, external_id,
             fingerprint, status pending|posted|ignored|duplicate, transaction_id)
 rules(id, book_id, priority, match JSONB, account_id, tag_ids)
 audit_log(id, book_id, table_name, row_id, action, old JSONB, new JSONB,
@@ -383,20 +389,135 @@ moves across unchanged.
   `Ledgers.Edit` do not check the owner at all.
 - Keep chi, golang-migrate (migrations embedded, run on start) and `caarlos0/env`.
 
-## Imports
+## Data sources and sync
 
-- **Stays local, by decision.** Statement data never goes to an external service.
-- **CSV first.**
-- **PDF.**
-  1. `pdftotext -layout` (poppler, installed in the image) extracts the text.
-  2. A Go `Parser` interface has one implementation per institution and statement type:
-     credit card, bank, futures.
-  3. Parsed rows go to `import_rows` with a dedupe fingerprint. The original PDF is kept
-     in `attachments`.
-- **Review queue.** `rules` pre-fill the account and tags. The user confirms, and only
-  then are transactions posted. **Nothing auto-posts.**
-- **Reconciliation.** The statement's closing balance is checked against the account
-  balance at `period_end`, and matched postings become `reconciled`.
+Decided 2026-09-23 against thirteen sources the household actually uses. The reference
+is [TedLin1993/all-set-tw](https://github.com/TedLin1993/all-set-tw) (MIT), a self-hosted
+Taiwan finance hub whose connectors this design reuses.
+
+### Principle
+
+- **Every source produces the same staged records**, whether it is a bank login, an
+  official API, an app API, or a CSV or PDF statement.
+- **Nothing auto-posts.** Rules and matching propose; the user confirms in the review
+  queue.
+- **Sources are evidence; the ledger is the truth.** Balance and holding snapshots become
+  **assertions** checked against the ledger, never overwrites.
+
+### Coverage
+
+| # | Source | What | Mechanism | Status |
+|---|---|---|---|---|
+| 1 | 永豐銀行 | card overview, recent bills, unbilled spend | all-set-tw `sinopac` (browser login + CAPTCHA) | reuse |
+| 1 | 永豐銀行 | deposits, balances, transactions | not in all-set-tw: a new connector, or the balance via 集保's settlement-bank list (unverified for 永豐) | new |
+| 2 | 永豐證券 | stocks, ETF, funds: positions and trades | **Shioaji**, official, read-only key | new (Python) |
+| 3 | 永豐期貨 | futures positions, margin, P&L | **Shioaji** futures account | new (Python) |
+| 4 | 國泰世華 | deposits, balances, transactions; card bills and spend | all-set-tw `cathaybk` (browser per sync; extra verification is manual) | reuse |
+| 5 | 國泰證券 | holdings and trades | via 集保 e存摺; retires when brokerage consolidates into 永豐 | via 集保 |
+| 6 | 國泰期貨 | futures trades | statement PDF until consolidated into 永豐 | PDF |
+| 7, 10 | 國泰人壽, 南山人壽 | policies | **out of the ledger** (see Insurance); premiums arrive through bank and card | not synced |
+| 8 | 將來銀行 | deposits, balances, transactions; 信貸 | new connector (app API) or export; the loan is a liability with principal/interest split | new |
+| 9 | 兆豐銀行 | deposits, balances, transactions | new connector or export | new |
+| 11 | 電子發票載具 | carrier invoices with line items | all-set-tw `einvoice` (app login). The MOF's own API route could not be verified | reuse |
+| 12 | 集保 e存摺 | settlement-bank balances; TW stocks, ETF and funds, holdings and trades across brokers | all-set-tw `tdcc` (device OTP on first login) | reuse; **source of truth for TW holdings** |
+| 13 | Firstrade | trades, positions, value, history | `MaxxRK/firstrade-api` (unofficial Python; TOTP, saved cookies); its CSV export is the fallback | new (Python) |
+
+What is known about the sources, and what is not:
+
+- **Open Banking (開放銀行)** phase 3 is TSP-only and voluntary. It is not an option for
+  an individual, so bank data means logins or statements.
+- **Shioaji** (sinotrade.github.io) is the one official brokerage API.
+  - Read-only queries for stock and futures accounts: `list_positions` (with unrealised
+    P&L), `list_profit_loss(begin, end)` (with fees and tax), `settlements` (T..T+2),
+    `margin()` (equity, margins, settle P&L), `account_balance`.
+  - The API key has per-permission and IP scopes. The CA certificate is needed only to
+    place orders.
+  - Limits: 25 queries per 5 s, 1000 logins per day.
+  - **Fills (`list_trades`) are current-day only**, so the runner must sync every
+    trading day after the close, or history is lost.
+- Consolidating 國泰 securities and futures into 永豐 (planned) turns rows 5–6 into
+  Shioaji too.
+
+### Runners
+
+Both are CronJobs in the hcloud chart. They hold the institution credentials; the Go app
+does not.
+
+- **`integrations/tw-sync/` (Node).**
+  - It pins all-set-tw's `@taiwan-fin-hub/connectors` and `core`. The connectors
+    package depends only on zod and node-forge.
+  - A small adapter replaces the Cloudflare-only pieces: Browser Run becomes local
+    Puppeteer/Chromium, and Workers AI CAPTCHA recognition becomes local OCR.
+  - It maps all-set-tw's `SyncResult` (accounts, balance snapshots, pending/posted
+    transactions, card bills, invoices with items, positions, trades) to our import
+    payload.
+  - Upstream fixes arrive by bumping the pin. New connectors (將來, 兆豐, 永豐
+    deposits) follow all-set-tw's connector contract, so they could be upstreamed.
+- **`integrations/py-sync/` (Python, uv).** Shioaji and Firstrade, both Python SDKs.
+
+Both POST to `/api/books/{id}/imports` with an `api` session token, and the rows land
+in one review queue.
+
+### Ingestion contract (Go side)
+
+- **Account mapping.** `source_accounts(book_id, connector, external_id -> account_id)`.
+  One external account maps to one ledger account; an unmapped one appears in the review
+  queue until the user maps it.
+- **Staged rows.** `import_rows` gain a `kind`:
+  - `transaction` (with `pending` or `posted`);
+  - `balance`, `holding`, `bill`;
+  - `invoice` (with items);
+  - `trade`, `settlement`, `margin`.
+- **Idempotent.** `transactions.external_id = "<connector>:<sourceId>"`, under the
+  existing unique `(book_id, source, external_id)`. A re-sync never duplicates.
+- **Matching** is the core of P4. all-set-tw documents its pending-to-posted card
+  matching: same card and day, then amount and merchant-name score, one-to-one. That
+  informs ours:
+  - **Card pending = our uncleared estimate.** The posted row rewrites the amount and
+    clears the line. This is the card-settlement flow below, automated.
+  - **Card payment** in the bank and the card's credit become one transfer.
+  - **Transfers between own accounts** (bank to bank, bank to broker settlement) match
+    on amount and a date window. Each is proposed once, never counted twice.
+  - **Invoices enrich; they do not create.**
+    - An invoice matches an existing card or cash transaction on amount, date and
+      seller. Its items attach to that transaction and can split the expense by
+      category.
+    - Only an unmatched cash invoice proposes a new cash transaction. Otherwise every
+      card purchase would be booked twice.
+  - **Broker trades** (集保, Shioaji, Firstrade) become buy and sell transactions with
+    `unit_cost`, using the existing average-cost rules. Dividends, fees and tax are their
+    own lines.
+  - **Futures.**
+    - Daily settle P&L from `margin()` becomes margin-account ↔ futures P&L postings.
+    - Equity is an assertion.
+    - Contract value stays exposure (see Holdings).
+- **Assertions.** `balance_assertions(account_id, date, amount, source)` hold bank
+  balances, card outstanding, and units per security.
+  - A mismatch shows as drift on the account, with the date it began.
+  - Nothing is overwritten. This replaces "statement closing balance" as the general
+    reconciliation.
+- **Challenges.**
+  - When a CAPTCHA defeats local OCR, or an OTP or new-device check appears, the run
+    stops with `needs_user_action`, as all-set-tw does.
+  - The challenge goes to the UI with a TTL. The user answers it there, and the run
+    resumes.
+  - The runner never bypasses a security check.
+
+### Security and risk
+
+- **Credentials** live in the SOPS/age k8s secret mounted only into the runner pods:
+  bank and app logins, the Shioaji key (Account permission only, IP-scoped) and the
+  Firstrade TOTP secret. They are never in the database, a log, or `raw`.
+- **Local-only rule.** Statements, invoices and CAPTCHA images never leave the cluster.
+  The only outbound traffic is the login to the institution itself. The app is
+  tailnet-only.
+- **Caveats, stated plainly.**
+  - Bank logins are unofficial: a site change breaks them, they can trip fraud checks,
+    and some banks end the user's other sessions (all-set-tw notes this).
+  - Terms of service may not permit automated access; that risk is the user's.
+  - Every connector has an off switch, and **CSV/PDF statement import stays** as the
+    fallback: `pdftotext -layout` plus a Go parser per institution, the original file
+    kept in `attachments`.
 
 ### Card purchases: record now, settle later
 
@@ -427,20 +548,6 @@ that makes this nearly automatic:
 - statement import matches uncleared lines by date window, amount tolerance and payee,
   and offers to rewrite the estimate to the statement amount.
 
-## Firstrade
-
-- `MaxxRK/firstrade-api` is an **unofficial, reverse-engineered** Python library (MIT).
-  - It logs in with a TOTP MFA secret and saves cookies.
-  - It exposes `account_balances`, `get_positions`, `get_account_history` and quotes.
-  - Firstrade can break it at any time.
-- `integrations/firstrade/` will be a small uv project, built as its own image and run as
-  a k8s CronJob.
-  - It pulls history and positions, then POSTs them to `/api/books/{id}/imports` with a
-    bearer token.
-  - The rows land in the same review queue as PDF imports.
-  - Credentials (username, password, TOTP secret) live in the SOPS secret.
-- **Firstrade CSV export** is the fallback when the scraper breaks.
-
 ## Deployment
 
 hcloud keeps every chart local under `k3s/helm/`. It has no OCI chart registry and
@@ -451,13 +558,16 @@ builds images.
 - A multi-stage `Dockerfile`: bun builds the SPA, Go builds static binaries with
   `-tags prod`, and the result runs on distroless static. P4 switches the runtime stage
   to Debian slim with `poppler-utils` for `pdftotext`.
+- The sync runner images (`tw-sync`, `py-sync`), built by the same pipelines from P4.
 - Identical pipelines on both forges: `ci` on every push, `image` on `main` and tags,
   and `release` (GoReleaser) on `v*` tags. Gitea pushes to
   `git.chenantunez.com/cwchen-twn/rigel-ledger`, and GitHub pushes to
   `ghcr.io/cwchen-twn/rigel-ledger`.
 
 **hcloud owns** `k3s/helm/rigel-ledger/`, modelled on `k3s/helm/navidrome/`:
-- A stateless Deployment (RollingUpdate, no PVC), plus the firstrade CronJob.
+- A stateless Deployment (RollingUpdate, no PVC), plus the sync-runner CronJobs
+  (`tw-sync`, `py-sync`), each mounting only its own SOPS secret of institution
+  credentials.
 - A SOPS secret `k3s/secrets/rigel-ledger-secrets.enc.yaml` that holds `DATABASE_URL`,
   pointing at `10.0.1.1:5432`.
 - A Postgres role and database, following `k3s/postgres/README.md`.
@@ -475,6 +585,6 @@ builds images.
 | P1 | ~~Schema reset, sessions, sqlc; books, accounts, multi-currency transactions API and UI; the "All accounts" balances page; the user Settings page~~ (done) |
 | P2 | ~~Dockerfile, Gitea/GitHub CI and release~~ (done); hcloud chart; deploy and start daily entry |
 | P3 | Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency), book rebase, the three statements bound to closing rates with `rates_used`, display-currency translation, tag (trip) report |
-| P4 | CSV and PDF import, review queue, rules, reconciliation. Confirm whether "future transactions pdf" means futures-broker statements or scheduled transactions |
-| P5 | Securities: quote scheduler (Firstrade, TWSE, end-of-day source), fair value and futures exposure in reports, FIFO lots for tax, Firstrade CronJob. (Points, average cost and the security commodity itself are done.) |
+| P4 | **Sync and review**: import API with `import_rows` kinds, `source_accounts`, review queue, rules, matching (pending/posted, transfers, invoices), assertions, challenges; the tw-sync runner (國泰世華, 永豐 card, 集保 e存摺, 電子發票); CSV/PDF fallback |
+| P5 | Securities and futures: py-sync (Shioaji daily, Firstrade), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, 永豐 deposits. (Points, average cost and the security commodity itself are done.) |
 | P6 | PWA polish, then Flutter if a native feature is needed |

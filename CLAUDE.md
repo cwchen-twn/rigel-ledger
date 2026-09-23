@@ -128,6 +128,7 @@ Copy `.env.example` to `.env`. Real environment variables always win over `.env`
 - Schema or query change: follow the `db-change` skill (`.claude/skills/db-change/SKILL.md`) -- edit `000001_init` in place until the first deploy, run `make sqlc`, add a DB test for any trigger.
 - Money: `NUMERIC` in Postgres, `shopspring/decimal` in Go, strings in JSON -- never floats anywhere. Dates are `YYYY-MM-DD` (`routes.Date`).
 - UI text, including account names, lives in the frontend i18n files keyed by stable codes; the database stores no translations. API error codes are translated as `error.<code>`, per-field codes as `field.<code>`.
+- Sync and imports: design in `docs/ARCHITECTURE.md` ("Data sources and sync"). Taiwan bank, card, 集保 and e-invoice connectors come from [all-set-tw](https://github.com/TedLin1993/all-set-tw) (MIT) via a Node runner; Shioaji and Firstrade via a Python runner. Institution credentials live only in the runners' SOPS secrets, never in the database.
 - Deployment target: the Helm chart lives in the hcloud repo (`k3s/helm/rigel-ledger/`); this repo only builds the image. See `docs/ARCHITECTURE.md#deployment`.
 
 ## CI and releases
