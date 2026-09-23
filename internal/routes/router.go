@@ -3,6 +3,7 @@
 package routes
 
 import (
+	"context"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -28,6 +29,9 @@ type Deps struct {
 	LogLevel     slog.Level
 	AppURL       string
 	AppPort      int
+	// Ready reports whether the app can serve (the database answers). Nil
+	// means always ready -- tests that do not care.
+	Ready func(ctx context.Context) error
 }
 
 type handlers struct {
@@ -57,6 +61,26 @@ func New(d Deps) http.Handler {
 		r.Use(middleware.Recoverer)
 	}
 	r.Use(d.Auth.Authenticate)
+
+	// Kubelet probes. Registered after every middleware because chi panics on
+	// a route defined before a Use. Authenticate is harmless here: no token,
+	// no lookup.
+	r.Get("/livez", func(w http.ResponseWriter, _ *http.Request) {
+		// Liveness never touches the database: a Postgres outage must make the
+		// pod unready, not restart it in a loop.
+		response.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
+	r.Get("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		if d.Ready != nil {
+			ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+			defer cancel()
+			if err := d.Ready(ctx); err != nil {
+				response.Error(w, http.StatusServiceUnavailable, "not_ready", "database unavailable", nil)
+				return
+			}
+		}
+		response.JSON(w, http.StatusOK, map[string]string{"status": "ready"})
+	})
 
 	setupSwagger(r, d.AppURL, d.AppPort)
 

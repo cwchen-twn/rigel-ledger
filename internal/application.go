@@ -81,6 +81,7 @@ func NewApp(cfg *Config, logger *slog.Logger) (*App, error) {
 		LogLevel:     cfg.GetLogLevel(),
 		AppURL:       cfg.AppURL,
 		AppPort:      cfg.AppPort,
+		Ready:        store.Pool.Ping,
 	})
 
 	return &App{cfg: cfg, handler: handler, store: store, logger: logger}, nil

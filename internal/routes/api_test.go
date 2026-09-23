@@ -350,3 +350,37 @@ func TestIdentityAndCommoditiesAPI(t *testing.T) {
 		t.Fatalf("cost basis = %+v", cb)
 	}
 }
+
+func TestProbes(t *testing.T) {
+	f := newAPI(t)
+	for _, path := range []string{"/livez", "/readyz"} {
+		res, err := http.Get(f.srv.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != 200 {
+			t.Fatalf("%s = %d, want 200", path, res.StatusCode)
+		}
+	}
+
+	// Readiness follows the database; liveness does not.
+	h := New(Deps{
+		Service: f.svc, Auth: auth.NewManager(nil, time.Hour, false),
+		Templates: response.NewTemplateEngine("test", web.TemplateFiles, true),
+		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Ready:     func(context.Context) error { return fmt.Errorf("down") },
+	})
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	for path, want := range map[string]int{"/livez": 200, "/readyz": 503} {
+		res, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != want {
+			t.Fatalf("down db: %s = %d, want %d", path, res.StatusCode, want)
+		}
+	}
+}

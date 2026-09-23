@@ -72,7 +72,8 @@ api/                # Generated Swagger output (do not edit manually)
 2. `/api/*` routes behind `auth.RequireUser` return 401 when anonymous and 403 `csrf` when a cookie-authenticated POST/PUT/PATCH/DELETE lacks `X-Rigel-Client`.
 3. `/api/books/{bookID}/*` goes through `bookAccess`, which loads the caller's membership (`ledger.Access`); a non-member gets 404, never 403.
 4. Handlers decode DTOs, call `ledger.Service`, and map `*ledger.Error` to 404/403/409/422 with `{"error":{"code","message","fields"}}`.
-5. Every other GET renders the SPA shell with the user's language and theme and a CSP nonce.
+5. `/livez` (process up, never touches the DB) and `/readyz` (pings the DB, 503 when down) are the kubelet probes.
+6. Every other GET renders the SPA shell with the user's language and theme and a CSP nonce.
 
 ### Ledger rules (internal/ledger)
 
