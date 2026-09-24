@@ -1,6 +1,6 @@
 module github.com/cwchen-twn/rigel-ledger
 
-go 1.26.8
+go 1.27.1
 
 require (
 	github.com/caarlos0/env/v11 v11.4.1
@@ -21,7 +21,7 @@ require (
 
 require (
 	github.com/KyleBanks/depth v1.2.1 // indirect
-	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
+	github.com/boombuler/barcode v1.1.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.4 // indirect
 	github.com/go-openapi/jsonpointer v1.0.1 // indirect
 	github.com/go-openapi/jsonreference v1.0.2 // indirect

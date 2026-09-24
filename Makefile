@@ -48,7 +48,9 @@ upgrade/go:
 	go install golang.org/dl/go$(version)@latest
 	go$(version) download
 	@echo "Go $(version) downloaded successfully in $(shell go env GOPATH)/bin/go$(version). Use 'go$(version)' to run commands with this version."
-	cp $(shell go env GOPATH)/bin/go$(version) $(shell go env GOPATH)/bin/go
+	# --remove-destination: replace, not overwrite, so a go that is running
+	# (gopls, air) does not fail the copy with "Text file busy".
+	cp --remove-destination $(shell go env GOPATH)/bin/go$(version) $(shell go env GOPATH)/bin/go
 	@echo "You should add '$(shell go env GOPATH)/bin' to your PATH before '/usr/local/go/bin'"
 	go$(version) mod edit -go=$(version)
 	go$(version) mod tidy

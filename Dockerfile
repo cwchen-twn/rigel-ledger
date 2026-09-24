@@ -9,14 +9,14 @@
 # P4, docs/ARCHITECTURE.md) needs poppler's pdftotext, and at that point this
 # stage becomes debian:bookworm-slim with poppler-utils.
 
-FROM oven/bun:1.3.14 AS web
+FROM oven/bun:1.4.2 AS web
 WORKDIR /src/web
 COPY web/package.json web/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY web/ ./
 RUN bun run build:prod
 
-FROM golang:1.26.8-bookworm AS build
+FROM golang:1.27.1-bookworm AS build
 ARG VERSION=dev
 ARG COMMIT=none
 ARG DATE=unknown
