@@ -37,6 +37,8 @@ make swag              # Regenerate Swagger/OpenAPI docs (writes to api/)
 go run ./cmd/cli create-user -u alice -e alice@example.com   # password read from stdin; walks the wizard at first sign-in
 go run ./cmd/cli set-admin -u alice                          # promote (the Administration page needs an admin)
 go run ./cmd/cli reset-mfa -u alice                          # break-glass: drop every second factor and session
+go run ./cmd/cli create-runner-token -u alice -l tw-sync     # the sync runner's token, printed once
+RUNNER_TOKEN=... go run ./integrations/fake-runner -url http://localhost:8080   # a pretend institution, for Connections
 ```
 
 To run a single test: `go test -run TestName ./internal/ledger/` (with `TEST_DATABASE_URL` set, e.g. from `.env`).
@@ -60,6 +62,8 @@ internal/
   auth/             # Opaque session tokens, CSRF header, client IP, sign-in throttle + auth_events
   mail/             # SMTP/log senders and the embedded mail templates (en, zh, es)
   rates/            # Exchange-rate providers and the hourly scheduler (USD snapshots into prices)
+  connections/      # Per-user institution connections and the sync runner's job queue
+  sealing/          # X25519 + AES-GCM blobs sealed to the runner (the browser seals; only the runner opens)
   secretbox/        # AES-256-GCM sealing of secrets the DB holds (APP_ENCRYPTION_KEY)
   routes/           # chi router, handlers, JSON DTOs
   response/         # JSON helpers and the SPA shell template
@@ -76,7 +80,7 @@ api/                # Generated Swagger output (do not edit manually)
 ### Request Flow
 
 1. `internal/routes/router.go`: `auth.ResolveClientIP` (rightmost untrusted `X-Forwarded-For`, see `TRUSTED_PROXIES`), then `auth.Authenticate` resolves the session from the `rigel_session` cookie or an `Authorization: Bearer` token on every request.
-2. `/api/*` routes behind `auth.RequireUser` return 401 when anonymous and 403 `csrf` when a cookie-authenticated POST/PUT/PATCH/DELETE lacks `X-Rigel-Client`. Behind `auth.RequireInitialized`, a user who has not finished the first-login wizard gets 403 `onboarding_required` (only `/api/me`, logout, `/api/me/email*` and `/api/me/onboarding` are open to them). `/api/admin/*` is behind `auth.RequireAdmin` (404 for non-admins). A `token` session (a sync runner's, made in Settings -> API tokens) only passes `auth.TokenScope`'s list (`tokenAllowed` in `handlers_imports.go`); anything else is 403 `token_scope`.
+2. `/api/*` routes behind `auth.RequireUser` return 401 when anonymous and 403 `csrf` when a cookie-authenticated POST/PUT/PATCH/DELETE lacks `X-Rigel-Client`. Behind `auth.RequireInitialized`, a user who has not finished the first-login wizard gets 403 `onboarding_required` (only `/api/me`, logout, `/api/me/email*` and `/api/me/onboarding` are open to them). `/api/admin/*` is behind `auth.RequireAdmin` (404 for non-admins). A `token` session (a person's script, made in Settings -> API tokens) only passes `auth.TokenScope`'s list (`tokenAllowed` in `handlers_imports.go`); a `runner` session (the sync runner's, made by an admin) only reaches `/api/runner/*`, which answers 404 to every other kind; anything else is 403 `token_scope`.
 3. `/api/books/{bookID}/*` goes through `bookAccess`, which loads the caller's membership (`ledger.Access`); a non-member gets 404, never 403.
 4. Handlers decode DTOs, call `ledger.Service` or `identity.Service`, and map `*ledger.Error` to 404/403/409/422 and `*auth.ThrottledError` to 429 (+ `Retry-After`), with `{"error":{"code","message","fields"}}`.
 5. `/livez` (process up, never touches the DB) and `/readyz` (pings the DB, 503 when down) are the kubelet probes.
@@ -106,12 +110,12 @@ stores/      session (me, currencies, live language/theme), book (book, accounts
 components/  ui/ -- shadcn-style kit (tokens only, cva variants, Kobalte where a11y is hard)
              AppShell, AccountCombobox, Money/MoneyInput, TransactionSheet (simple + split entry)
 pages/       Login, Register, RequestAccess, Invite, VerifyLink, Welcome (wizard), SetupMFA, Onboarding (new book),
-             Overview (balances), Transactions, Accounts, Reports (3 statements), Imports (review queue), BookSettings, UserSettings, admin/ (tabs)
+             Overview (balances), Transactions, Accounts, Reports (3 statements), Imports (review queue), Connections, BookSettings, UserSettings, admin/ (tabs)
 i18n/        en.json, zh.json (Traditional), es.json -- same keys; account names under account.template.*
-lib/         money.ts (decimal strings via js-big-decimal), dates.ts, csv.ts (statement parsing), cn.ts
+lib/         money.ts (decimal strings via js-big-decimal), dates.ts, csv.ts (statement parsing), seal.ts (sealing to the runner), cn.ts
 ```
 
-Routes: signed out `/login`, `/register`, `/request-access`, `/invite/:token`, `/verify?token=`; `/welcome` (first-login wizard); `/onboarding` (new book), `/settings`, `/admin/:tab`, `/b/:bookId/{,transactions,accounts,reports/:tab,imports,settings}`; `/` redirects to the default book.
+Routes: signed out `/login`, `/register`, `/request-access`, `/invite/:token`, `/verify?token=`; `/welcome` (first-login wizard); `/onboarding` (new book), `/settings`, `/connections`, `/admin/:tab`, `/b/:bookId/{,transactions,accounts,reports/:tab,imports,settings}`; `/` redirects to the default book.
 
 ## Configuration
 
@@ -148,7 +152,7 @@ Copy `.env.example` to `.env`. Real environment variables always win over `.env`
 - UI text, including account names, lives in the frontend i18n files keyed by stable codes; the database stores no translations. API error codes are translated as `error.<code>`, per-field codes as `field.<code>`, sign-in events as `event.<name>`. The one server-side exception is mail: `internal/mail/templates/{en,zh,es}/*.tmpl`, one file per message per language.
 - Two-factor sign-in: sessions carry `aal` (1 password/link, 2 second factor or passkey). `auth.Manager.RequireMFA` confines aal-1 sessions to enrolment while `system_settings.mfa_required`; login answers a challenge instead of a session when the user has a factor. Factors live in `mfa_factors` (email, TOTP sealed by `secretbox`), `webauthn_credentials`, `mfa_recovery_codes`; short-lived ceremony state in `auth_challenges`. Code in `internal/identity/{mfa,passkey}.go`; the frontend's WebAuthn JSON glue is `web/src/lib/webauthn.ts`. Passkeys bind to `APP_ORIGIN`'s host.
 - Sign-in and account flows go through `identity.Service`, which records every outcome in `auth_events` (also the throttle's source). New anonymous or code-checking endpoints call `auth.Manager.Check` first and record failures with `Failure: true`.
-- Sync and imports: design in `docs/ARCHITECTURE.md` ("Data sources and sync"). Taiwan bank, card, 集保 and e-invoice connectors come from [all-set-tw](https://github.com/TedLin1993/all-set-tw) (MIT) via a Node runner; Shioaji and Firstrade via a Python runner. Institution credentials live only in the runners' SOPS secrets, never in the database.
+- Sync and imports: design in `docs/ARCHITECTURE.md` ("Data sources and sync"). Taiwan bank, card, 集保 and e-invoice connectors come from [all-set-tw](https://github.com/TedLin1993/all-set-tw) (MIT) via a Node runner; Shioaji and Firstrade via a Python runner. Each person links institutions under Connections: the browser seals the credentials to the runner's X25519 key (`web/src/lib/seal.ts` = `internal/sealing`), the app stores ciphertext it cannot open, and the runner claims jobs over `/api/runner/*` with a `runner` token (`internal/connections`). Never add a code path that decrypts, logs or returns a sealed blob. `integrations/fake-runner` is the reference runner for development.
 - Deployment target: the Helm chart lives in the hcloud repo (`k3s/helm/rigel-ledger/`); this repo only builds the image. See `docs/ARCHITECTURE.md#deployment`.
 
 ## CI and releases

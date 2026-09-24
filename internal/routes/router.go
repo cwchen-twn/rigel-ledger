@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/httplog/v3"
 
 	"github.com/cwchen-twn/rigel-ledger/internal/auth"
+	"github.com/cwchen-twn/rigel-ledger/internal/connections"
 	"github.com/cwchen-twn/rigel-ledger/internal/identity"
 	"github.com/cwchen-twn/rigel-ledger/internal/ledger"
 	"github.com/cwchen-twn/rigel-ledger/internal/rates"
@@ -26,7 +27,9 @@ type Deps struct {
 	Service  *ledger.Service
 	Identity *identity.Service
 	Rates    *rates.Service // nil: no scheduler (tests)
-	Auth     *auth.Manager
+	// Connections is Settings -> Connections and the sync runner's API.
+	Connections *connections.Service
+	Auth        *auth.Manager
 	// TrustedProxies are the hops whose X-Forwarded-For is believed.
 	TrustedProxies []netip.Prefix
 	Templates      *response.TemplateEngine
@@ -45,6 +48,7 @@ type handlers struct {
 	svc       *ledger.Service
 	identity  *identity.Service
 	rates     *rates.Service
+	conns     *connections.Service
 	auth      *auth.Manager
 	templates *response.TemplateEngine
 	logger    *slog.Logger
@@ -56,7 +60,7 @@ type handlers struct {
 //	@version	1.0
 //	@description	Session cookie (browser) or Bearer token (scripts, mobile). Cookie-authenticated POST/PUT/PATCH/DELETE must send X-Rigel-Client.
 func New(d Deps) http.Handler {
-	h := &handlers{svc: d.Service, identity: d.Identity, rates: d.Rates, auth: d.Auth, templates: d.Templates, logger: d.Logger}
+	h := &handlers{svc: d.Service, identity: d.Identity, rates: d.Rates, conns: d.Connections, auth: d.Auth, templates: d.Templates, logger: d.Logger}
 	r := chi.NewRouter()
 
 	r.Use(middleware.Compress(6, "text/*", "application/*"))
@@ -159,6 +163,18 @@ func New(d Deps) http.Handler {
 			r.Delete("/me/email/pending", h.cancelEmail)
 			r.Post("/me/onboarding", h.onboarding)
 
+			// The sync runner: a runner token only (404 to everyone else).
+			r.Route("/runner", func(r chi.Router) {
+				r.Use(auth.RequireRunner(writeAuthError))
+				r.Post("/keys", h.runnerKeys)
+				r.Put("/connectors", h.publishConnectors)
+				r.Post("/jobs/claim", h.claimJobs)
+				r.Post("/connections/{connectionID}/imports", h.runnerImport)
+				r.Post("/connections/{connectionID}/challenges", h.raiseChallenge)
+				r.Get("/connections/{connectionID}/challenges/{challengeID}", h.challengeAnswer)
+				r.Post("/connections/{connectionID}/finish", h.finishRun)
+			})
+
 			r.Group(func(r chi.Router) {
 				r.Use(auth.RequireInitialized(writeAuthError))
 				// Enrolment is open to a password-only session: it is how
@@ -185,6 +201,14 @@ func New(d Deps) http.Handler {
 					r.Delete("/me/sessions/{sessionID}", h.revokeSession)
 					r.Get("/me/events", h.myEvents)
 					r.Post("/me/tokens", h.createToken)
+					r.Get("/connectors", h.connectorCatalog)
+					r.Get("/me/connections", h.listConnections)
+					r.Post("/me/connections", h.createConnection)
+					r.Patch("/me/connections/{connectionID}", h.updateConnection)
+					r.Delete("/me/connections/{connectionID}", h.deleteConnection)
+					r.Put("/me/connections/{connectionID}/credentials", h.replaceCredentials)
+					r.Post("/me/connections/{connectionID}/sync", h.syncConnection)
+					r.Post("/me/connections/{connectionID}/challenges/{challengeID}", h.answerChallenge)
 
 					r.Route("/admin", func(r chi.Router) {
 						r.Use(auth.RequireAdmin(writeAuthError))
@@ -204,6 +228,9 @@ func New(d Deps) http.Handler {
 						r.Post("/users/{userID}/reset-mfa", h.resetMFA)
 						r.Get("/rates", h.rateFetches)
 						r.Post("/rates/refresh", h.refreshRates)
+						r.Get("/runner", h.runnerStatus)
+						r.Post("/runner/tokens", h.createRunnerToken)
+						r.Delete("/runner/tokens/{sessionID}", h.revokeRunnerToken)
 					})
 
 					r.Get("/books", h.listBooks)

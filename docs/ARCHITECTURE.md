@@ -514,8 +514,11 @@ What is known about the sources, and what is not:
 
 ### Runners
 
-Both are CronJobs in the hcloud chart. They hold the institution credentials; the Go app
-does not.
+Both run in the cluster next to the app. Since P4c-1 they **do not hold anyone's
+institution login in their own config**: each person links their institutions under
+Connections, the browser seals the credentials to the runner's key, and the runner
+works through the connections as a job queue (see "Connections" below). The only
+secrets a runner is deployed with are its runner token and its X25519 private key.
 
 - **`integrations/tw-sync/` (Node).**
   - It pins all-set-tw's `@taiwan-fin-hub/connectors` and `core`. The connectors
@@ -529,8 +532,11 @@ does not.
     deposits) follow all-set-tw's connector contract, so they could be upstreamed.
 - **`integrations/py-sync/` (Python, uv).** Shioaji and Firstrade, both Python SDKs.
 
-Both POST to `/api/books/{id}/imports` with an `api` session token, and the rows land
-in one review queue.
+Both speak the runner protocol (`/api/runner/*`, a `runner` token): claim due
+connections, open their sealed credentials, raise challenges, and post batches to
+`/api/runner/connections/{id}/imports`, which lands them in that connection's book's
+review queue. `integrations/fake-runner` (Go, not shipped) is the reference
+implementation against one pretend institution, for development and end-to-end tests.
 
 ### Ingestion contract (Go side)
 
@@ -570,11 +576,13 @@ in one review queue.
   - A mismatch shows as drift on the account, with the date it began.
   - Nothing is overwritten. This replaces "statement closing balance" as the general
     reconciliation.
-- **Challenges.**
-  - When a CAPTCHA defeats local OCR, or an OTP or new-device check appears, the run
-    stops with `needs_user_action`, as all-set-tw does.
-  - The challenge goes to the UI with a TTL. The user answers it there, and the run
-    resumes.
+- **Challenges** (implemented in P4c-1).
+  - When a CAPTCHA defeats local OCR, or an OTP or new-device check appears, the runner
+    raises a challenge (`otp`, `captcha` with its image, `device`) with a TTL of at most
+    15 minutes; the connection shows `needs_user_action`, as all-set-tw does.
+  - The owner answers on Connections (a banner on every page points there). The answer
+    is sealed to the runner like the credentials, and handed to the runner once.
+  - An unanswered challenge expires; the runner ends the run `challenge_expired`.
   - The runner never bypasses a security check.
 
 ### The import core (P4a, implemented)
@@ -583,12 +591,13 @@ What every source feeds, built before any connector so the runners have one
 contract to target. Migration `000005`; `internal/ledger/imports.go`,
 `internal/routes/handlers_imports.go`, `web/src/pages/Imports.tsx`.
 
-- **Runner tokens.** Settings -> API tokens makes a session of kind `token` (a new
-  kind; `api` stays the full-access script login). It is shown once, lives 1-730
-  days without sliding, carries aal 2, and `auth.TokenScope` confines it to
-  `GET /api/me`, `GET /api/books`, `POST /api/books/{id}/imports` and
-  `GET .../imports/sources`. A leaked runner token can add rows to the queue and
-  nothing else: it cannot read the books or accept its own rows.
+- **Import tokens.** Settings -> API tokens makes a session of kind `token` (a new
+  kind; `api` stays the full-access script login), for a person's own import script.
+  It is shown once, lives 1-730 days without sliding, carries aal 2, and
+  `auth.TokenScope` confines it to `GET /api/me`, `GET /api/books`,
+  `POST /api/books/{id}/imports` and `GET .../imports/sources`. A leaked one can add
+  rows to the queue and nothing else: it cannot read the books or accept its own rows.
+  (The sync runner has its own `runner` token since P4c-1; see Connections.)
 - **The batch.** `POST /api/books/{id}/imports` takes
   `{connector, label, accounts[{id, label, currency}], rows[{kind, account, id, date,
   amount, currency, description, counterparty, pending, raw}]}`, up to 5,000 rows and
@@ -621,6 +630,44 @@ contract to target. Migration `000005`; `internal/ledger/imports.go`,
   occurrence index, so re-importing the same or an overlapping export adds nothing.
 - **Not yet:** `holding`, `bill`, `invoice`, `trade`, `settlement` and `margin` kinds;
   challenges; tags from rules; the runners themselves (P4c).
+
+### Connections (P4c-1, implemented)
+
+Decided 2026-09-24: with more than one household on the instance, each person links
+their own institutions in the app, instead of an admin collecting everyone's bank
+logins into the runner's SOPS secret. Migration `000006`; `internal/connections`,
+`internal/sealing`, `internal/routes/handlers_{connections,runner}.go`,
+`web/src/pages/Connections.tsx`, `web/src/lib/seal.ts`.
+
+- **Sealed to the runner, not to the app.** The browser encrypts the connector's fields
+  (a JSON object) to the runner's X25519 public key: an ephemeral X25519 key,
+  HKDF-SHA256, AES-256-GCM, with additional data binding the blob to
+  `credentials/<user id>/<connector>` (format in `internal/sealing`'s package comment;
+  WebCrypto, the Go standard library and node:crypto all have it). The app stores
+  ciphertext and holds no key that opens it; **a leaked database plus
+  `APP_ENCRYPTION_KEY` exposes no bank login.** Sealing with the app's own `secretbox`
+  key was rejected for exactly that reason.
+- **Never shown again.** No response carries the blob back to a person, and the audit
+  trigger (`audit_connection`) stores the row without it. Changing credentials means
+  entering all of them again.
+- **The runner.** An admin makes a `runner` token (Administration -> Sync runner, or
+  `rigel-ledger-cli create-runner-token`); it reaches `/api/runner/*` only, and nobody
+  else reaches that (404). The runner registers the keys it holds (the newest is what
+  browsers seal to; keys it stops listing are retired, and connections sealed to them
+  ask their owner to re-enter), publishes its connectors with a field schema (the UI
+  renders the form from it), claims due connections (a claim lapses after 30 minutes),
+  and ends each run `ok` or `failed` with a stable code, never the institution's text.
+- **A connection** belongs to one person and feeds one book they edit; rows are imported
+  as that person, under the connection's connector, into the P4a review queue. It syncs
+  every 1-168 hours (24 by default), or at once on "Sync now".
+- **The consent panel** says it plainly: an unofficial login that can break, may end
+  the person's other sessions, may be against the institution's terms, and only reads.
+- **Scale, stated plainly.** Every login leaves from one cluster address. For many
+  people at one bank that trips fraud checks sooner than one household does: the
+  runner logs in to one institution at a time, with jitter. Syncing bank data for
+  people outside the family comes close to account aggregation in Taiwan (個資法, and
+  the FSC's open-banking rules): fine for invited family and friends, a legal question
+  before any public sign-up.
 
 ### Receipts
 
@@ -664,9 +711,11 @@ Email is **evidence**, like e-invoices: it enriches and proposes, it does not po
 
 ### Security and risk
 
-- **Credentials** live in the SOPS/age k8s secret mounted only into the runner pods:
-  bank and app logins, the Shioaji key (Account permission only, IP-scoped), the
-  Firstrade TOTP secret and the Gmail app password. They are never in the database, a log, or `raw`.
+- **Credentials** are sealed in the browser to the runner's key and stored as ciphertext
+  in `connections` (see Connections): bank and app logins, the Shioaji key (Account
+  permission only, IP-scoped), the Firstrade TOTP secret, the Gmail app password. **They
+  are never readable by the app, a log, or `raw`; only the runner opens them, only while
+  it signs in.** The runner's own SOPS/age secret holds just its token and private key.
 - **Local-only rule.** Statements, invoices, receipts, emails and CAPTCHA images never
   leave the cluster.
   The only outbound traffic is the login to the institution itself. The app is
@@ -910,7 +959,7 @@ builds images.
 | P2 | ~~Dockerfile, Gitea/GitHub CI and release; probes and the hcloud chart (tailnet-only ipAllowList, own Postgres role, nightly backup); release `v0.1.0` and deploy~~ (done, 2026-09-24) |
 | P2.5 | **Accounts and sign-in security.** a: first-login wizard, verified email, invitations, registration modes, bootstrap admin, the Administration page (users, requests, sign-in rules, defaults, SMTP), throttling and the sign-in audit, sessions (migration `000002`). b: ~~two-factor sign-in -- email codes, TOTP, passkeys, recovery codes, enforcement (`000003`)~~ (done). Both before any public exposure |
 | P3 | ~~Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency)~~ (P3a, done); ~~the three statements bound to closing rates with `rates_used`, display-currency translation~~ (P3b, done); ~~book rebase, tag (trip) report~~ (P3c, done) |
-| P4 | **Sync and review**: ~~import API, runner tokens, `source_accounts`, review queue, rules, matching (duplicates, pending/posted, transfers), balance assertions and drift, CSV import~~ (P4a, done); `import_rows` kinds for invoices, holdings and trades, order emails, challenges; receipt attachments (upload, camera, optional local OCR); the tw-sync runner (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
+| P4 | **Sync and review**: ~~import API, runner tokens, `source_accounts`, review queue, rules, matching (duplicates, pending/posted, transfers), balance assertions and drift, CSV import~~ (P4a, done); ~~per-user Connections with credentials sealed to the runner, the runner protocol, challenges, the fake runner~~ (P4c-1, done); `import_rows` kinds for invoices, holdings and trades, order emails, challenges; receipt attachments (upload, camera, optional local OCR); the tw-sync runner (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
 | P5 | Securities and futures: py-sync (Shioaji daily, Firstrade), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, 永豐 deposits, Banco Continental (if its export is not enough). Recurring list and subscription templates. (Points, average cost and the security commodity itself are done.) |
 | P6 | PWA polish, then Flutter if a native feature is needed |
 | P7 | **Tax workbooks (TW, PY)**: `person` tags and `tax_profiles`; tax categories and account mappings per jurisdiction; `tax_withheld` accounts and foreign-tax-paid records; per-year rule files; workbook export (income by category, deductions with evidence, withholding, capital gains in the country's currency and rate). Needs P3 reports, P4 attachments and P5 lots. Prepares and cross-checks; does not file. |

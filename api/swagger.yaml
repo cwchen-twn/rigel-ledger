@@ -393,6 +393,81 @@ definitions:
       class:
         $ref: '#/definitions/db.CfClass'
     type: object
+  routes.CatalogDTO:
+    properties:
+      connectors:
+        items:
+          $ref: '#/definitions/routes.ConnectorDTO'
+        type: array
+      key:
+        allOf:
+        - $ref: '#/definitions/routes.SealingKeyDTO'
+        description: What to seal to; null while no runner has registered.
+    type: object
+  routes.ChallengeAnswerDTO:
+    properties:
+      answered:
+        type: boolean
+      expired:
+        type: boolean
+      sealed:
+        description: |-
+          Sealed to the runner with additional data "rigel-ledger/answer/v1\0<challenge id>";
+          handed out once.
+        type: string
+    type: object
+  routes.ChallengeCreatedDTO:
+    properties:
+      expires_at:
+        type: string
+      id:
+        type: integer
+    type: object
+  routes.ChallengeDTO:
+    properties:
+      expires_at:
+        type: string
+      id:
+        type: integer
+      image:
+        type: string
+      kind:
+        enum:
+        - otp
+        - captcha
+        - device
+        type: string
+      prompt:
+        type: string
+    type: object
+  routes.ChallengeInDTO:
+    properties:
+      image:
+        description: A CAPTCHA image (PNG or JPEG, base64, under 256 KiB).
+        type: string
+      kind:
+        enum:
+        - otp
+        - captcha
+        - device
+        type: string
+      prompt:
+        type: string
+      ttl_seconds:
+        type: integer
+    type: object
+  routes.ChallengeReplyDTO:
+    properties:
+      sealed:
+        description: The answer, sealed with additional data "rigel-ledger/answer/v1\0<challenge
+          id>".
+        type: string
+    type: object
+  routes.ClaimDTO:
+    properties:
+      limit:
+        type: integer
+    type: object
   routes.CommodityAmountDTO:
     properties:
       amount:
@@ -417,6 +492,100 @@ definitions:
       quote_currency:
         type: string
     type: object
+  routes.ConnectionDTO:
+    properties:
+      book_id:
+        type: integer
+      book_name:
+        type: string
+      challenge:
+        $ref: '#/definitions/routes.ChallengeDTO'
+      connector:
+        type: string
+      enabled:
+        type: boolean
+      id:
+        type: integer
+      interval_hours:
+        type: integer
+      key_retired:
+        description: 'The runner''s key changed since these credentials were sealed:
+          enter them again.'
+        type: boolean
+      label:
+        type: string
+      last_error:
+        type: string
+      last_run_at:
+        type: string
+      run_requested:
+        type: boolean
+      status:
+        enum:
+        - new
+        - ok
+        - needs_user_action
+        - failed
+        type: string
+    type: object
+  routes.ConnectionInputDTO:
+    properties:
+      book_id:
+        type: integer
+      connector:
+        type: string
+      interval_hours:
+        type: integer
+      key_id:
+        description: The runner key the credentials were sealed to (from GET /api/connectors).
+        type: integer
+      label:
+        type: string
+      sealed:
+        description: |-
+          The credentials as a JSON object of the connector's fields, sealed in
+          the browser with additional data "rigel-ledger/credentials/v1\0<your user id>\0<connector>".
+        type: string
+    type: object
+  routes.ConnectionUpdateDTO:
+    properties:
+      book_id:
+        type: integer
+      enabled:
+        type: boolean
+      interval_hours:
+        type: integer
+      label:
+        type: string
+    type: object
+  routes.ConnectorDTO:
+    properties:
+      country:
+        type: string
+      fields:
+        items:
+          $ref: '#/definitions/routes.ConnectorFieldDTO'
+        type: array
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+  routes.ConnectorFieldDTO:
+    properties:
+      kind:
+        enum:
+        - text
+        - secret
+        - id_number
+        type: string
+      label:
+        type: string
+      name:
+        type: string
+      optional:
+        type: boolean
+    type: object
   routes.CostBasisDTO:
     properties:
       cost:
@@ -432,6 +601,18 @@ definitions:
         description: Days until it expires; default 365, at most 730.
         type: integer
       label:
+        type: string
+    type: object
+  routes.CreatedDTO:
+    properties:
+      id:
+        type: integer
+    type: object
+  routes.CredentialsDTO:
+    properties:
+      key_id:
+        type: integer
+      sealed:
         type: string
     type: object
   routes.CurrencyDTO:
@@ -470,6 +651,18 @@ definitions:
         items:
           type: string
         type: array
+    type: object
+  routes.FinishDTO:
+    properties:
+      error:
+        description: 'A stable code when failed: bad_credentials, challenge_expired,
+          institution_down, ...'
+        type: string
+      status:
+        enum:
+        - ok
+        - failed
+        type: string
     type: object
   routes.IgnoreRowsDTO:
     properties:
@@ -662,6 +855,24 @@ definitions:
       username:
         type: string
     type: object
+  routes.JobDTO:
+    properties:
+      book_id:
+        type: integer
+      connector:
+        type: string
+      id:
+        type: integer
+      key_id:
+        type: integer
+      sealed:
+        description: |-
+          Open with the key's private half and additional data
+          "rigel-ledger/credentials/v1\0<user_id>\0<connector>" (internal/sealing).
+        type: string
+      user_id:
+        type: integer
+    type: object
   routes.LineInputDTO:
     properties:
       account_id:
@@ -789,6 +1000,13 @@ definitions:
       source:
         type: string
     type: object
+  routes.PublishConnectorsDTO:
+    properties:
+      connectors:
+        items:
+          $ref: '#/definitions/routes.ConnectorDTO'
+        type: array
+    type: object
   routes.RateDTO:
     properties:
       date:
@@ -890,6 +1108,64 @@ definitions:
       revalued:
         type: boolean
       total:
+        type: string
+    type: object
+  routes.RunnerKeyDTO:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      public_key:
+        type: string
+      retired_at:
+        type: string
+    type: object
+  routes.RunnerKeysDTO:
+    properties:
+      public_keys:
+        description: |-
+          Every key the runner holds, oldest first, the one to seal to last
+          (raw 32-byte X25519 public keys, base64).
+        items:
+          type: string
+        type: array
+    type: object
+  routes.RunnerStatusDTO:
+    properties:
+      connectors:
+        items:
+          $ref: '#/definitions/routes.ConnectorDTO'
+        type: array
+      keys:
+        items:
+          $ref: '#/definitions/routes.RunnerKeyDTO'
+        type: array
+      tokens:
+        items:
+          $ref: '#/definitions/routes.RunnerTokenDTO'
+        type: array
+    type: object
+  routes.RunnerTokenDTO:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: integer
+      label:
+        type: string
+      last_used_at:
+        type: string
+    type: object
+  routes.SealingKeyDTO:
+    properties:
+      id:
+        type: integer
+      public_key:
         type: string
     type: object
   routes.SessionDTO:
@@ -1691,6 +1967,53 @@ paths:
           schema:
             $ref: '#/definitions/response.ErrorBody'
       summary: Fetch the latest exchange rates now, or one past day's (admin)
+      tags:
+      - admin
+  /api/admin/runner:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.RunnerStatusDTO'
+      summary: 'The sync runner: its tokens, keys and connectors'
+      tags:
+      - admin
+  /api/admin/runner/tokens:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: label and lifetime
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.CreateTokenDTO'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/routes.TokenCreatedDTO'
+      summary: Make a token for the sync runner (shown once)
+      tags:
+      - admin
+  /api/admin/runner/tokens/{sessionID}:
+    delete:
+      parameters:
+      - description: token id
+        in: path
+        name: sessionID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      summary: Revoke a sync runner token
       tags:
       - admin
   /api/admin/settings:
@@ -3172,6 +3495,18 @@ paths:
       summary: 'Everything an account can hold: currencies, securities, points'
       tags:
       - reference
+  /api/connectors:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.CatalogDTO'
+      summary: What can be connected, and the key to seal credentials to
+      tags:
+      - connections
   /api/currencies:
     get:
       produces:
@@ -3228,6 +3563,138 @@ paths:
         through /api/me/email
       tags:
       - me
+  /api/me/connections:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/routes.ConnectionDTO'
+            type: array
+      summary: Your connections (never with their credentials)
+      tags:
+      - connections
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: connection
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.ConnectionInputDTO'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/routes.CreatedDTO'
+      summary: Link an institution
+      tags:
+      - connections
+  /api/me/connections/{connectionID}:
+    delete:
+      parameters:
+      - description: connection id
+        in: path
+        name: connectionID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      summary: Unlink an institution (its sealed credentials are deleted)
+      tags:
+      - connections
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: connection id
+        in: path
+        name: connectionID
+        required: true
+        type: integer
+      - description: changes
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.ConnectionUpdateDTO'
+      responses:
+        "204":
+          description: No Content
+      summary: Change a connection's book, label, schedule or on/off
+      tags:
+      - connections
+  /api/me/connections/{connectionID}/challenges/{challengeID}:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: connection id
+        in: path
+        name: connectionID
+        required: true
+        type: integer
+      - description: challenge id
+        in: path
+        name: challengeID
+        required: true
+        type: integer
+      - description: sealed answer
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.ChallengeReplyDTO'
+      responses:
+        "204":
+          description: No Content
+      summary: Answer the runner's OTP, CAPTCHA or device check
+      tags:
+      - connections
+  /api/me/connections/{connectionID}/credentials:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: connection id
+        in: path
+        name: connectionID
+        required: true
+        type: integer
+      - description: sealed credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.CredentialsDTO'
+      responses:
+        "204":
+          description: No Content
+      summary: Enter a connection's credentials again
+      tags:
+      - connections
+  /api/me/connections/{connectionID}/sync:
+    post:
+      parameters:
+      - description: connection id
+        in: path
+        name: connectionID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      summary: Sync a connection at the runner's next poll
+      tags:
+      - connections
   /api/me/email:
     post:
       consumes:
@@ -3580,4 +4047,169 @@ paths:
       summary: Make an API token for a sync runner or a script
       tags:
       - me
+  /api/runner/connections/{connectionID}/challenges:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: connection id
+        in: path
+        name: connectionID
+        required: true
+        type: integer
+      - description: challenge
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.ChallengeInDTO'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/routes.ChallengeCreatedDTO'
+      summary: Ask the connection's owner for an OTP, a CAPTCHA or a device check
+      tags:
+      - runner
+  /api/runner/connections/{connectionID}/challenges/{challengeID}:
+    get:
+      parameters:
+      - description: connection id
+        in: path
+        name: connectionID
+        required: true
+        type: integer
+      - description: challenge id
+        in: path
+        name: challengeID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.ChallengeAnswerDTO'
+      summary: Poll a challenge for the owner's answer
+      tags:
+      - runner
+  /api/runner/connections/{connectionID}/finish:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: connection id
+        in: path
+        name: connectionID
+        required: true
+        type: integer
+      - description: outcome
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.FinishDTO'
+      responses:
+        "204":
+          description: No Content
+      summary: End a claimed connection's run
+      tags:
+      - runner
+  /api/runner/connections/{connectionID}/imports:
+    post:
+      consumes:
+      - application/json
+      description: The same batch as POST /api/books/{bookID}/imports; the connector
+        is the connection's.
+      parameters:
+      - description: connection id
+        in: path
+        name: connectionID
+        required: true
+        type: integer
+      - description: batch
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.ImportBatchDTO'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/routes.ImportResultDTO'
+      summary: Send a claimed connection's rows to its book's review queue
+      tags:
+      - runner
+  /api/runner/connectors:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: connectors
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.PublishConnectorsDTO'
+      responses:
+        "204":
+          description: No Content
+      summary: Publish what the runner can connect to
+      tags:
+      - runner
+  /api/runner/jobs/claim:
+    post:
+      consumes:
+      - application/json
+      description: A claim lapses after 30 minutes. Finish every claimed job.
+      parameters:
+      - description: how many
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.ClaimDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/routes.JobDTO'
+            type: array
+      summary: Claim due connections
+      tags:
+      - runner
+  /api/runner/keys:
+    post:
+      consumes:
+      - application/json
+      description: Keys left out are retired; connections sealed to them wait for
+        new credentials.
+      parameters:
+      - description: keys
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.RunnerKeysDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/routes.RunnerKeyDTO'
+            type: array
+      summary: Register the runner's public keys
+      tags:
+      - runner
 swagger: "2.0"

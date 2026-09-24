@@ -12,6 +12,7 @@ import Home from '~/pages/Home';
 import Invite from '~/pages/Invite';
 import Login from '~/pages/Login';
 import Register from '~/pages/Register';
+import Connections from '~/pages/Connections';
 import Imports from '~/pages/Imports';
 import Reports from '~/pages/Reports';
 import RequestAccess from '~/pages/RequestAccess';
@@ -181,6 +182,7 @@ export default function App() {
         <Route path="/" component={UserLayout}>
           <Route path="/onboarding" component={Onboarding} />
           <Route path="/settings" component={UserSettings} />
+          <Route path="/connections" component={Connections} />
           <Route path="/admin/:tab?" component={Admin} />
         </Route>
         <Route path="/b/:bookId" component={BookLayout}>
@@ -188,7 +190,7 @@ export default function App() {
           <Route path="/transactions" component={Transactions} />
           <Route path="/accounts" component={Accounts} />
           <Route path="/reports/:tab?" component={Reports} />
-            <Route path="/imports" component={Imports} />
+          <Route path="/imports" component={Imports} />
           <Route path="/settings" component={BookSettings} />
         </Route>
         <Route path="*" component={NotFound} />

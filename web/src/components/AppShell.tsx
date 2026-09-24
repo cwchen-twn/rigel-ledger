@@ -1,6 +1,6 @@
 import { A, useLocation, useNavigate } from '@solidjs/router';
-import { BookOpen, ChartColumn, ChevronsUpDown, Inbox, LayoutDashboard, List, LogOut, Menu, Plus, Settings, Shield, SlidersHorizontal, Wallet } from 'lucide-solid';
-import { createResource, createSignal, Show, type JSX, type ParentComponent } from 'solid-js';
+import { BookOpen, ChartColumn, ChevronsUpDown, Inbox, LayoutDashboard, Link2, List, LogOut, Menu, Plus, Settings, Shield, SlidersHorizontal, Wallet } from 'lucide-solid';
+import { createResource, createSignal, onCleanup, Show, type JSX, type ParentComponent } from 'solid-js';
 import { api } from '~/api/client';
 import { DropdownMenu, type MenuItem } from '~/components/ui/dropdown-menu';
 import { Sheet } from '~/components/ui/dialog';
@@ -111,6 +111,7 @@ export const AppShell: ParentComponent<{ bookId: number | null }> = (props) => {
         <Show when={user()?.is_admin}>
           <NavLink href="/admin" icon={<Shield />} label={t('nav.admin')} onClick={close} />
         </Show>
+        <NavLink href="/connections" icon={<Link2 />} label={t('nav.connections')} onClick={close} />
         <NavLink href="/settings" icon={<Settings />} label={t('nav.settings')} onClick={close} />
         <button
           type="button"
@@ -135,7 +136,10 @@ export const AppShell: ParentComponent<{ bookId: number | null }> = (props) => {
           </button>
           <span class="truncate text-sm font-medium">{current()?.name ?? t('app.name')}</span>
         </header>
-        <main class={cn('mx-auto w-full max-w-6xl flex-1 p-4 md:p-8')}>{props.children}</main>
+        <main class={cn('mx-auto w-full max-w-6xl flex-1 p-4 md:p-8')}>
+          <ChallengeBanner />
+          {props.children}
+        </main>
       </div>
       <Sheet open={mobileOpen()} onOpenChange={setMobileOpen} title={t('app.name')} class="max-w-72 p-0 sm:max-w-72">
         {nav(() => setMobileOpen(false))}
@@ -158,5 +162,33 @@ export function PageHeader(props: { title: string; description?: string; actions
         <div class="flex flex-wrap items-center gap-2">{props.actions}</div>
       </Show>
     </div>
+  );
+}
+
+/**
+ * A sync runner is waiting on the person (an OTP, a CAPTCHA): say so on every
+ * page, since the check expires in minutes. Polls while the tab is visible.
+ */
+function ChallengeBanner() {
+  const { t } = useI18n();
+  const location = useLocation();
+  const [waiting, setWaiting] = createSignal(0);
+  const poll = async () => {
+    if (document.visibilityState !== 'visible') return;
+    try {
+      setWaiting((await api.connections()).filter((c) => c.challenge).length);
+    } catch {
+      /* not signed in, or the server is away: say nothing */
+    }
+  };
+  poll();
+  const timer = setInterval(poll, 15000);
+  onCleanup(() => clearInterval(timer));
+  return (
+    <Show when={waiting() > 0 && location.pathname !== '/connections'}>
+      <A href="/connections" class="mb-4 flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm hover:bg-amber-500/15">
+        <Link2 class="size-4 shrink-0" /> {t('connections.banner', { count: waiting() })}
+      </A>
+    </Show>
   );
 }

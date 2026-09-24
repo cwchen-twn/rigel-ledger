@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/cwchen-twn/rigel-ledger/internal/auth"
+	"github.com/cwchen-twn/rigel-ledger/internal/connections"
 	"github.com/cwchen-twn/rigel-ledger/internal/db"
 	"github.com/cwchen-twn/rigel-ledger/internal/dbtest"
 	"github.com/cwchen-twn/rigel-ledger/internal/identity"
@@ -77,6 +78,7 @@ func newAPI(t *testing.T) *apiFixture {
 	mgr.SetPolicy(ids)
 	h := New(Deps{
 		Service:     svc,
+		Connections: connections.New(store, svc),
 		Identity:    ids,
 		Auth:        mgr,
 		Templates:   response.NewTemplateEngine("test", web.TemplateFiles, web.StaticFiles, true),

@@ -317,6 +317,80 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/admin/runner": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "The sync runner: its tokens, keys and connectors",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.RunnerStatusDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/runner/tokens": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Make a token for the sync runner (shown once)",
+                "parameters": [
+                    {
+                        "description": "label and lifetime",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.CreateTokenDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/routes.TokenCreatedDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/runner/tokens/{sessionID}": {
+            "delete": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Revoke a sync runner token",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "token id",
+                        "name": "sessionID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
         "/api/admin/settings": {
             "get": {
                 "produces": [
@@ -2571,6 +2645,25 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/connectors": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "connections"
+                ],
+                "summary": "What can be connected, and the key to seal credentials to",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.CatalogDTO"
+                        }
+                    }
+                }
+            }
+        },
         "/api/currencies": {
             "get": {
                 "produces": [
@@ -2653,6 +2746,210 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.ErrorBody"
                         }
+                    }
+                }
+            }
+        },
+        "/api/me/connections": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "connections"
+                ],
+                "summary": "Your connections (never with their credentials)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/routes.ConnectionDTO"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "connections"
+                ],
+                "summary": "Link an institution",
+                "parameters": [
+                    {
+                        "description": "connection",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.ConnectionInputDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/routes.CreatedDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/connections/{connectionID}": {
+            "delete": {
+                "tags": [
+                    "connections"
+                ],
+                "summary": "Unlink an institution (its sealed credentials are deleted)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "connection id",
+                        "name": "connectionID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "connections"
+                ],
+                "summary": "Change a connection's book, label, schedule or on/off",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "connection id",
+                        "name": "connectionID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "changes",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.ConnectionUpdateDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/me/connections/{connectionID}/challenges/{challengeID}": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "connections"
+                ],
+                "summary": "Answer the runner's OTP, CAPTCHA or device check",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "connection id",
+                        "name": "connectionID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "challenge id",
+                        "name": "challengeID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "sealed answer",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.ChallengeReplyDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/me/connections/{connectionID}/credentials": {
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "connections"
+                ],
+                "summary": "Enter a connection's credentials again",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "connection id",
+                        "name": "connectionID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "sealed credentials",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.CredentialsDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/me/connections/{connectionID}/sync": {
+            "post": {
+                "tags": [
+                    "connections"
+                ],
+                "summary": "Sync a connection at the runner's next poll",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "connection id",
+                        "name": "connectionID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
                     }
                 }
             }
@@ -3202,6 +3499,257 @@ const docTemplate = `{
                         "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/routes.TokenCreatedDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/runner/connections/{connectionID}/challenges": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "runner"
+                ],
+                "summary": "Ask the connection's owner for an OTP, a CAPTCHA or a device check",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "connection id",
+                        "name": "connectionID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "challenge",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.ChallengeInDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/routes.ChallengeCreatedDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/runner/connections/{connectionID}/challenges/{challengeID}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "runner"
+                ],
+                "summary": "Poll a challenge for the owner's answer",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "connection id",
+                        "name": "connectionID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "challenge id",
+                        "name": "challengeID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.ChallengeAnswerDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/runner/connections/{connectionID}/finish": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "runner"
+                ],
+                "summary": "End a claimed connection's run",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "connection id",
+                        "name": "connectionID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "outcome",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.FinishDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/runner/connections/{connectionID}/imports": {
+            "post": {
+                "description": "The same batch as POST /api/books/{bookID}/imports; the connector is the connection's.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "runner"
+                ],
+                "summary": "Send a claimed connection's rows to its book's review queue",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "connection id",
+                        "name": "connectionID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "batch",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.ImportBatchDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/routes.ImportResultDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/runner/connectors": {
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "runner"
+                ],
+                "summary": "Publish what the runner can connect to",
+                "parameters": [
+                    {
+                        "description": "connectors",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.PublishConnectorsDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/runner/jobs/claim": {
+            "post": {
+                "description": "A claim lapses after 30 minutes. Finish every claimed job.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "runner"
+                ],
+                "summary": "Claim due connections",
+                "parameters": [
+                    {
+                        "description": "how many",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.ClaimDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/routes.JobDTO"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/runner/keys": {
+            "post": {
+                "description": "Keys left out are retired; connections sealed to them wait for new credentials.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "runner"
+                ],
+                "summary": "Register the runner's public keys",
+                "parameters": [
+                    {
+                        "description": "keys",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.RunnerKeysDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/routes.RunnerKeyDTO"
+                            }
                         }
                     }
                 }
@@ -3793,6 +4341,116 @@ const docTemplate = `{
                 }
             }
         },
+        "routes.CatalogDTO": {
+            "type": "object",
+            "properties": {
+                "connectors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.ConnectorDTO"
+                    }
+                },
+                "key": {
+                    "description": "What to seal to; null while no runner has registered.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/routes.SealingKeyDTO"
+                        }
+                    ]
+                }
+            }
+        },
+        "routes.ChallengeAnswerDTO": {
+            "type": "object",
+            "properties": {
+                "answered": {
+                    "type": "boolean"
+                },
+                "expired": {
+                    "type": "boolean"
+                },
+                "sealed": {
+                    "description": "Sealed to the runner with additional data \"rigel-ledger/answer/v1\\0\u003cchallenge id\u003e\";\nhanded out once.",
+                    "type": "string"
+                }
+            }
+        },
+        "routes.ChallengeCreatedDTO": {
+            "type": "object",
+            "properties": {
+                "expires_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "routes.ChallengeDTO": {
+            "type": "object",
+            "properties": {
+                "expires_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "image": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string",
+                    "enum": [
+                        "otp",
+                        "captcha",
+                        "device"
+                    ]
+                },
+                "prompt": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.ChallengeInDTO": {
+            "type": "object",
+            "properties": {
+                "image": {
+                    "description": "A CAPTCHA image (PNG or JPEG, base64, under 256 KiB).",
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string",
+                    "enum": [
+                        "otp",
+                        "captcha",
+                        "device"
+                    ]
+                },
+                "prompt": {
+                    "type": "string"
+                },
+                "ttl_seconds": {
+                    "type": "integer"
+                }
+            }
+        },
+        "routes.ChallengeReplyDTO": {
+            "type": "object",
+            "properties": {
+                "sealed": {
+                    "description": "The answer, sealed with additional data \"rigel-ledger/answer/v1\\0\u003cchallenge id\u003e\".",
+                    "type": "string"
+                }
+            }
+        },
+        "routes.ClaimDTO": {
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer"
+                }
+            }
+        },
         "routes.CommodityAmountDTO": {
             "type": "object",
             "properties": {
@@ -3830,6 +4488,141 @@ const docTemplate = `{
                 }
             }
         },
+        "routes.ConnectionDTO": {
+            "type": "object",
+            "properties": {
+                "book_id": {
+                    "type": "integer"
+                },
+                "book_name": {
+                    "type": "string"
+                },
+                "challenge": {
+                    "$ref": "#/definitions/routes.ChallengeDTO"
+                },
+                "connector": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "interval_hours": {
+                    "type": "integer"
+                },
+                "key_retired": {
+                    "description": "The runner's key changed since these credentials were sealed: enter them again.",
+                    "type": "boolean"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "last_error": {
+                    "type": "string"
+                },
+                "last_run_at": {
+                    "type": "string"
+                },
+                "run_requested": {
+                    "type": "boolean"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "new",
+                        "ok",
+                        "needs_user_action",
+                        "failed"
+                    ]
+                }
+            }
+        },
+        "routes.ConnectionInputDTO": {
+            "type": "object",
+            "properties": {
+                "book_id": {
+                    "type": "integer"
+                },
+                "connector": {
+                    "type": "string"
+                },
+                "interval_hours": {
+                    "type": "integer"
+                },
+                "key_id": {
+                    "description": "The runner key the credentials were sealed to (from GET /api/connectors).",
+                    "type": "integer"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "sealed": {
+                    "description": "The credentials as a JSON object of the connector's fields, sealed in\nthe browser with additional data \"rigel-ledger/credentials/v1\\0\u003cyour user id\u003e\\0\u003cconnector\u003e\".",
+                    "type": "string"
+                }
+            }
+        },
+        "routes.ConnectionUpdateDTO": {
+            "type": "object",
+            "properties": {
+                "book_id": {
+                    "type": "integer"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "interval_hours": {
+                    "type": "integer"
+                },
+                "label": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.ConnectorDTO": {
+            "type": "object",
+            "properties": {
+                "country": {
+                    "type": "string"
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.ConnectorFieldDTO"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.ConnectorFieldDTO": {
+            "type": "object",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "enum": [
+                        "text",
+                        "secret",
+                        "id_number"
+                    ]
+                },
+                "label": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "optional": {
+                    "type": "boolean"
+                }
+            }
+        },
         "routes.CostBasisDTO": {
             "type": "object",
             "properties": {
@@ -3852,6 +4645,25 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "label": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.CreatedDTO": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "routes.CredentialsDTO": {
+            "type": "object",
+            "properties": {
+                "key_id": {
+                    "type": "integer"
+                },
+                "sealed": {
                     "type": "string"
                 }
             }
@@ -3910,6 +4722,22 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "routes.FinishDTO": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "description": "A stable code when failed: bad_credentials, challenge_expired, institution_down, ...",
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "ok",
+                        "failed"
+                    ]
                 }
             }
         },
@@ -4198,6 +5026,30 @@ const docTemplate = `{
                 }
             }
         },
+        "routes.JobDTO": {
+            "type": "object",
+            "properties": {
+                "book_id": {
+                    "type": "integer"
+                },
+                "connector": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "key_id": {
+                    "type": "integer"
+                },
+                "sealed": {
+                    "description": "Open with the key's private half and additional data\n\"rigel-ledger/credentials/v1\\0\u003cuser_id\u003e\\0\u003cconnector\u003e\" (internal/sealing).",
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
         "routes.LineInputDTO": {
             "type": "object",
             "properties": {
@@ -4387,6 +5239,17 @@ const docTemplate = `{
                 }
             }
         },
+        "routes.PublishConnectorsDTO": {
+            "type": "object",
+            "properties": {
+                "connectors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.ConnectorDTO"
+                    }
+                }
+            }
+        },
         "routes.RateDTO": {
             "type": "object",
             "properties": {
@@ -4538,6 +5401,92 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "total": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.RunnerKeyDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "public_key": {
+                    "type": "string"
+                },
+                "retired_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.RunnerKeysDTO": {
+            "type": "object",
+            "properties": {
+                "public_keys": {
+                    "description": "Every key the runner holds, oldest first, the one to seal to last\n(raw 32-byte X25519 public keys, base64).",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "routes.RunnerStatusDTO": {
+            "type": "object",
+            "properties": {
+                "connectors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.ConnectorDTO"
+                    }
+                },
+                "keys": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.RunnerKeyDTO"
+                    }
+                },
+                "tokens": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.RunnerTokenDTO"
+                    }
+                }
+            }
+        },
+        "routes.RunnerTokenDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "last_used_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.SealingKeyDTO": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "public_key": {
                     "type": "string"
                 }
             }

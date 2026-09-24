@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/httplog/v3"
 
 	"github.com/cwchen-twn/rigel-ledger/internal/auth"
+	"github.com/cwchen-twn/rigel-ledger/internal/connections"
 	"github.com/cwchen-twn/rigel-ledger/internal/db"
 	"github.com/cwchen-twn/rigel-ledger/internal/identity"
 	"github.com/cwchen-twn/rigel-ledger/internal/ledger"
@@ -113,6 +114,7 @@ func NewApp(cfg *Config, logger *slog.Logger) (*App, error) {
 
 	handler := routes.New(routes.Deps{
 		Rates:          rateSvc,
+		Connections:    connections.New(store, svc),
 		Service:        svc,
 		Identity:       ids,
 		Auth:           authMgr,

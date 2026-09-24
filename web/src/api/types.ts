@@ -97,7 +97,7 @@ export interface Invitation extends Profile {
 export interface SessionInfo {
   id: number;
   /** token: made in settings for a sync runner, confined to sending batches. */
-  kind: 'web' | 'api' | 'token';
+  kind: 'web' | 'api' | 'token' | 'runner';
   label: string;
   user_agent: string;
   ip: string;
@@ -560,4 +560,66 @@ export interface Drift {
   asserted: string;
   booked: string;
   source: string;
+}
+
+// ---- connections and the sync runner (routes/handlers_connections.go, handlers_runner.go) ----
+
+export interface ConnectorField {
+  name: string;
+  /** English default; the UI prefers connector.<id>.field.<name>. */
+  label: string;
+  kind: 'text' | 'secret' | 'id_number';
+  optional?: boolean;
+}
+
+export interface Connector {
+  id: string;
+  name: string;
+  country: string;
+  fields: ConnectorField[];
+}
+
+export interface Catalog {
+  connectors: Connector[];
+  /** What to seal to; null while no runner has registered. */
+  key: { id: number; public_key: string } | null;
+}
+
+export interface ConnectionChallenge {
+  id: number;
+  kind: 'otp' | 'captcha' | 'device';
+  prompt: string;
+  /** base64 PNG/JPEG, for a CAPTCHA */
+  image?: string;
+  expires_at: string;
+}
+
+export interface Connection {
+  id: number;
+  book_id: number;
+  book_name: string;
+  connector: string;
+  label: string;
+  enabled: boolean;
+  interval_hours: number;
+  status: 'new' | 'ok' | 'needs_user_action' | 'failed';
+  last_error: string;
+  last_run_at: string | null;
+  run_requested: boolean;
+  /** The runner's key changed since these credentials were sealed. */
+  key_retired: boolean;
+  challenge: ConnectionChallenge | null;
+}
+
+export interface RunnerKey {
+  id: number;
+  public_key: string;
+  created_at: string;
+  retired_at: string | null;
+}
+
+export interface RunnerStatus {
+  tokens: { id: number; label: string; created_by: string; created_at: string; last_used_at: string; expires_at: string }[];
+  keys: RunnerKey[];
+  connectors: Connector[];
 }

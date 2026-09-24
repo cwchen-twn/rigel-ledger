@@ -128,6 +128,19 @@ export const api = {
   sessions: () => get<T.SessionInfo[]>('/api/me/sessions'),
   revokeSession: (id: number) => del(`/api/me/sessions/${id}`),
   createToken: (label: string, days: number) => post<T.TokenCreated>('/api/me/tokens', { label, days }),
+
+  /** Credentials and answers go out sealed (lib/seal.ts): the server cannot read them. */
+  connectors: () => get<T.Catalog>('/api/connectors'),
+  connections: () => get<T.Connection[]>('/api/me/connections'),
+  createConnection: (c: { book_id: number; connector: string; label: string; interval_hours: number; key_id: number; sealed: string }) =>
+    post<{ id: number }>('/api/me/connections', c),
+  updateConnection: (id: number, c: { book_id?: number; label?: string; enabled?: boolean; interval_hours?: number }) =>
+    patch<void>(`/api/me/connections/${id}`, c),
+  replaceCredentials: (id: number, key_id: number, sealed: string) => put<void>(`/api/me/connections/${id}/credentials`, { key_id, sealed }),
+  syncConnection: (id: number) => post<void>(`/api/me/connections/${id}/sync`),
+  deleteConnection: (id: number) => del(`/api/me/connections/${id}`),
+  answerChallenge: (id: number, challengeId: number, sealed: string) =>
+    post<void>(`/api/me/connections/${id}/challenges/${challengeId}`, { sealed }),
   myEvents: () => get<T.AuthEvent[]>('/api/me/events'),
 
   // Administration.
@@ -148,6 +161,9 @@ export const api = {
     resetMFA: (id: number) => post<void>(`/api/admin/users/${id}/reset-mfa`),
     rates: () => get<T.RateStatus>('/api/admin/rates'),
     refreshRates: (date?: string) => post<T.RateFetch>('/api/admin/rates/refresh', date ? { date } : {}),
+    runner: () => get<T.RunnerStatus>('/api/admin/runner'),
+    createRunnerToken: (label: string, days: number) => post<T.TokenCreated>('/api/admin/runner/tokens', { label, days }),
+    revokeRunnerToken: (id: number) => del(`/api/admin/runner/tokens/${id}`),
   },
   currencies: () => get<T.Currency[]>('/api/currencies'),
   commodities: () => get<T.Commodity[]>('/api/commodities'),

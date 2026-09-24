@@ -388,6 +388,37 @@ type Commodity struct {
 	ContractSize  decimal.NullDecimal
 }
 
+type Connection struct {
+	ID             int64
+	UserID         int64
+	BookID         int64
+	Connector      string
+	Label          string
+	Sealed         []byte
+	KeyID          int64
+	Enabled        bool
+	IntervalHours  int16
+	Status         string
+	LastError      string
+	LastRunAt      *time.Time
+	RunRequestedAt *time.Time
+	ClaimedAt      *time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type ConnectionChallenge struct {
+	ID           int64
+	ConnectionID int64
+	Kind         string
+	Prompt       string
+	Image        []byte
+	AnswerSealed []byte
+	ExpiresAt    time.Time
+	AnsweredAt   *time.Time
+	CreatedAt    time.Time
+}
+
 type EmailToken struct {
 	ID        int64
 	UserID    *int64
@@ -503,6 +534,21 @@ type RateFetch struct {
 	Skipped   int32
 	Error     string
 	FetchedAt time.Time
+}
+
+type RunnerConnector struct {
+	ID        string
+	Name      string
+	Country   string
+	Fields    []byte
+	UpdatedAt time.Time
+}
+
+type RunnerKey struct {
+	ID        int64
+	PublicKey []byte
+	CreatedAt time.Time
+	RetiredAt *time.Time
 }
 
 type Session struct {

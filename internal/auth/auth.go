@@ -245,7 +245,7 @@ func (m *Manager) Authenticate(next http.Handler) http.Handler {
 		}
 		if time.Since(row.Session.LastUsedAt) > touchEvery {
 			expires := time.Now().Add(m.sessionTTL(r.Context()))
-			if row.Session.Kind == KindToken {
+			if row.Session.Kind == KindToken || row.Session.Kind == KindRunner {
 				expires = row.Session.ExpiresAt // a token lives as long as it was made for, no longer
 			}
 			_ = m.store.TouchSession(r.Context(), db.TouchSessionParams{ID: row.Session.ID, ExpiresAt: expires})
@@ -341,22 +341,37 @@ func (m *Manager) RequireMFA(onError func(w http.ResponseWriter, status int, cod
 }
 
 // Session kinds. A web session slides and rides a cookie; an api one is a
-// script's full login; a token is made in settings for a runner and is
-// confined by TokenScope.
+// script's full login; a token is made in settings for a person's own
+// scripts and is confined by TokenScope; a runner token is the sync
+// runner's, made by an admin, and reaches /api/runner/* only.
 const (
-	KindWeb   = "web"
-	KindAPI   = "api"
-	KindToken = "token"
+	KindWeb    = "web"
+	KindAPI    = "api"
+	KindToken  = "token"
+	KindRunner = "runner"
 )
 
-// MaxTokenTTL caps an API token's lifetime: a runner's token is rotated at
-// least once every two years.
+// RunnerPath is the only part of the API a runner token reaches.
+const RunnerPath = "/api/runner/"
+
+// MaxTokenTTL caps a token's lifetime: it is rotated at least once every
+// two years.
 const MaxTokenTTL = 2 * 365 * 24 * time.Hour
 
-// CreateToken makes an API token for a runner or a script. Only a two-factor
-// session may make one, and the token carries that level, so the runner is
+// CreateToken makes an API token for a person's script. Only a two-factor
+// session may make one, and the token carries that level, so the script is
 // not asked for a second factor it cannot give. It is shown once.
 func (m *Manager) CreateToken(ctx context.Context, u db.User, label string, ttl time.Duration, c Client) (string, db.Session, error) {
+	return m.createToken(ctx, u, KindToken, label, ttl, c, "token_created")
+}
+
+// CreateRunnerToken makes the sync runner's token, owned by the admin who
+// made it (so the sessions table keeps one shape), shown once.
+func (m *Manager) CreateRunnerToken(ctx context.Context, admin db.User, label string, ttl time.Duration, c Client) (string, db.Session, error) {
+	return m.createToken(ctx, admin, KindRunner, label, ttl, c, "runner_token_created")
+}
+
+func (m *Manager) createToken(ctx context.Context, u db.User, kind, label string, ttl time.Duration, c Client, event string) (string, db.Session, error) {
 	if ttl <= 0 || ttl > MaxTokenTTL {
 		ttl = MaxTokenTTL / 2
 	}
@@ -365,26 +380,43 @@ func (m *Manager) CreateToken(ctx context.Context, u db.User, label string, ttl 
 		return "", db.Session{}, err
 	}
 	s, err := m.store.CreateSessionAAL(ctx, db.CreateSessionAALParams{
-		UserID: u.ID, TokenHash: hash, Kind: KindToken, Label: label, UserAgent: c.UserAgent,
+		UserID: u.ID, TokenHash: hash, Kind: kind, Label: label, UserAgent: c.UserAgent,
 		ExpiresAt: time.Now().Add(ttl), Ip: c.IP, Aal: AALMFA,
 	})
 	if err != nil {
 		return "", db.Session{}, err
 	}
 	_ = m.Record(ctx, Event{Username: u.Username, UserID: &u.ID, IP: c.IP, UserAgent: c.UserAgent,
-		Name: "token_created", Detail: map[string]any{"label": label, "session_id": s.ID}})
+		Name: event, Detail: map[string]any{"label": label, "session_id": s.ID}})
 	return token, s, nil
 }
 
-// TokenScope confines API tokens to what a runner needs: who am I, which
-// books, and sending a batch. Everything else -- the review queue, settings,
-// making more tokens -- needs a person signed in, so a leaked runner token
-// cannot read the books or approve its own rows.
+// TokenScope confines the narrow session kinds. A person's token gets what
+// allowed says (who am I, which books, sending a batch): the review queue,
+// settings and making more tokens need a person signed in, so a leaked
+// token cannot read the books or approve its own rows. A runner token gets
+// RunnerPath and nothing else.
 func TokenScope(allowed func(method, path string) bool, onError func(w http.ResponseWriter, status int, code string)) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if id, _ := FromContext(r.Context()); id.Kind == KindToken && !allowed(r.Method, r.URL.Path) {
+			id, _ := FromContext(r.Context())
+			if (id.Kind == KindToken && !allowed(r.Method, r.URL.Path)) ||
+				(id.Kind == KindRunner && !strings.HasPrefix(r.URL.Path, RunnerPath)) {
 				onError(w, http.StatusForbidden, "token_scope")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// RequireRunner answers 404 to everyone but the runner, like RequireAdmin,
+// so the runner API does not advertise itself.
+func RequireRunner(onError func(w http.ResponseWriter, status int, code string)) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if id, _ := FromContext(r.Context()); id.Kind != KindRunner {
+				onError(w, http.StatusNotFound, "not_found")
 				return
 			}
 			next.ServeHTTP(w, r)

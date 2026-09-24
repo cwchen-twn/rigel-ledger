@@ -10,6 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/cwchen-twn/rigel-ledger/internal/auth"
+	"github.com/cwchen-twn/rigel-ledger/internal/db"
 	"github.com/cwchen-twn/rigel-ledger/internal/ledger"
 	"github.com/cwchen-twn/rigel-ledger/internal/response"
 )
@@ -64,19 +65,10 @@ func (h *handlers) createToken(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	if req.Label == "" || len(req.Label) > 80 {
-		response.Error(w, http.StatusUnprocessableEntity, "invalid_input", "a token needs a label",
-			map[string]string{"label": "required"})
+	days, err := tokenDays(req)
+	if err != nil {
+		h.fail(w, r, err)
 		return
-	}
-	if req.Days < 0 || req.Days > 730 {
-		response.Error(w, http.StatusUnprocessableEntity, "invalid_input", "1 to 730 days",
-			map[string]string{"days": "out_of_range"})
-		return
-	}
-	days := req.Days
-	if days == 0 {
-		days = 365
 	}
 	id, _ := auth.FromContext(r.Context())
 	token, s, err := h.auth.CreateToken(r.Context(), id.User, req.Label, time.Duration(days)*24*time.Hour, clientOf(r))
@@ -84,9 +76,26 @@ func (h *handlers) createToken(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	response.JSON(w, http.StatusCreated, TokenCreatedDTO{Token: token, Session: SessionDTO{
-		ID: s.ID, Kind: s.Kind, Label: s.Label, UserAgent: s.UserAgent,
-		CreatedAt: timestamp(s.CreatedAt), LastUsedAt: timestamp(s.LastUsedAt), ExpiresAt: timestamp(s.ExpiresAt)}})
+	response.JSON(w, http.StatusCreated, TokenCreatedDTO{Token: token, Session: sessionDTO(s)})
+}
+
+// tokenDays validates a token request: a label, and 1-730 days (default 365).
+func tokenDays(req CreateTokenDTO) (int, error) {
+	if req.Label == "" || len(req.Label) > 80 {
+		return 0, ledger.FieldError("label", "required", "a token needs a label")
+	}
+	if req.Days < 0 || req.Days > 730 {
+		return 0, ledger.FieldError("days", "out_of_range", "1 to 730 days")
+	}
+	if req.Days == 0 {
+		return 365, nil
+	}
+	return req.Days, nil
+}
+
+func sessionDTO(s db.Session) SessionDTO {
+	return SessionDTO{ID: s.ID, Kind: s.Kind, Label: s.Label, UserAgent: s.UserAgent,
+		CreatedAt: timestamp(s.CreatedAt), LastUsedAt: timestamp(s.LastUsedAt), ExpiresAt: timestamp(s.ExpiresAt)}
 }
 
 type ImportAccountDTO struct {
@@ -144,6 +153,16 @@ func (h *handlers) importBatch(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
+	in := importInput(req)
+	res, err := h.svc.Import(r.Context(), access(r), in)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	response.JSON(w, http.StatusCreated, importResultDTO(res))
+}
+
+func importInput(req ImportBatchDTO) ledger.ImportInput {
 	in := ledger.ImportInput{Connector: req.Connector, Label: req.Label}
 	for _, a := range req.Accounts {
 		in.Accounts = append(in.Accounts, ledger.ImportAccount{ExternalID: a.ID, Label: a.Label, Currency: a.Currency})
@@ -153,13 +172,11 @@ func (h *handlers) importBatch(w http.ResponseWriter, r *http.Request) {
 			Amount: row.Amount, Currency: row.Currency, Description: row.Description, Counterparty: row.Counterparty,
 			Pending: row.Pending, Raw: row.Raw})
 	}
-	res, err := h.svc.Import(r.Context(), access(r), in)
-	if err != nil {
-		h.fail(w, r, err)
-		return
-	}
-	response.JSON(w, http.StatusCreated, ImportResultDTO{BatchID: res.BatchID, Received: res.Received,
-		Staged: res.Staged, Duplicates: res.Duplicates, Balances: res.Balances})
+	return in
+}
+
+func importResultDTO(res ledger.ImportResult) ImportResultDTO {
+	return ImportResultDTO{BatchID: res.BatchID, Received: res.Received, Staged: res.Staged, Duplicates: res.Duplicates, Balances: res.Balances}
 }
 
 type SourceAccountDTO struct {
