@@ -6,7 +6,7 @@ import { api } from '~/api/client';
 import type { Profile } from '~/api/types';
 import { AuthCard } from '~/components/AuthCard';
 import { EmailVerification } from '~/components/EmailVerification';
-import { browserLanguage, browserTimeZone, ProfileFields } from '~/components/ProfileFields';
+import { browserTimeZone, ProfileFields } from '~/components/ProfileFields';
 import { Button } from '~/components/ui/button';
 import { Field, Input } from '~/components/ui/input';
 import { useI18n } from '~/i18n';
@@ -26,12 +26,13 @@ export default function Welcome() {
   const navigate = useNavigate();
   const u = () => user()!;
 
-  // Start from the stored values, but offer the browser's language and time
-  // zone while the account still has the instance defaults.
+  // Start from the stored values (the language may have been chosen by
+  // whoever created the account), but offer the browser's time zone while the
+  // account still has UTC.
   const [profile, setProfile] = createStore<Profile>({
     username: u().username,
     display_name: u().display_name,
-    language: browserLanguage() ?? u().language,
+    language: u().language,
     display_currency: u().display_currency,
     timezone: u().timezone === 'UTC' ? (browserTimeZone() ?? 'UTC') : u().timezone,
     date_format: u().date_format,

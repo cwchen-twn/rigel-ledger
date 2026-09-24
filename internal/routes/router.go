@@ -34,6 +34,10 @@ type Deps struct {
 	LogLevel       slog.Level
 	AppURL         string
 	AppPort        int
+	// DevAssets serves /static with no-cache: in development the asset URLs
+	// carry ?version=dev, which never changes between builds, so a long
+	// max-age kept the browser on a stale main.js.
+	DevAssets bool
 	// Ready reports whether the app can serve (the database answers). Nil
 	// means always ready -- tests that do not care.
 	Ready func(ctx context.Context) error
@@ -94,8 +98,14 @@ func New(d Deps) http.Handler {
 	if d.StaticFiles != nil {
 		static := http.FileServer(http.FS(d.StaticFiles))
 		r.Handle("/static/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Cache-Control", "public, max-age=7884000")
-			w.Header().Set("Expires", time.Now().AddDate(0, 3, 0).Format(http.TimeFormat))
+			if d.DevAssets {
+				w.Header().Set("Cache-Control", "no-cache")
+			} else {
+				// Release builds version the URLs (?version=vX.Y.Z), so a new
+				// release is a new URL and a long lifetime is safe.
+				w.Header().Set("Cache-Control", "public, max-age=7884000")
+				w.Header().Set("Expires", time.Now().AddDate(0, 3, 0).Format(http.TimeFormat))
+			}
 			static.ServeHTTP(w, r)
 		}))
 		r.Get("/robots.txt", func(w http.ResponseWriter, r *http.Request) {

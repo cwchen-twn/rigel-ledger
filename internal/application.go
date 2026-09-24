@@ -119,6 +119,7 @@ func NewApp(cfg *Config, logger *slog.Logger) (*App, error) {
 		LogLevel:       cfg.GetLogLevel(),
 		AppURL:         cfg.AppURL,
 		AppPort:        cfg.AppPort,
+		DevAssets:      cfg.IsDevelopment() || cfg.AppVersion == "" || cfg.AppVersion == "dev",
 		Ready:          store.Pool.Ping,
 	})
 
