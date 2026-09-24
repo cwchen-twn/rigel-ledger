@@ -259,6 +259,12 @@ Implemented in P3a (`internal/rates`).
 
 ## IFRS, applied where it fits a household
 
+The three statements are implemented (P3b, `internal/ledger/reports.go`, page
+`/b/:id/reports`). Each is computed per request, returns the exact rates it used, and
+can be shown in any currency: figures are kept in the book's base and translated at the
+report date's rate (default: the viewer's display currency). A currency with no rate
+falls back to the base and is listed as missing, as is a security with no price.
+
 - **Accrual, simply.** Expenses are recognised at purchase (card swipe), not at payment.
   Prepaid amortisation is possible but is not in the template.
 - **Functional currency** per book. Foreign monetary balances are retranslated at the
@@ -350,10 +356,26 @@ moves across unchanged.
   render, with nothing to regenerate. Any cache added later is keyed by currency (and
   date, and book) and dropped with the prices it read.
 
-### A balance sheet bound to its date's rates (P3)
+### A balance sheet bound to its date's rates (P3b, implemented)
 
 - The report "as of D" converts foreign cash and debts, and securities at fair value, at
-  the **latest rate on or before D**. Points and property stay at cost.
+  the **latest rate on or before D**. Points, property, futures (contract value is
+  exposure) and equity accounts stay at cost.
+- **Equity** = the equity accounts + the result accumulated in income and expense + the
+  unrealised revaluation. The last is derived as whatever balances the statement, which
+  in the base currency is exactly sum(value - cost), and translated also absorbs the
+  per-line rounding, so assets - liabilities - equity is zero by construction.
+- **Income statement** for a period = income and expense at their stored
+  (transaction-date) base amounts, plus the change in the unrealised revaluation between
+  the day before the period and its last day.
+- **Cash flow** (direct method): each transaction that moves a cash account attributes
+  that movement to its other legs, each contributing minus its own base amount (pro rata
+  by construction); a cash-to-cash transfer moves nothing. Legs are classified by their
+  account's `cf_class`; interest and dividends received follow the book's choice. Cash
+  arriving through the opening-balances account is part of the opening position, not a
+  flow. An "effect of exchange rates" line reconciles opening to closing cash.
+- Accounts holding a security default to `investing`, so a share purchase is not an
+  operating outflow.
 - The difference from historical base amounts is a computed unrealised-FX or valuation
   line (IAS 21, IFRS 9).
 - The income statement stays at transaction-date rates, which are already stored.
@@ -819,7 +841,7 @@ builds images.
 | P1 | ~~Schema reset, sessions, sqlc; books, accounts, multi-currency transactions API and UI; the "All accounts" balances page; the user Settings page~~ (done) |
 | P2 | ~~Dockerfile, Gitea/GitHub CI and release; probes and the hcloud chart (tailnet-only ipAllowList, own Postgres role, nightly backup); release `v0.1.0` and deploy~~ (done, 2026-09-24) |
 | P2.5 | **Accounts and sign-in security.** a: first-login wizard, verified email, invitations, registration modes, bootstrap admin, the Administration page (users, requests, sign-in rules, defaults, SMTP), throttling and the sign-in audit, sessions (migration `000002`). b: ~~two-factor sign-in -- email codes, TOTP, passkeys, recovery codes, enforcement (`000003`)~~ (done). Both before any public exposure |
-| P3 | ~~Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency)~~ (P3a, done); book rebase, the three statements bound to closing rates with `rates_used`, display-currency translation, tag (trip) report |
+| P3 | ~~Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency)~~ (P3a, done); ~~the three statements bound to closing rates with `rates_used`, display-currency translation~~ (P3b, done); book rebase, tag (trip) report |
 | P4 | **Sync and review**: import API with `import_rows` kinds, `source_accounts`, review queue, rules, matching (pending/posted, transfers, invoices, order emails), assertions, challenges; receipt attachments (upload, camera, optional local OCR); the tw-sync runner (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
 | P5 | Securities and futures: py-sync (Shioaji daily, Firstrade), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, 永豐 deposits, Banco Continental (if its export is not enough). Recurring list and subscription templates. (Points, average cost and the security commodity itself are done.) |
 | P6 | PWA polish, then Flutter if a native feature is needed |

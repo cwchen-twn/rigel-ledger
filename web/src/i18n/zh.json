@@ -16,7 +16,8 @@
     "books": "帳本",
     "new_book": "新增帳本",
     "menu": "選單",
-    "admin": "系統管理"
+    "admin": "系統管理",
+    "reports": "報表"
   },
   "common": {
     "save": "儲存",
@@ -591,6 +592,39 @@
     "regenerate": "重新產生",
     "codes_regenerated": "已產生新救援碼，舊的已失效",
     "alerts": "從新位址登入時寄信通知我"
+  },
+  "reports": {
+    "title": "報表",
+    "tab_balance_sheet": "資產負債表",
+    "tab_income_statement": "損益表",
+    "tab_cash_flow": "現金流量表",
+    "from": "起日",
+    "to": "迄日",
+    "as_of": "截至",
+    "currency": "幣別",
+    "cost": "成本",
+    "current_assets": "流動資產",
+    "non_current_assets": "非流動資產",
+    "total_assets": "資產總計",
+    "current_liabilities": "流動負債",
+    "non_current_liabilities": "非流動負債",
+    "total_liabilities": "負債總計",
+    "accumulated_result": "累積損益",
+    "unrealised": "未實現損益",
+    "unrealised_hint": "外幣餘額與股票以當日匯率與價格重新評價",
+    "total_equity": "權益總計",
+    "total_income": "收入合計",
+    "total_expenses": "支出合計",
+    "unrealised_change": "未實現損益變動",
+    "net_result": "本期淨損益",
+    "opening_cash": "期初現金",
+    "closing_cash": "期末現金",
+    "net_flow": "{section}淨額",
+    "fx_effect": "匯率變動對現金之影響",
+    "rates_used": "使用的匯率",
+    "via_usd": "經由美元換算",
+    "translated": "帳本以 {base} 記帳，報表以報表日匯率換算為 {currency}。",
+    "missing": "{list} 沒有匯率或價格，以成本列示。"
   },
   "account": {
     "template": {

@@ -30,7 +30,7 @@ function AccountDialog(props: {
   cls: AccountClass; // new top-level of
 }) {
   const { t, te, fieldErrors } = useI18n();
-  const { commodities } = useSession();
+  const { commodities, kind } = useSession();
   const book = useBook();
   const base = () => book.book()?.base_currency ?? 'USD';
 
@@ -151,7 +151,11 @@ function AccountDialog(props: {
         <div class="grid gap-4 sm:grid-cols-2">
           <Show when={holdsCommodity(cls())}>
             <Field label={t('accounts.commodity')} hint={t('accounts.commodity_hint')} error={errors().commodity}>
-              <SearchSelect options={commodityOptions(commodities())} value={commodity()} disabled={editing()} onChange={setCommodity} />
+              <SearchSelect options={commodityOptions(commodities())} value={commodity()} disabled={editing()} onChange={(c) => {
+                setCommodity(c);
+                // Shares are bought and sold as investing activity (IAS 7).
+                if (kind(c) === 'security') setCf('investing');
+              }} />
             </Field>
           </Show>
           <Field label={t('accounts.code')}>

@@ -1632,6 +1632,138 @@
                 }
             }
         },
+        "/api/books/{bookID}/reports/balance-sheet": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reports"
+                ],
+                "summary": "Balance sheet at the date's rates (IAS 1, IAS 21, IFRS 9 FVTPL)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "YYYY-MM-DD, default today",
+                        "name": "as_of",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "report currency, default the user's display currency",
+                        "name": "currency",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.BalanceSheetDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/reports/cash-flow": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reports"
+                ],
+                "summary": "Cash flow statement for a period, direct method (IAS 7)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "YYYY-MM-DD, default 1 January",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "YYYY-MM-DD, default today",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "report currency",
+                        "name": "currency",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.CashFlowDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/reports/income-statement": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reports"
+                ],
+                "summary": "Income statement for a period, with the change in unrealised gains",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "YYYY-MM-DD, default 1 January",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "YYYY-MM-DD, default today",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "report currency",
+                        "name": "currency",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.IncomeStatementDTO"
+                        }
+                    }
+                }
+            }
+        },
         "/api/books/{bookID}/tags": {
             "get": {
                 "produces": [
@@ -2866,6 +2998,68 @@
                 }
             }
         },
+        "routes.BalanceSheetDTO": {
+            "type": "object",
+            "properties": {
+                "accumulated_result": {
+                    "type": "string"
+                },
+                "as_of": {
+                    "type": "string"
+                },
+                "base_currency": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "current_assets": {
+                    "type": "string"
+                },
+                "current_liabilities": {
+                    "type": "string"
+                },
+                "equity_accounts": {
+                    "type": "string"
+                },
+                "lines": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.ReportLineDTO"
+                    }
+                },
+                "missing": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "non_current_assets": {
+                    "type": "string"
+                },
+                "non_current_liabilities": {
+                    "type": "string"
+                },
+                "rates_used": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.RateUsedDTO"
+                    }
+                },
+                "total_assets": {
+                    "type": "string"
+                },
+                "total_equity": {
+                    "type": "string"
+                },
+                "total_liabilities": {
+                    "type": "string"
+                },
+                "unrealised": {
+                    "type": "string"
+                }
+            }
+        },
         "routes.BalancesDTO": {
             "type": "object",
             "properties": {
@@ -2914,6 +3108,73 @@
                 },
                 "role": {
                     "$ref": "#/definitions/db.MemberRole"
+                }
+            }
+        },
+        "routes.CashFlowDTO": {
+            "type": "object",
+            "properties": {
+                "base_currency": {
+                    "type": "string"
+                },
+                "closing": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "financing": {
+                    "type": "string"
+                },
+                "from": {
+                    "type": "string"
+                },
+                "fx_effect": {
+                    "type": "string"
+                },
+                "investing": {
+                    "type": "string"
+                },
+                "lines": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.CashFlowLineDTO"
+                    }
+                },
+                "missing": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "opening": {
+                    "type": "string"
+                },
+                "operating": {
+                    "type": "string"
+                },
+                "rates_used": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.RateUsedDTO"
+                    }
+                },
+                "to": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.CashFlowLineDTO": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "amount": {
+                    "type": "string"
+                },
+                "class": {
+                    "$ref": "#/definitions/db.CfClass"
                 }
             }
         },
@@ -3002,6 +3263,53 @@
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "routes.IncomeStatementDTO": {
+            "type": "object",
+            "properties": {
+                "base_currency": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "expenses": {
+                    "type": "string"
+                },
+                "from": {
+                    "type": "string"
+                },
+                "income": {
+                    "type": "string"
+                },
+                "lines": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.ReportLineDTO"
+                    }
+                },
+                "missing": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "net_result": {
+                    "type": "string"
+                },
+                "rates_used": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.RateUsedDTO"
+                    }
+                },
+                "to": {
+                    "type": "string"
+                },
+                "unrealised": {
+                    "type": "string"
                 }
             }
         },
@@ -3273,6 +3581,53 @@
                 "scheduler": {
                     "description": "False when RATES_ENABLED=false or the scheduler is not wired (tests).",
                     "type": "boolean"
+                }
+            }
+        },
+        "routes.RateUsedDTO": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string"
+                },
+                "from": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "rate": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.ReportLineDTO": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "amount": {
+                    "type": "string"
+                },
+                "historical": {
+                    "description": "Balance sheet only.",
+                    "type": "string"
+                },
+                "holdings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.CommodityAmountDTO"
+                    }
+                },
+                "revalued": {
+                    "type": "boolean"
+                },
+                "total": {
+                    "type": "string"
                 }
             }
         },

@@ -192,6 +192,12 @@ export const api = {
   addPrice: (id: number, p: { commodity: string; quote: string; date: string; rate: string }) =>
     post<T.Price>(`${book(id)}/prices`, p),
   deletePrice: (id: number, priceId: number) => del(`${book(id)}/prices/${priceId}`),
+  balanceSheet: (id: number, as_of: string, currency: string) =>
+    get<T.BalanceSheet>(`${book(id)}/reports/balance-sheet${qs({ as_of, currency })}`),
+  incomeStatement: (id: number, from: string, to: string, currency: string) =>
+    get<T.IncomeStatement>(`${book(id)}/reports/income-statement${qs({ from, to, currency })}`),
+  cashFlow: (id: number, from: string, to: string, currency: string) =>
+    get<T.CashFlow>(`${book(id)}/reports/cash-flow${qs({ from, to, currency })}`),
   rate: (id: number, from: string, to: string, date: string) =>
     get<T.Rate>(`${book(id)}/rate${qs({ from, to, date })}`),
 };

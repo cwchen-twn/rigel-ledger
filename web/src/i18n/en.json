@@ -16,7 +16,8 @@
     "books": "Books",
     "new_book": "New book",
     "menu": "Menu",
-    "admin": "Administration"
+    "admin": "Administration",
+    "reports": "Reports"
   },
   "common": {
     "save": "Save",
@@ -591,6 +592,39 @@
     "regenerate": "Make new codes",
     "codes_regenerated": "New recovery codes; the old ones no longer work",
     "alerts": "Email me when someone signs in from a new address"
+  },
+  "reports": {
+    "title": "Reports",
+    "tab_balance_sheet": "Balance sheet",
+    "tab_income_statement": "Income statement",
+    "tab_cash_flow": "Cash flow",
+    "from": "From",
+    "to": "To",
+    "as_of": "As of",
+    "currency": "Currency",
+    "cost": "cost",
+    "current_assets": "Current assets",
+    "non_current_assets": "Non-current assets",
+    "total_assets": "Total assets",
+    "current_liabilities": "Current liabilities",
+    "non_current_liabilities": "Non-current liabilities",
+    "total_liabilities": "Total liabilities",
+    "accumulated_result": "Accumulated result",
+    "unrealised": "Unrealised gains and losses",
+    "unrealised_hint": "foreign balances and shares at the date's rates",
+    "total_equity": "Total equity",
+    "total_income": "Total income",
+    "total_expenses": "Total expenses",
+    "unrealised_change": "Change in unrealised gains and losses",
+    "net_result": "Net result",
+    "opening_cash": "Cash at the start",
+    "closing_cash": "Cash at the end",
+    "net_flow": "Net {section}",
+    "fx_effect": "Effect of exchange rates on cash",
+    "rates_used": "Rates used",
+    "via_usd": "crossed through USD",
+    "translated": "Figures are kept in {base} and translated to {currency} at the report date's rate.",
+    "missing": "No rate or price for {list}: shown at cost."
   },
   "account": {
     "template": {

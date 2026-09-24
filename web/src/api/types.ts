@@ -369,3 +369,64 @@ export interface RateStatus {
   scheduler: boolean;
   recent: RateFetch[];
 }
+
+export interface ReportLine {
+  account_id: number;
+  amount: string;
+  total: string;
+  historical?: string;
+  holdings?: { commodity: string; amount: string }[];
+  revalued?: boolean;
+}
+
+export interface RateUsed {
+  from: string;
+  to: string;
+  rate: string;
+  date: string;
+  path: string;
+}
+
+interface ReportBase {
+  base_currency: string;
+  currency: string;
+  rates_used: RateUsed[];
+  missing: string[];
+}
+
+export interface BalanceSheet extends ReportBase {
+  as_of: string;
+  lines: ReportLine[];
+  current_assets: string;
+  non_current_assets: string;
+  total_assets: string;
+  current_liabilities: string;
+  non_current_liabilities: string;
+  total_liabilities: string;
+  equity_accounts: string;
+  accumulated_result: string;
+  unrealised: string;
+  total_equity: string;
+}
+
+export interface IncomeStatement extends ReportBase {
+  from: string;
+  to: string;
+  lines: ReportLine[];
+  income: string;
+  expenses: string;
+  unrealised: string;
+  net_result: string;
+}
+
+export interface CashFlow extends ReportBase {
+  from: string;
+  to: string;
+  opening: string;
+  lines: { class: CfClass; account_id: number; amount: string }[];
+  operating: string;
+  investing: string;
+  financing: string;
+  fx_effect: string;
+  closing: string;
+}

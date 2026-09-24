@@ -16,7 +16,8 @@
     "books": "Libros",
     "new_book": "Nuevo libro",
     "menu": "Menú",
-    "admin": "Administración"
+    "admin": "Administración",
+    "reports": "Informes"
   },
   "common": {
     "save": "Guardar",
@@ -591,6 +592,39 @@
     "regenerate": "Generar nuevos",
     "codes_regenerated": "Nuevos códigos; los anteriores ya no sirven",
     "alerts": "Avisarme por correo cuando alguien entre desde una dirección nueva"
+  },
+  "reports": {
+    "title": "Informes",
+    "tab_balance_sheet": "Balance",
+    "tab_income_statement": "Estado de resultados",
+    "tab_cash_flow": "Flujo de efectivo",
+    "from": "Desde",
+    "to": "Hasta",
+    "as_of": "Al",
+    "currency": "Moneda",
+    "cost": "coste",
+    "current_assets": "Activo corriente",
+    "non_current_assets": "Activo no corriente",
+    "total_assets": "Total activo",
+    "current_liabilities": "Pasivo corriente",
+    "non_current_liabilities": "Pasivo no corriente",
+    "total_liabilities": "Total pasivo",
+    "accumulated_result": "Resultado acumulado",
+    "unrealised": "Ganancias y pérdidas no realizadas",
+    "unrealised_hint": "saldos en divisas y acciones a los tipos de la fecha",
+    "total_equity": "Total patrimonio",
+    "total_income": "Total ingresos",
+    "total_expenses": "Total gastos",
+    "unrealised_change": "Variación de ganancias no realizadas",
+    "net_result": "Resultado neto",
+    "opening_cash": "Efectivo al inicio",
+    "closing_cash": "Efectivo al final",
+    "net_flow": "{section} neto",
+    "fx_effect": "Efecto de los tipos de cambio en el efectivo",
+    "rates_used": "Tipos usados",
+    "via_usd": "cruzado por USD",
+    "translated": "Las cifras se llevan en {base} y se convierten a {currency} al tipo de la fecha.",
+    "missing": "Sin tipo ni precio para {list}: se muestra al coste."
   },
   "account": {
     "template": {

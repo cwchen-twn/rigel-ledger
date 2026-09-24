@@ -45,3 +45,40 @@ func TestBookRatesAndAdminStatus(t *testing.T) {
 		t.Fatalf("refresh without a scheduler = %d %s", res.StatusCode, b)
 	}
 }
+
+func TestReportEndpoints(t *testing.T) {
+	f := newAPI(t)
+	alice := f.browser("alice")
+	var book BookDTO
+	alice.json("POST", "/api/books", map[string]string{"name": "B", "base_currency": "TWD"}, 201, &book)
+	base := fmt.Sprintf("/api/books/%d/reports", book.ID)
+
+	var bs BalanceSheetDTO
+	alice.json("GET", base+"/balance-sheet?as_of=2026-03-31&currency=TWD", nil, 200, &bs)
+	if bs.AsOf != "2026-03-31" || bs.Currency != "TWD" || !bs.TotalAssets.Equal(bs.TotalEquity) {
+		t.Fatalf("balance sheet = %+v", bs)
+	}
+	// No currency: the user's display currency (USD); no rate yet, so the
+	// report stays in the base currency and says USD is missing.
+	alice.json("GET", base+"/balance-sheet", nil, 200, &bs)
+	if bs.Currency != "TWD" || len(bs.Missing) != 1 || bs.Missing[0] != "USD" {
+		t.Fatalf("untranslatable = %+v", bs)
+	}
+	var is IncomeStatementDTO
+	alice.json("GET", base+"/income-statement?to=2026-06-30", nil, 200, &is)
+	if is.From != "2026-01-01" || is.To != "2026-06-30" {
+		t.Fatalf("default period = %s..%s", is.From, is.To)
+	}
+	var cf CashFlowDTO
+	alice.json("GET", base+"/cash-flow?from=2026-01-01&to=2026-03-31&currency=TWD", nil, 200, &cf)
+	if res, _ := alice.do("GET", base+"/cash-flow?from=2026-04-01&to=2026-03-31", nil); res.StatusCode != 422 {
+		t.Fatalf("backwards period = %d", res.StatusCode)
+	}
+	if res, _ := alice.do("GET", base+"/balance-sheet?currency=NOPE", nil); res.StatusCode != 422 {
+		t.Fatalf("unknown currency = %d", res.StatusCode)
+	}
+	// Members only.
+	if res, _ := f.browser("bob").do("GET", base+"/balance-sheet", nil); res.StatusCode != 404 {
+		t.Fatalf("non-member = %d", res.StatusCode)
+	}
+}

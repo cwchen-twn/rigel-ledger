@@ -12,6 +12,7 @@ import Home from '~/pages/Home';
 import Invite from '~/pages/Invite';
 import Login from '~/pages/Login';
 import Register from '~/pages/Register';
+import Reports from '~/pages/Reports';
 import RequestAccess from '~/pages/RequestAccess';
 import SetupMFA from '~/pages/SetupMFA';
 import VerifyLink from '~/pages/VerifyLink';
@@ -185,6 +186,7 @@ export default function App() {
           <Route path="/" component={Overview} />
           <Route path="/transactions" component={Transactions} />
           <Route path="/accounts" component={Accounts} />
+          <Route path="/reports/:tab?" component={Reports} />
           <Route path="/settings" component={BookSettings} />
         </Route>
         <Route path="*" component={NotFound} />

@@ -115,6 +115,110 @@ func (q *Queries) AccountSums(ctx context.Context, arg AccountSumsParams) ([]Acc
 	return items, nil
 }
 
+const accountSumsBetween = `-- name: AccountSumsBetween :many
+SELECT p.account_id,
+       p.commodity,
+       coalesce(sum(p.amount), 0)::numeric      AS amount,
+       coalesce(sum(p.base_amount), 0)::numeric AS base_amount
+FROM postings p
+JOIN transactions t ON t.id = p.transaction_id
+WHERE t.book_id = $1 AND t.date BETWEEN $2 AND $3
+GROUP BY p.account_id, p.commodity
+`
+
+type AccountSumsBetweenParams struct {
+	BookID   int64
+	FromDate time.Time
+	ToDate   time.Time
+}
+
+type AccountSumsBetweenRow struct {
+	AccountID  int64
+	Commodity  string
+	Amount     decimal.Decimal
+	BaseAmount decimal.Decimal
+}
+
+// Movements in [from, to], per account and commodity: the income statement.
+func (q *Queries) AccountSumsBetween(ctx context.Context, arg AccountSumsBetweenParams) ([]AccountSumsBetweenRow, error) {
+	rows, err := q.db.Query(ctx, accountSumsBetween, arg.BookID, arg.FromDate, arg.ToDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AccountSumsBetweenRow{}
+	for rows.Next() {
+		var i AccountSumsBetweenRow
+		if err := rows.Scan(
+			&i.AccountID,
+			&i.Commodity,
+			&i.Amount,
+			&i.BaseAmount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const cashFlowPostings = `-- name: CashFlowPostings :many
+SELECT p.transaction_id, p.account_id, p.base_amount::numeric AS base_amount, a.is_cash
+FROM postings p
+JOIN transactions t ON t.id = p.transaction_id
+JOIN accounts a ON a.id = p.account_id
+WHERE t.book_id = $1 AND t.date BETWEEN $2 AND $3
+  AND EXISTS (
+      SELECT 1 FROM postings p2 JOIN accounts a2 ON a2.id = p2.account_id
+      WHERE p2.transaction_id = t.id AND a2.is_cash
+  )
+ORDER BY p.transaction_id, p.id
+`
+
+type CashFlowPostingsParams struct {
+	BookID   int64
+	FromDate time.Time
+	ToDate   time.Time
+}
+
+type CashFlowPostingsRow struct {
+	TransactionID int64
+	AccountID     int64
+	BaseAmount    decimal.Decimal
+	IsCash        bool
+}
+
+// Every posting of the transactions in [from, to] that move a cash account:
+// the direct-method cash flow statement attributes each one's cash movement
+// to its other legs.
+func (q *Queries) CashFlowPostings(ctx context.Context, arg CashFlowPostingsParams) ([]CashFlowPostingsRow, error) {
+	rows, err := q.db.Query(ctx, cashFlowPostings, arg.BookID, arg.FromDate, arg.ToDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CashFlowPostingsRow{}
+	for rows.Next() {
+		var i CashFlowPostingsRow
+		if err := rows.Scan(
+			&i.TransactionID,
+			&i.AccountID,
+			&i.BaseAmount,
+			&i.IsCash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createAccount = `-- name: CreateAccount :one
 INSERT INTO accounts (book_id, parent_id, class, name, template_key, code, commodity,
                       is_current, is_cash, cf_class, is_placeholder)

@@ -58,6 +58,13 @@ func (s *Service) CreateAccount(ctx context.Context, a Access, in AccountInput) 
 	}
 	if in.CfClass == "" {
 		in.CfClass = db.CfClassOperating
+		// Buying and selling shares is investing under IAS 7; left as
+		// operating, a purchase would read as an operating outflow.
+		if in.Commodity != nil {
+			if c, err := s.validCommodity(ctx, strings.ToUpper(*in.Commodity)); err == nil && c.Kind == db.CommodityKindSecurity {
+				in.CfClass = db.CfClassInvesting
+			}
+		}
 	}
 	if !in.CfClass.Valid() {
 		return db.Account{}, fieldError("cf_class", "invalid", "must be operating, investing or financing")

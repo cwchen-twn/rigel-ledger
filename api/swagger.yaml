@@ -242,6 +242,47 @@ definitions:
       username:
         type: string
     type: object
+  routes.BalanceSheetDTO:
+    properties:
+      accumulated_result:
+        type: string
+      as_of:
+        type: string
+      base_currency:
+        type: string
+      currency:
+        type: string
+      current_assets:
+        type: string
+      current_liabilities:
+        type: string
+      equity_accounts:
+        type: string
+      lines:
+        items:
+          $ref: '#/definitions/routes.ReportLineDTO'
+        type: array
+      missing:
+        items:
+          type: string
+        type: array
+      non_current_assets:
+        type: string
+      non_current_liabilities:
+        type: string
+      rates_used:
+        items:
+          $ref: '#/definitions/routes.RateUsedDTO'
+        type: array
+      total_assets:
+        type: string
+      total_equity:
+        type: string
+      total_liabilities:
+        type: string
+      unrealised:
+        type: string
+    type: object
   routes.BalancesDTO:
     properties:
       accounts:
@@ -275,6 +316,50 @@ definitions:
         type: string
       role:
         $ref: '#/definitions/db.MemberRole'
+    type: object
+  routes.CashFlowDTO:
+    properties:
+      base_currency:
+        type: string
+      closing:
+        type: string
+      currency:
+        type: string
+      financing:
+        type: string
+      from:
+        type: string
+      fx_effect:
+        type: string
+      investing:
+        type: string
+      lines:
+        items:
+          $ref: '#/definitions/routes.CashFlowLineDTO'
+        type: array
+      missing:
+        items:
+          type: string
+        type: array
+      opening:
+        type: string
+      operating:
+        type: string
+      rates_used:
+        items:
+          $ref: '#/definitions/routes.RateUsedDTO'
+        type: array
+      to:
+        type: string
+    type: object
+  routes.CashFlowLineDTO:
+    properties:
+      account_id:
+        type: integer
+      amount:
+        type: string
+      class:
+        $ref: '#/definitions/db.CfClass'
     type: object
   routes.CommodityAmountDTO:
     properties:
@@ -332,6 +417,37 @@ definitions:
         items:
           type: string
         type: array
+    type: object
+  routes.IncomeStatementDTO:
+    properties:
+      base_currency:
+        type: string
+      currency:
+        type: string
+      expenses:
+        type: string
+      from:
+        type: string
+      income:
+        type: string
+      lines:
+        items:
+          $ref: '#/definitions/routes.ReportLineDTO'
+        type: array
+      missing:
+        items:
+          type: string
+        type: array
+      net_result:
+        type: string
+      rates_used:
+        items:
+          $ref: '#/definitions/routes.RateUsedDTO'
+        type: array
+      to:
+        type: string
+      unrealised:
+        type: string
     type: object
   routes.InvitationDTO:
     properties:
@@ -514,6 +630,37 @@ definitions:
         description: False when RATES_ENABLED=false or the scheduler is not wired
           (tests).
         type: boolean
+    type: object
+  routes.RateUsedDTO:
+    properties:
+      date:
+        type: string
+      from:
+        type: string
+      path:
+        type: string
+      rate:
+        type: string
+      to:
+        type: string
+    type: object
+  routes.ReportLineDTO:
+    properties:
+      account_id:
+        type: integer
+      amount:
+        type: string
+      historical:
+        description: Balance sheet only.
+        type: string
+      holdings:
+        items:
+          $ref: '#/definitions/routes.CommodityAmountDTO'
+        type: array
+      revalued:
+        type: boolean
+      total:
+        type: string
     type: object
   routes.SessionDTO:
     properties:
@@ -2081,6 +2228,92 @@ paths:
       summary: Today's rate of each currency the book uses, in its base
       tags:
       - prices
+  /api/books/{bookID}/reports/balance-sheet:
+    get:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: YYYY-MM-DD, default today
+        in: query
+        name: as_of
+        type: string
+      - description: report currency, default the user's display currency
+        in: query
+        name: currency
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.BalanceSheetDTO'
+      summary: Balance sheet at the date's rates (IAS 1, IAS 21, IFRS 9 FVTPL)
+      tags:
+      - reports
+  /api/books/{bookID}/reports/cash-flow:
+    get:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: YYYY-MM-DD, default 1 January
+        in: query
+        name: from
+        type: string
+      - description: YYYY-MM-DD, default today
+        in: query
+        name: to
+        type: string
+      - description: report currency
+        in: query
+        name: currency
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.CashFlowDTO'
+      summary: Cash flow statement for a period, direct method (IAS 7)
+      tags:
+      - reports
+  /api/books/{bookID}/reports/income-statement:
+    get:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: YYYY-MM-DD, default 1 January
+        in: query
+        name: from
+        type: string
+      - description: YYYY-MM-DD, default today
+        in: query
+        name: to
+        type: string
+      - description: report currency
+        in: query
+        name: currency
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.IncomeStatementDTO'
+      summary: Income statement for a period, with the change in unrealised gains
+      tags:
+      - reports
   /api/books/{bookID}/tags:
     get:
       parameters:

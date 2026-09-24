@@ -92,6 +92,7 @@ api/                # Generated Swagger output (do not edit manually)
 - `prices` obeys the lock date too: a rate on or before the lock date of any book using either side is frozen (trigger `prices_lock`).
 - Go validates first for friendly field errors; the triggers in `000001_init.up.sql` enforce the same rules for any writer. A trigger's `CONSTRAINT` name becomes the API error code (see `ledger.translate`).
 - No stored balances: `Balances` sums postings and rolls up the account tree in Go.
+- Statements (`internal/ledger/reports.go`): `BalanceSheet`, `IncomeStatement`, `CashFlow`, computed per request, never persisted; values in the base, then translated at the report date (`reportCtx.out`). Revaluation uses `RateDetail` (the rate plus its date and path) so every report lists `rates_used`. Keep assets - liabilities - equity at zero by deriving the unrealised line, not by summing it.
 - New books are seeded from `personalTemplate` in `template.go`; account names are i18n keys (`account.template.<key>`) until renamed.
 
 ### Frontend (web/src)
@@ -103,13 +104,13 @@ api/         client.ts (fetch + X-Rigel-Client + ApiError), types.ts (mirrors ro
 stores/      session (me, currencies, live language/theme), book (book, accounts, names, paths, roles)
 components/  ui/ -- shadcn-style kit (tokens only, cva variants, Kobalte where a11y is hard)
              AppShell, AccountCombobox, Money/MoneyInput, TransactionSheet (simple + split entry)
-pages/       Login, Register, RequestAccess, Invite, VerifyLink, Welcome (wizard), Onboarding (new book),
-             Overview (balances), Transactions, Accounts, BookSettings, UserSettings, admin/ (tabs)
+pages/       Login, Register, RequestAccess, Invite, VerifyLink, Welcome (wizard), SetupMFA, Onboarding (new book),
+             Overview (balances), Transactions, Accounts, Reports (3 statements), BookSettings, UserSettings, admin/ (tabs)
 i18n/        en.json, zh.json (Traditional), es.json -- same keys; account names under account.template.*
 lib/         money.ts (decimal strings via js-big-decimal), dates.ts, cn.ts
 ```
 
-Routes: signed out `/login`, `/register`, `/request-access`, `/invite/:token`, `/verify?token=`; `/welcome` (first-login wizard); `/onboarding` (new book), `/settings`, `/admin/:tab`, `/b/:bookId/{,transactions,accounts,settings}`; `/` redirects to the default book.
+Routes: signed out `/login`, `/register`, `/request-access`, `/invite/:token`, `/verify?token=`; `/welcome` (first-login wizard); `/onboarding` (new book), `/settings`, `/admin/:tab`, `/b/:bookId/{,transactions,accounts,reports/:tab,settings}`; `/` redirects to the default book.
 
 ## Configuration
 
