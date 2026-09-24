@@ -34,6 +34,45 @@ type Config struct {
 	PgPassword  string `env:"PG_PASS"`
 	PgDbname    string `env:"APP_DBNAME"`
 	PgMaxConns  int32  `env:"PG_MAX_CONNS" envDefault:"10"`
+
+	// AppOrigin is the public base URL that links in mail point at, e.g.
+	// https://ledger.example.com. Empty in development: http://localhost:<port>.
+	AppOrigin string `env:"APP_ORIGIN"`
+	// EncryptionKey seals the secrets the database holds (the SMTP password).
+	// 32 bytes, base64: openssl rand -base64 32. Required in production.
+	EncryptionKey string `env:"APP_ENCRYPTION_KEY"`
+	// TrustedProxies are the hops whose X-Forwarded-For is believed: the pod
+	// network (Traefik) and loopback. Add Cloudflare's ranges if it ever
+	// fronts the app.
+	TrustedProxies string `env:"TRUSTED_PROXIES" envDefault:"10.42.0.0/16,127.0.0.1/32,::1/128"`
+
+	// The first administrator, created at startup only while none exists.
+	AdminUsername        string `env:"ADMIN_USERNAME"`
+	AdminInitialPassword string `env:"ADMIN_INITIAL_PASSWORD"`
+	AdminEmail           string `env:"ADMIN_EMAIL"`
+
+	// Mail seed: copied into the system settings on the first start only;
+	// afterwards the Administration page owns them.
+	MailDriver   string `env:"MAIL_DRIVER"`
+	SMTPHost     string `env:"SMTP_HOST"`
+	SMTPPort     int    `env:"SMTP_PORT" envDefault:"587"`
+	SMTPSecurity string `env:"SMTP_SECURITY" envDefault:"starttls"`
+	SMTPUser     string `env:"SMTP_USER"`
+	SMTPPass     string `env:"SMTP_PASS"`
+	MailFrom     string `env:"MAIL_FROM"`
+	MailFromName string `env:"MAIL_FROM_NAME"`
+}
+
+// Origin is AppOrigin, or the local development address.
+func (c *Config) Origin() string {
+	if c.AppOrigin != "" {
+		return c.AppOrigin
+	}
+	host := c.AppURL
+	if host == "" {
+		host = "localhost"
+	}
+	return "http://" + net.JoinHostPort(host, strconv.Itoa(c.AppPort))
 }
 
 // DSN returns the postgres:// URL to connect to.

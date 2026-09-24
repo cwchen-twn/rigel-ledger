@@ -1,0 +1,9 @@
+{{define "subject"}}You're invited to {{.AppName}}{{end}}
+{{define "action"}}Accept the invitation{{end}}
+{{define "body"}}
+Hi {{.Username}},
+
+{{if .Inviter}}{{.Inviter}} has invited you{{else}}You have been invited{{end}} to {{.AppName}}. Open the link below to choose your settings and a password. The link works once and expires in {{.Expires}}.
+
+If you did not expect this, you can ignore this email.
+{{end}}

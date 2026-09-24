@@ -22,6 +22,13 @@ import (
 
 func New(t testing.TB) *db.Store {
 	t.Helper()
+	store, _ := NewWithDSN(t)
+	return store
+}
+
+// NewWithDSN is New, also returning the database's URL (for migration tests).
+func NewWithDSN(t testing.TB) (*db.Store, string) {
+	t.Helper()
 	base := os.Getenv("TEST_DATABASE_URL")
 	if base == "" {
 		if os.Getenv("REQUIRE_DB_TESTS") == "1" {
@@ -75,5 +82,5 @@ func New(t testing.TB) *db.Store {
 			t.Logf("drop %s: %v", name, err)
 		}
 	})
-	return store
+	return store, dsn
 }

@@ -1,0 +1,9 @@
+{{define "subject"}}Te invitaron a {{.AppName}}{{end}}
+{{define "action"}}Aceptar la invitación{{end}}
+{{define "body"}}
+Hola {{.Username}}:
+
+{{if .Inviter}}{{.Inviter}} te invitó{{else}}Te invitaron{{end}} a {{.AppName}}. Abre el enlace de abajo para elegir tus preferencias y una contraseña. El enlace sirve una sola vez y vence en {{.Expires}}.
+
+Si no esperabas este correo, puedes ignorarlo.
+{{end}}

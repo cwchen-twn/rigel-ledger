@@ -1,12 +1,14 @@
-// rigel-ledger-cli administers users. There is no public sign-up: accounts are
-// created here, e.g. inside the running container:
+// rigel-ledger-cli administers users from inside the running container. The
+// Administration page (invitations) is the usual way in; this is for the first
+// admin and for recovery:
 //
 //	rigel-ledger-cli create-user -u alice -e alice@example.com --display-name Alice
 //	rigel-ledger-cli reset-password -u alice
 //	rigel-ledger-cli set-admin -u alice --admin=true
 //
 // A password not given with -p is read from stdin, so it stays out of the
-// shell history and the process list.
+// shell history and the process list. A created user still walks the
+// first-login wizard (and verifies the address) at the first sign-in.
 package main
 
 import (

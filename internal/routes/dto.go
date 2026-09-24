@@ -69,6 +69,14 @@ type UserDTO struct {
 	DateFormat      string `json:"date_format"`
 	Theme           string `json:"theme"`
 	DefaultBookID   *int64 `json:"default_book_id"`
+	EmailVerified   bool   `json:"email_verified"`
+	// False until the first-login wizard is done; most of the API answers
+	// 403 onboarding_required meanwhile.
+	Initialized        bool `json:"initialized"`
+	PasswordMustChange bool `json:"password_must_change"`
+	// An address a verification code was sent to and not yet confirmed
+	// (only on GET /api/me).
+	PendingEmail string `json:"pending_email,omitempty"`
 }
 
 func userDTO(u db.User) UserDTO {
@@ -76,6 +84,8 @@ func userDTO(u db.User) UserDTO {
 		ID: u.ID, Username: u.Username, Email: u.Email, DisplayName: u.DisplayName, IsAdmin: u.IsAdmin,
 		Language: u.Language, DisplayCurrency: u.DisplayCurrency, Timezone: u.Timezone,
 		DateFormat: u.DateFormat, Theme: u.Theme, DefaultBookID: u.DefaultBookID,
+		EmailVerified: u.EmailVerifiedAt != nil && u.Email != "", Initialized: u.InitializedAt != nil,
+		PasswordMustChange: u.PasswordMustChange,
 	}
 }
 

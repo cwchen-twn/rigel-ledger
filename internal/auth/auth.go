@@ -13,6 +13,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -43,7 +44,14 @@ func HashPassword(password string) (string, error) {
 	return string(h), err
 }
 
+// CheckPassword reports whether password matches hash. An empty hash (an
+// invited user who has not chosen a password) never matches, and costs the
+// same bcrypt time as a real comparison, so it is not a tell.
 func CheckPassword(hash, password string) bool {
+	if hash == "" {
+		_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
+		return false
+	}
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
 
@@ -64,55 +72,105 @@ func HashToken(token string) []byte {
 
 type Manager struct {
 	store        *db.Store
-	ttl          time.Duration
+	ttl          time.Duration // SESSION_TTL; the policy may override it
 	secureCookie bool
+	policy       Policy
 }
 
 func NewManager(store *db.Store, ttl time.Duration, secureCookie bool) *Manager {
 	return &Manager{store: store, ttl: ttl, secureCookie: secureCookie}
 }
 
-// Login checks the password and opens a session of the given kind ("web" or "api").
-func (m *Manager) Login(ctx context.Context, username, password, kind, userAgent string) (db.User, string, error) {
-	u, err := m.store.GetUserByUsername(ctx, strings.ToLower(strings.TrimSpace(username)))
+// SetPolicy makes the throttle limits and the session lifetime follow the
+// system settings instead of the built-in defaults.
+func (m *Manager) SetPolicy(p Policy) { m.policy = p }
+
+func (m *Manager) sessionTTL(ctx context.Context) time.Duration {
+	if m.policy != nil {
+		if d := m.policy.SessionTTL(ctx); d > 0 {
+			return d
+		}
+	}
+	return m.ttl
+}
+
+// Client describes where a request came from, for sessions and the audit.
+type Client struct {
+	IP        *netip.Addr
+	UserAgent string
+}
+
+// Login checks the throttle, then the password, and opens a session of the
+// given kind ("web" or "api"). Every outcome is recorded in auth_events.
+func (m *Manager) Login(ctx context.Context, username, password, kind string, c Client) (db.User, string, error) {
+	username = strings.ToLower(strings.TrimSpace(username))
+	if err := m.Check(ctx, username, c.IP); err != nil {
+		if _, ok := IsThrottled(err); ok {
+			_ = m.Record(ctx, Event{Username: username, IP: c.IP, UserAgent: c.UserAgent, Name: "throttled"})
+		}
+		return db.User{}, "", err
+	}
+	fail := func(uid *int64) (db.User, string, error) {
+		_ = m.Record(ctx, Event{Username: username, UserID: uid, IP: c.IP, UserAgent: c.UserAgent,
+			Name: "password_bad", Failure: true})
+		return db.User{}, "", ErrInvalidCredentials
+	}
+
+	u, err := m.store.GetUserByUsername(ctx, username)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && !u.IsActive) {
 		_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
-		return db.User{}, "", ErrInvalidCredentials
+		if err == nil {
+			return fail(&u.ID)
+		}
+		return fail(nil)
 	}
 	if err != nil {
 		return db.User{}, "", err
 	}
 	if !CheckPassword(u.PasswordHash, password) {
-		return db.User{}, "", ErrInvalidCredentials
+		return fail(&u.ID)
 	}
 
-	token, hash, err := NewToken()
+	token, err := m.OpenSession(ctx, u.ID, kind, c)
 	if err != nil {
 		return db.User{}, "", err
 	}
-	if _, err := m.store.CreateSession(ctx, db.CreateSessionParams{
-		UserID:    u.ID,
+	_ = m.store.TouchUserLogin(ctx, u.ID)
+	_ = m.Record(ctx, Event{Username: username, UserID: &u.ID, IP: c.IP, UserAgent: c.UserAgent,
+		Name: "password_ok", Detail: map[string]any{"kind": kind}})
+	return u, token, nil
+}
+
+// OpenSession creates a session for a user who has already proved who they
+// are (a password, an invitation or a sign-up link) and returns its token.
+func (m *Manager) OpenSession(ctx context.Context, userID int64, kind string, c Client) (string, error) {
+	token, hash, err := NewToken()
+	if err != nil {
+		return "", err
+	}
+	if _, err := m.store.CreateSessionWithIP(ctx, db.CreateSessionWithIPParams{
+		UserID:    userID,
 		TokenHash: hash,
 		Kind:      kind,
-		UserAgent: userAgent,
-		ExpiresAt: time.Now().Add(m.ttl),
+		UserAgent: c.UserAgent,
+		ExpiresAt: time.Now().Add(m.sessionTTL(ctx)),
+		Ip:        c.IP,
 	}); err != nil {
-		return db.User{}, "", err
+		return "", err
 	}
-	_ = m.store.TouchUserLogin(ctx, u.ID)
-	return u, token, nil
+	return token, nil
 }
 
 func (m *Manager) Logout(ctx context.Context, token string) error {
 	return m.store.DeleteSessionByTokenHash(ctx, HashToken(token))
 }
 
-func (m *Manager) SetCookie(w http.ResponseWriter, token string) {
+func (m *Manager) SetCookie(ctx context.Context, w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     CookieName,
 		Value:    token,
 		Path:     "/",
-		MaxAge:   int(m.ttl.Seconds()),
+		MaxAge:   int(m.sessionTTL(ctx).Seconds()),
 		HttpOnly: true,
 		Secure:   m.secureCookie,
 		SameSite: http.SameSiteLaxMode,
@@ -182,10 +240,10 @@ func (m *Manager) Authenticate(next http.Handler) http.Handler {
 		if time.Since(row.Session.LastUsedAt) > touchEvery {
 			_ = m.store.TouchSession(r.Context(), db.TouchSessionParams{
 				ID:        row.Session.ID,
-				ExpiresAt: time.Now().Add(m.ttl),
+				ExpiresAt: time.Now().Add(m.sessionTTL(r.Context())),
 			})
 			if viaCookie {
-				m.SetCookie(w, token)
+				m.SetCookie(r.Context(), w, token)
 			}
 		}
 		ctx := WithIdentity(r.Context(), Identity{
@@ -219,6 +277,37 @@ func RequireUser(onError func(w http.ResponseWriter, status int, code string)) f
 			}
 			if id.ViaCookie && !isSafeMethod(r.Method) && r.Header.Get(ClientHeader) == "" {
 				onError(w, http.StatusForbidden, "csrf")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// RequireInitialized keeps a user who has not finished the first-login
+// wizard (or still has to replace a bootstrap password) inside it: every
+// route behind this answers 403 onboarding_required until they do.
+func RequireInitialized(onError func(w http.ResponseWriter, status int, code string)) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			id, _ := FromContext(r.Context())
+			if id.User.InitializedAt == nil || id.User.PasswordMustChange {
+				onError(w, http.StatusForbidden, "onboarding_required")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// RequireAdmin answers 404 to non-admins, the same as a route that does not
+// exist, so the admin API does not advertise itself.
+func RequireAdmin(onError func(w http.ResponseWriter, status int, code string)) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			id, _ := FromContext(r.Context())
+			if !id.User.IsAdmin {
+				onError(w, http.StatusNotFound, "not_found")
 				return
 			}
 			next.ServeHTTP(w, r)

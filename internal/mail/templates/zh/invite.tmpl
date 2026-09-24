@@ -1,0 +1,9 @@
+{{define "subject"}}邀請您加入 {{.AppName}}{{end}}
+{{define "action"}}接受邀請{{end}}
+{{define "body"}}
+{{.Username}} 您好：
+
+{{if .Inviter}}{{.Inviter}} 邀請您{{else}}您受邀{{end}}加入 {{.AppName}}。請開啟下方連結設定個人偏好與密碼。此連結僅能使用一次，並將於 {{.Expires}} 後失效。
+
+若您並未預期收到此信，請忽略即可。
+{{end}}

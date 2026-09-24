@@ -1,8 +1,8 @@
 import { useNavigate } from '@solidjs/router';
-import { Wallet } from 'lucide-solid';
-import { createSignal, Show } from 'solid-js';
+import { createResource, createSignal, Match, Show, Switch } from 'solid-js';
+import { api } from '~/api/client';
+import { AuthCard } from '~/components/AuthCard';
 import { Button } from '~/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Field, Input } from '~/components/ui/input';
 import { useI18n } from '~/i18n';
 import { useSession } from '~/stores/session';
@@ -11,6 +11,7 @@ export default function Login() {
   const { t, te } = useI18n();
   const { login } = useSession();
   const navigate = useNavigate();
+  const [config] = createResource(() => api.authConfig().catch(() => null));
   const [username, setUsername] = createSignal('');
   const [password, setPassword] = createSignal('');
   const [error, setError] = createSignal('');
@@ -30,33 +31,33 @@ export default function Login() {
     }
   };
 
+  const footer = (
+    <Switch>
+      <Match when={config()?.registration === 'open'}>
+        <a href="/register" class="underline-offset-4 hover:underline">{t('register.link')}</a>
+      </Match>
+      <Match when={config()?.registration === 'request'}>
+        <a href="/request-access" class="underline-offset-4 hover:underline">{t('request.link')}</a>
+      </Match>
+    </Switch>
+  );
+
   return (
-    <div class="flex min-h-screen items-center justify-center bg-muted/40 p-4">
-      <Card class="w-full max-w-sm">
-        <CardHeader class="justify-items-center text-center">
-          <div class="mb-2 flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Wallet class="size-5" />
-          </div>
-          <CardTitle class="text-xl">{t('app.name')}</CardTitle>
-          <CardDescription>{t('auth.welcome')}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form class="grid gap-4" onSubmit={submit}>
-            <Field label={t('auth.username')}>
-              <Input autocomplete="username" autofocus required value={username()} onInput={(e) => setUsername(e.currentTarget.value)} />
-            </Field>
-            <Field label={t('auth.password')}>
-              <Input type="password" autocomplete="current-password" required value={password()} onInput={(e) => setPassword(e.currentTarget.value)} />
-            </Field>
-            <Show when={error()}>
-              <p role="alert" class="text-sm text-destructive">{error()}</p>
-            </Show>
-            <Button type="submit" disabled={busy()}>
-              {busy() ? t('auth.signing_in') : t('auth.sign_in')}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+    <AuthCard title={t('app.name')} description={t('auth.welcome')} footer={config()?.registration !== 'closed' ? footer : undefined}>
+      <form class="grid gap-4" onSubmit={submit}>
+        <Field label={t('auth.username')}>
+          <Input autocomplete="username" autofocus required value={username()} onInput={(e) => setUsername(e.currentTarget.value)} />
+        </Field>
+        <Field label={t('auth.password')}>
+          <Input type="password" autocomplete="current-password" required value={password()} onInput={(e) => setPassword(e.currentTarget.value)} />
+        </Field>
+        <Show when={error()}>
+          <p role="alert" class="text-sm text-destructive">{error()}</p>
+        </Show>
+        <Button type="submit" disabled={busy()}>
+          {busy() ? t('auth.signing_in') : t('auth.sign_in')}
+        </Button>
+      </form>
+    </AuthCard>
   );
 }

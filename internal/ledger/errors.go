@@ -86,3 +86,15 @@ func translate(err error, what string) error {
 	}
 	return err
 }
+
+// Exported for the identity package, which shares this error type so every
+// handler maps failures the same way.
+
+func Invalid(code, format string, args ...any) *Error { return invalid(code, format, args...) }
+func FieldError(field, code, format string, args ...any) *Error {
+	return fieldError(field, code, format, args...)
+}
+func NotFound(what string) *Error            { return notFound(what) }
+func Forbidden(code, msg string) *Error      { return forbidden(code, msg) }
+func Conflict(code, msg string) *Error       { return conflict(code, msg) }
+func Translate(err error, what string) error { return translate(err, what) }

@@ -9,7 +9,7 @@ description: How to change the rigel-ledger database schema or SQL queries safel
 
 | What | Where |
 |---|---|
-| The whole schema | `migrations/000001_init.up.sql` (+ `.down.sql`) |
+| The schema | `migrations/000001_init.up.sql`, then one pair per change (`000002_accounts_admin`, ...) |
 | Queries | `internal/db/queries/<domain>.sql` |
 | Generated Go | `internal/db/*.sql.go`, `models.go`, `db.go` -- **never edit by hand** |
 | sqlc config | `sqlc.yaml` (numeric -> `decimal.Decimal`, date/timestamptz -> `time.Time`) |
@@ -19,14 +19,15 @@ description: How to change the rigel-ledger database schema or SQL queries safel
 
 ## The migration rule
 
-**Until the first deployment, edit `000001_init` in place.** Nobody has data
-worth migrating, and one readable schema file beats a pile of ALTERs. After a
-change, reset the local dev database with `make db/reset`; golang-migrate will
-otherwise refuse with `no migration found for version N`.
+**The app is deployed (2026-09-24): never edit an applied migration.**
+`000001_init` and `000002_accounts_admin` are frozen. A schema change is a new
+pair: `make migrations/new name=<what>`, with both up and down, and the down
+must leave the database the previous migration expects (see `000002`'s down for
+how to restore a replaced function). Add the pair to
+`internal/db/migrations_test.go`'s round trip when it touches existing data.
 
-**After the first deployment** (the hcloud chart exists and has run), never
-touch an applied file again: `make migrations/new name=<what>` and write both
-up and down. Update this skill and CLAUDE.md when that switch happens.
+Before the deploy the rule was the opposite (one readable `000001`, edited in
+place, `make db/reset` after each change); that is history now.
 
 Keep the SQL PostgreSQL-14 compatible (local dev); CI and hcloud run 18.
 
@@ -66,6 +67,12 @@ Keep the SQL PostgreSQL-14 compatible (local dev); CI and hcloud run 18.
   new that feeds a closed period's statements needs the same protection.
 - **Translations are not data.** Store stable keys; names live in
   `web/src/i18n/*.json`.
+- **Secrets the database must hold** (the SMTP password; TOTP seeds next) are sealed
+  with `internal/secretbox` under `APP_ENCRYPTION_KEY`, are never returned by the
+  API, and are stripped from `audit_log` (see the `system_settings` branch of
+  `audit_row()` in `000002`).
+- **A nullable `host(ip)::TEXT` must be `coalesce`d**: sqlc types a computed text
+  column as `string`, and a NULL fails the scan at runtime (the admin log did).
 
 ## Tests every change needs
 

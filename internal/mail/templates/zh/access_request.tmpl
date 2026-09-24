@@ -1,0 +1,7 @@
+{{define "subject"}}{{.Username}} 申請使用 {{.AppName}}{{end}}
+{{define "action"}}審核申請{{end}}
+{{define "body"}}
+{{.Username}}（{{.Email}}）申請建立帳號。
+
+{{if .Message}}留言：{{.Message}}{{end}}
+{{end}}

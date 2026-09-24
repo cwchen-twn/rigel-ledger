@@ -69,6 +69,25 @@ definitions:
       message:
         type: string
     type: object
+  routes.AccessRequestDTO:
+    properties:
+      created_at:
+        type: string
+      decided_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      ip:
+        type: string
+      message:
+        type: string
+      status:
+        type: string
+      username:
+        type: string
+    type: object
   routes.AccountBalanceDTO:
     properties:
       account_id:
@@ -111,6 +130,116 @@ definitions:
       parent_id:
         type: integer
       template_key:
+        type: string
+    type: object
+  routes.AdminSettingsDTO:
+    properties:
+      default_date_format:
+        type: string
+      default_display_currency:
+        type: string
+      default_language:
+        type: string
+      default_theme:
+        type: string
+      default_timezone:
+        type: string
+      invite_ttl_seconds:
+        type: integer
+      login_ip_max_failures:
+        type: integer
+      login_max_failures:
+        type: integer
+      login_user_max_failures:
+        type: integer
+      login_window_seconds:
+        type: integer
+      mail_configured:
+        type: boolean
+      mail_driver:
+        type: string
+      mail_from:
+        type: string
+      mail_from_name:
+        type: string
+      mfa_methods:
+        items:
+          type: string
+        type: array
+      mfa_required:
+        type: boolean
+      registration:
+        type: string
+      session_ttl_seconds:
+        description: 'null: SESSION_TTL from the environment.'
+        type: integer
+      smtp_host:
+        type: string
+      smtp_password_set:
+        type: boolean
+      smtp_port:
+        type: integer
+      smtp_security:
+        type: string
+      smtp_user:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  routes.AdminUserDTO:
+    properties:
+      created_at:
+        type: string
+      display_name:
+        type: string
+      email:
+        type: string
+      email_verified:
+        type: boolean
+      id:
+        type: integer
+      initialized:
+        type: boolean
+      invite_pending:
+        type: boolean
+      invited:
+        description: has not accepted yet
+        type: boolean
+      is_active:
+        type: boolean
+      is_admin:
+        type: boolean
+      last_login_at:
+        type: string
+      username:
+        type: string
+    type: object
+  routes.AuthConfigDTO:
+    properties:
+      registration:
+        description: 'closed: invitations only; request: /request-access; open: /register.'
+        type: string
+    type: object
+  routes.AuthEventDTO:
+    properties:
+      created_at:
+        type: string
+      detail:
+        additionalProperties: {}
+        type: object
+      event:
+        type: string
+      failure:
+        type: boolean
+      id:
+        type: integer
+      ip:
+        type: string
+      user_agent:
+        type: string
+      user_id:
+        type: integer
+      username:
         type: string
     type: object
   routes.BalancesDTO:
@@ -187,6 +316,25 @@ definitions:
       decimals:
         type: integer
       name:
+        type: string
+    type: object
+  routes.InvitationDTO:
+    properties:
+      date_format:
+        type: string
+      display_currency:
+        type: string
+      display_name:
+        type: string
+      email:
+        type: string
+      language:
+        type: string
+      theme:
+        type: string
+      timezone:
+        type: string
+      username:
         type: string
     type: object
   routes.LineInputDTO:
@@ -270,6 +418,25 @@ definitions:
       to:
         type: string
     type: object
+  routes.SessionDTO:
+    properties:
+      created_at:
+        type: string
+      current:
+        type: boolean
+      expires_at:
+        type: string
+      id:
+        type: integer
+      ip:
+        type: string
+      kind:
+        type: string
+      last_used_at:
+        type: string
+      user_agent:
+        type: string
+    type: object
   routes.TransactionDTO:
     properties:
       created_at:
@@ -335,15 +502,57 @@ definitions:
         type: string
       email:
         type: string
+      email_verified:
+        type: boolean
       id:
         type: integer
+      initialized:
+        description: |-
+          False until the first-login wizard is done; most of the API answers
+          403 onboarding_required meanwhile.
+        type: boolean
       is_admin:
         type: boolean
       language:
         type: string
+      password_must_change:
+        type: boolean
+      pending_email:
+        description: |-
+          An address a verification code was sent to and not yet confirmed
+          (only on GET /api/me).
+        type: string
       theme:
         type: string
       timezone:
+        type: string
+      username:
+        type: string
+    type: object
+  routes.acceptInviteRequest:
+    properties:
+      date_format:
+        type: string
+      display_currency:
+        type: string
+      display_name:
+        type: string
+      language:
+        type: string
+      password:
+        type: string
+      theme:
+        type: string
+      timezone:
+        type: string
+      username:
+        type: string
+    type: object
+  routes.accessRequest:
+    properties:
+      email:
+        type: string
+      message:
         type: string
       username:
         type: string
@@ -355,10 +564,77 @@ definitions:
       username:
         type: string
     type: object
+  routes.adminMailRequest:
+    properties:
+      clear_smtp_password:
+        type: boolean
+      mail_driver:
+        type: string
+      mail_from:
+        type: string
+      mail_from_name:
+        type: string
+      smtp_host:
+        type: string
+      smtp_password:
+        description: Empty or absent keeps the stored password.
+        type: string
+      smtp_port:
+        type: integer
+      smtp_security:
+        type: string
+      smtp_user:
+        type: string
+    type: object
+  routes.adminSettingsRequest:
+    properties:
+      default_date_format:
+        type: string
+      default_display_currency:
+        type: string
+      default_language:
+        type: string
+      default_theme:
+        type: string
+      default_timezone:
+        type: string
+      invite_ttl_seconds:
+        type: integer
+      login_ip_max_failures:
+        type: integer
+      login_max_failures:
+        type: integer
+      login_user_max_failures:
+        type: integer
+      login_window_seconds:
+        type: integer
+      mfa_methods:
+        items:
+          type: string
+        type: array
+      mfa_required:
+        type: boolean
+      registration:
+        type: string
+      session_ttl_seconds:
+        type: integer
+    type: object
+  routes.adminUserRequest:
+    properties:
+      is_active:
+        type: boolean
+      is_admin:
+        type: boolean
+    type: object
   routes.archiveRequest:
     properties:
       archived:
         type: boolean
+    type: object
+  routes.codeRequest:
+    properties:
+      code:
+        type: string
     type: object
   routes.createAccountRequest:
     properties:
@@ -411,6 +687,11 @@ definitions:
     properties:
       current_password:
         type: string
+      username:
+        type: string
+    type: object
+  routes.inviteRequest:
+    properties:
       email:
         type: string
       username:
@@ -433,6 +714,26 @@ definitions:
         type: string
       user:
         $ref: '#/definitions/routes.UserDTO'
+    type: object
+  routes.onboardingRequest:
+    properties:
+      date_format:
+        type: string
+      display_currency:
+        type: string
+      display_name:
+        type: string
+      language:
+        type: string
+      new_password:
+        description: Required when password_must_change (a bootstrap admin).
+        type: string
+      theme:
+        type: string
+      timezone:
+        type: string
+      username:
+        type: string
     type: object
   routes.openingDTO:
     properties:
@@ -463,6 +764,17 @@ definitions:
       rate:
         type: string
     type: object
+  routes.registerRequest:
+    properties:
+      email:
+        type: string
+      language:
+        type: string
+      password:
+        type: string
+      username:
+        type: string
+    type: object
   routes.roleRequest:
     properties:
       role:
@@ -483,6 +795,23 @@ definitions:
       theme:
         type: string
       timezone:
+        type: string
+    type: object
+  routes.signedInResponse:
+    properties:
+      user:
+        $ref: '#/definitions/routes.UserDTO'
+    type: object
+  routes.startEmailRequest:
+    properties:
+      current_password:
+        type: string
+      email:
+        type: string
+    type: object
+  routes.tokenRequest:
+    properties:
+      token:
         type: string
     type: object
   routes.updateAccountRequest:
@@ -519,6 +848,306 @@ info:
   title: RigelLedger API
   version: "1.0"
 paths:
+  /api/admin/access-requests:
+    get:
+      parameters:
+      - description: pending, approved or rejected
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/routes.AccessRequestDTO'
+            type: array
+      summary: Requests for an account (admin)
+      tags:
+      - admin
+  /api/admin/access-requests/{requestID}/approve:
+    post:
+      parameters:
+      - description: request id
+        in: path
+        name: requestID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      summary: 'Approve a request: the person is invited (admin)'
+      tags:
+      - admin
+  /api/admin/access-requests/{requestID}/reject:
+    post:
+      parameters:
+      - description: request id
+        in: path
+        name: requestID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      summary: Reject a request (admin)
+      tags:
+      - admin
+  /api/admin/events:
+    get:
+      parameters:
+      - description: at most 500
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/routes.AuthEventDTO'
+            type: array
+      summary: Recent sign-in and security events of everyone (admin)
+      tags:
+      - admin
+  /api/admin/invitations:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: who
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.inviteRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/routes.AdminUserDTO'
+        "409":
+          description: taken, or mail_failed (the invitation is saved; resend it)
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Invite a user by username and email (admin)
+      tags:
+      - admin
+  /api/admin/invitations/{userID}:
+    delete:
+      parameters:
+      - description: invited user id
+        in: path
+        name: userID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      summary: Withdraw an invitation that was not accepted; deletes that user (admin)
+      tags:
+      - admin
+  /api/admin/invitations/{userID}/resend:
+    post:
+      parameters:
+      - description: invited user id
+        in: path
+        name: userID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      summary: Mail a fresh invitation link; the old one stops working (admin)
+      tags:
+      - admin
+  /api/admin/mail:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: mail
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.adminMailRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.AdminSettingsDTO'
+      summary: Outgoing mail settings (admin); the password is stored sealed and never
+        returned
+      tags:
+      - admin
+  /api/admin/mail/test:
+    post:
+      responses:
+        "204":
+          description: No Content
+        "409":
+          description: mail_failed or mail_disabled
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Send a test email to yourself (admin)
+      tags:
+      - admin
+  /api/admin/settings:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.AdminSettingsDTO'
+      summary: System settings (admin)
+      tags:
+      - admin
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: every field
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.adminSettingsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.AdminSettingsDTO'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Replace registration, security and default settings (admin)
+      tags:
+      - admin
+  /api/admin/users:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/routes.AdminUserDTO'
+            type: array
+      summary: Every user (admin)
+      tags:
+      - admin
+  /api/admin/users/{userID}:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: user id
+        in: path
+        name: userID
+        required: true
+        type: integer
+      - description: changes
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.adminUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.AdminUserDTO'
+        "409":
+          description: last_admin
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Activate, deactivate, promote or demote another user (admin)
+      tags:
+      - admin
+  /api/auth/config:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.AuthConfigDTO'
+      summary: What the signed-out pages may offer
+      tags:
+      - auth
+  /api/auth/invite/{token}:
+    get:
+      parameters:
+      - description: token from the link
+        in: path
+        name: token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.InvitationDTO'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: The invitation behind a link
+      tags:
+      - auth
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: token from the link
+        in: path
+        name: token
+        required: true
+        type: string
+      - description: profile and password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.acceptInviteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.signedInResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: 'Accept an invitation: settings and password, then signed in'
+      tags:
+      - auth
   /api/auth/login:
     post:
       consumes:
@@ -541,6 +1170,10 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/response.ErrorBody'
+        "429":
+          description: too many failures; see Retry-After
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
       summary: Sign in
       tags:
       - auth
@@ -550,6 +1183,73 @@ paths:
         "204":
           description: No Content
       summary: Sign out this session
+      tags:
+      - auth
+  /api/auth/register:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: sign-up
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.registerRequest'
+      responses:
+        "202":
+          description: Accepted
+        "403":
+          description: registration_closed
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Sign up (registration = open); a confirmation link is mailed
+      tags:
+      - auth
+  /api/auth/request-access:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.accessRequest'
+      responses:
+        "202":
+          description: Accepted
+      summary: Ask the administrators for an account (registration = request)
+      tags:
+      - auth
+  /api/auth/verify-link:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: the token from the link
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.tokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.signedInResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: 'Confirm a sign-up link: creates the user and signs them in'
       tags:
       - auth
   /api/books:
@@ -1269,14 +1969,114 @@ paths:
           schema:
             $ref: '#/definitions/routes.UserDTO'
         "409":
-          description: username or email taken
+          description: username taken
           schema:
             $ref: '#/definitions/response.ErrorBody'
         "422":
           description: Unprocessable Entity
           schema:
             $ref: '#/definitions/response.ErrorBody'
-      summary: Change username and email (needs the current password)
+      summary: Change the username (needs the current password); email changes go
+        through /api/me/email
+      tags:
+      - me
+  /api/me/email:
+    post:
+      consumes:
+      - application/json
+      description: After the first-login wizard the current password is required.
+        The address changes only when the code is confirmed.
+      parameters:
+      - description: address
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.startEmailRequest'
+      responses:
+        "204":
+          description: No Content
+        "409":
+          description: email taken, already_verified, mail_failed
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Mail a 6-digit code to verify the current or a new address
+      tags:
+      - me
+  /api/me/email/confirm:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: code
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.codeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.UserDTO'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Confirm the emailed code; the address becomes verified (and current)
+      tags:
+      - me
+  /api/me/email/pending:
+    delete:
+      responses:
+        "204":
+          description: No Content
+      summary: Drop a pending address change
+      tags:
+      - me
+  /api/me/events:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/routes.AuthEventDTO'
+            type: array
+      summary: Recent sign-in and security events of the signed-in user
+      tags:
+      - me
+  /api/me/onboarding:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: profile
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.onboardingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.UserDTO'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Finish the first-login wizard (needs a verified address)
       tags:
       - me
   /api/me/password:
@@ -1298,6 +2098,34 @@ paths:
           schema:
             $ref: '#/definitions/response.ErrorBody'
       summary: Change password and sign out every other session
+      tags:
+      - me
+  /api/me/sessions:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/routes.SessionDTO'
+            type: array
+      summary: The signed-in user's open sessions
+      tags:
+      - me
+  /api/me/sessions/{sessionID}:
+    delete:
+      parameters:
+      - description: session id
+        in: path
+        name: sessionID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      summary: Sign out one of your sessions
       tags:
       - me
   /api/me/settings:

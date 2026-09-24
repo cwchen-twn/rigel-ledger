@@ -1,0 +1,9 @@
+{{define "subject"}}Confirma tu registro en {{.AppName}}{{end}}
+{{define "action"}}Confirmar mi correo{{end}}
+{{define "body"}}
+Hola {{.Username}}:
+
+Abre el enlace de abajo para confirmar esta dirección y terminar de crear tu cuenta. Vence en {{.Expires}}.
+
+Si no te registraste, ignora este correo y no se creará ninguna cuenta.
+{{end}}

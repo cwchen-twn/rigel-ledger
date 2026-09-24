@@ -1,9 +1,9 @@
 # RigelLedger target architecture
 
-Status: **accepted direction; P1 backend implemented** (2026-09-22). The schema
-(`migrations/000001_init.up.sql`), sqlc data layer, sessions and the book-scoped JSON
-API follow this document, and so does the SolidJS frontend. The app has never been deployed, so nothing here
-needs a data migration path.
+Status: **accepted direction; P1 and P2 done, P2.5 in progress** (2026-09-24). The schema,
+sqlc data layer, sessions and the book-scoped JSON API follow this document, and so does
+the SolidJS frontend. **The app is deployed** (ledger.chenantunez.com, tailnet-only), so
+`000001_init` is frozen: every schema change is a new migration pair.
 
 ## Goals
 
@@ -331,6 +331,10 @@ moves across unchanged.
   Converting to the display currency multiplies once more by the base→display rate at
   the same date.
 - The display currency is a view. Changing it touches no stored amount.
+- **Rule for P3: reports are computed per request and never persisted in a display
+  currency.** A new display currency therefore shows in every report on its next
+  render, with nothing to regenerate. Any cache added later is keyed by currency (and
+  date, and book) and dropped with the prices it read.
 
 ### A balance sheet bound to its date's rates (P3)
 
@@ -677,6 +681,68 @@ most of them are already there.
 - **Filing, e-signing and payment** belong to the official channels.
 - **Tax optimisation advice.** The workbook shows numbers and where they came from.
 
+## Accounts, administration and sign-in security (P2.5)
+
+Decided 2026-09-24, before the app is ever reachable outside the tailnet.
+
+### Accounts
+
+- **Every user walks a first-login wizard** once: username, a verified email address,
+  display name, then language, display currency, time zone, date format and theme.
+  `users.initialized_at` stays NULL until it is done, and the API answers
+  `403 onboarding_required` to everything except `/api/me`, logout, the email-code
+  endpoints and `/api/me/onboarding` meanwhile.
+- **The email address changes only when a 6-digit code comes back.** The code goes to
+  the new address; the old one is told afterwards. Addresses are unique regardless of
+  case (`users_email_key` on `lower(email)`).
+- **The bootstrap admin** comes from `ADMIN_USERNAME` / `ADMIN_INITIAL_PASSWORD`
+  (and optionally `ADMIN_EMAIL`). It is created at startup only while no admin exists,
+  never overwrites a user, and must replace the password inside the wizard.
+- **Invitations**: an admin enters a username and an address; the user row is created
+  without a password, and a one-time link (7 days by default) leads to settings and a
+  password, then a signed-in session. Clicking the link verifies the address.
+- **Registration mode** (admin): `closed` (invitations only, the default), `request`
+  (a public form files an access request; approving it sends the invitation) or `open`
+  (a mailed link; the user row is created only when it is clicked, so an unverified
+  sign-up reserves nothing and creates nobody).
+- **CLI-created users** (`rigel-ledger-cli create-user`) walk the wizard too.
+
+### System settings and mail
+
+- One `system_settings` row, edited on the Administration page: registration mode,
+  two-factor switches, defaults for new users, session and invitation lifetimes, and
+  the sign-in limits. `SESSION_TTL` is the fallback while the row leaves it empty.
+- **SMTP is configured on the Administration page.** The password is sealed with
+  AES-256-GCM under `APP_ENCRYPTION_KEY` (SOPS), never returned by the API, and kept
+  out of `audit_log`. `SMTP_*` / `MAIL_*` environment variables seed the row on the first
+  start only.
+- Mail templates are server-side (`internal/mail/templates/{en,zh,es}`): the one
+  exception to "UI text lives in the frontend i18n".
+
+### Throttling and audit
+
+- `auth_events` is both the security audit (sign-ins, failures, codes, invitations,
+  admin changes) and the throttle's source, so limits survive restarts and rollouts.
+- Failed sign-ins inside a window (15 min) are counted per (username, address) (5),
+  per address (20) and per username (20). Past a limit the answer is
+  `429 too_many_attempts` with `Retry-After`, the same for unknown usernames. The same
+  throttle covers codes, invitation links and anonymous sign-ups and requests.
+- **The client address** is the rightmost `X-Forwarded-For` entry not in
+  `TRUSTED_PROXIES` (the pod network by default). Cloudflare's ranges join that list if
+  it ever fronts the app.
+- Users see their own sessions (and sign any out) and their sign-in history; admins
+  see everyone's.
+
+### Two-factor sign-in (P2.5b, next)
+
+- Enforced by `system_settings.mfa_required` (on by default, stored now, applied then).
+- Methods, any of which a user may enable: **email codes**, **TOTP** (secrets sealed
+  like the SMTP password) and **passkeys** (WebAuthn, RP = `APP_ORIGIN`), plus
+  one-time recovery codes. A password-only session is `aal 1` and reaches only
+  enrolment until a factor exists.
+- Before going public: exempt addresses with a recent success from the username-wide
+  lockout, so a stranger cannot lock the owner out.
+
 ## Deployment
 
 hcloud keeps every chart local under `k3s/helm/`. It has no OCI chart registry and
@@ -712,7 +778,8 @@ builds images.
 | Phase | Scope |
 |---|---|
 | P1 | ~~Schema reset, sessions, sqlc; books, accounts, multi-currency transactions API and UI; the "All accounts" balances page; the user Settings page~~ (done) |
-| P2 | ~~Dockerfile, Gitea/GitHub CI and release~~ (done); ~~probes (`/livez`, `/readyz`) and the hcloud chart `k3s/helm/rigel-ledger` (tailnet-only ipAllowList, own Postgres role, in the nightly backup)~~ (written, hcloud #90); first release `v0.1.0`, deploy, and start daily entry |
+| P2 | ~~Dockerfile, Gitea/GitHub CI and release; probes and the hcloud chart (tailnet-only ipAllowList, own Postgres role, nightly backup); release `v0.1.0` and deploy~~ (done, 2026-09-24) |
+| P2.5 | **Accounts and sign-in security.** a: first-login wizard, verified email, invitations, registration modes, bootstrap admin, the Administration page (users, requests, sign-in rules, defaults, SMTP), throttling and the sign-in audit, sessions (migration `000002`). b: two-factor sign-in -- email codes, TOTP, passkeys, recovery codes, enforcement (`000003`). Both before any public exposure |
 | P3 | Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency), book rebase, the three statements bound to closing rates with `rates_used`, display-currency translation, tag (trip) report |
 | P4 | **Sync and review**: import API with `import_rows` kinds, `source_accounts`, review queue, rules, matching (pending/posted, transfers, invoices, order emails), assertions, challenges; receipt attachments (upload, camera, optional local OCR); the tw-sync runner (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
 | P5 | Securities and futures: py-sync (Shioaji daily, Firstrade), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, 永豐 deposits, Banco Continental (if its export is not enough). Recurring list and subscription templates. (Points, average cost and the security commodity itself are done.) |

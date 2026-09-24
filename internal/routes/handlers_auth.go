@@ -30,6 +30,7 @@ type loginResponse struct {
 //	@Param		body	body		loginRequest	true	"credentials"
 //	@Success	200		{object}	loginResponse
 //	@Failure	401		{object}	response.ErrorBody
+//	@Failure	429		{object}	response.ErrorBody	"too many failures; see Retry-After"
 //	@Router		/api/auth/login [post]
 func (h *handlers) login(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
@@ -41,7 +42,7 @@ func (h *handlers) login(w http.ResponseWriter, r *http.Request) {
 	if req.Client == "api" {
 		kind = "api"
 	}
-	u, token, err := h.auth.Login(r.Context(), req.Username, req.Password, kind, r.UserAgent())
+	u, token, err := h.auth.Login(r.Context(), req.Username, req.Password, kind, clientOf(r))
 	if errors.Is(err, auth.ErrInvalidCredentials) {
 		response.Error(w, http.StatusUnauthorized, "invalid_credentials", err.Error(), nil)
 		return
@@ -54,7 +55,7 @@ func (h *handlers) login(w http.ResponseWriter, r *http.Request) {
 	if kind == "api" {
 		resp.Token = token
 	} else {
-		h.auth.SetCookie(w, token)
+		h.auth.SetCookie(r.Context(), w, token)
 	}
 	response.JSON(w, http.StatusOK, resp)
 }
@@ -84,7 +85,9 @@ func (h *handlers) logout(w http.ResponseWriter, r *http.Request) {
 //	@Router		/api/me [get]
 func (h *handlers) me(w http.ResponseWriter, r *http.Request) {
 	id, _ := auth.FromContext(r.Context())
-	response.JSON(w, http.StatusOK, userDTO(id.User))
+	out := userDTO(id.User)
+	out.PendingEmail = h.identity.PendingEmail(r.Context(), id.User)
+	response.JSON(w, http.StatusOK, out)
 }
 
 type settingsRequest struct {

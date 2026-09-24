@@ -15,6 +15,472 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/admin/access-requests": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Requests for an account (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "pending, approved or rejected",
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/routes.AccessRequestDTO"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/access-requests/{requestID}/approve": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Approve a request: the person is invited (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "request id",
+                        "name": "requestID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/admin/access-requests/{requestID}/reject": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Reject a request (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "request id",
+                        "name": "requestID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/admin/events": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Recent sign-in and security events of everyone (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "at most 500",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/routes.AuthEventDTO"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/invitations": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Invite a user by username and email (admin)",
+                "parameters": [
+                    {
+                        "description": "who",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.inviteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/routes.AdminUserDTO"
+                        }
+                    },
+                    "409": {
+                        "description": "taken, or mail_failed (the invitation is saved; resend it)",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/invitations/{userID}": {
+            "delete": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Withdraw an invitation that was not accepted; deletes that user (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "invited user id",
+                        "name": "userID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/admin/invitations/{userID}/resend": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Mail a fresh invitation link; the old one stops working (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "invited user id",
+                        "name": "userID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/admin/mail": {
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Outgoing mail settings (admin); the password is stored sealed and never returned",
+                "parameters": [
+                    {
+                        "description": "mail",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.adminMailRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.AdminSettingsDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/mail/test": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Send a test email to yourself (admin)",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "409": {
+                        "description": "mail_failed or mail_disabled",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/settings": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "System settings (admin)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.AdminSettingsDTO"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Replace registration, security and default settings (admin)",
+                "parameters": [
+                    {
+                        "description": "every field",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.adminSettingsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.AdminSettingsDTO"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/users": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Every user (admin)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/routes.AdminUserDTO"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/users/{userID}": {
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Activate, deactivate, promote or demote another user (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "user id",
+                        "name": "userID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "changes",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.adminUserRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.AdminUserDTO"
+                        }
+                    },
+                    "409": {
+                        "description": "last_admin",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/config": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "What the signed-out pages may offer",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.AuthConfigDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/invite/{token}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "The invitation behind a link",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "token from the link",
+                        "name": "token",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.InvitationDTO"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Accept an invitation: settings and password, then signed in",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "token from the link",
+                        "name": "token",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "profile and password",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.acceptInviteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.signedInResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/api/auth/login": {
             "post": {
                 "consumes": [
@@ -50,6 +516,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.ErrorBody"
                         }
+                    },
+                    "429": {
+                        "description": "too many failures; see Retry-After",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
                     }
                 }
             }
@@ -63,6 +535,111 @@ const docTemplate = `{
                 "responses": {
                     "204": {
                         "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/auth/register": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Sign up (registration = open); a confirmation link is mailed",
+                "parameters": [
+                    {
+                        "description": "sign-up",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.registerRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted"
+                    },
+                    "403": {
+                        "description": "registration_closed",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/request-access": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Ask the administrators for an account (registration = request)",
+                "parameters": [
+                    {
+                        "description": "request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.accessRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted"
+                    }
+                }
+            }
+        },
+        "/api/auth/verify-link": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Confirm a sign-up link: creates the user and signs them in",
+                "parameters": [
+                    {
+                        "description": "the token from the link",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.tokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.signedInResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
                     }
                 }
             }
@@ -1138,7 +1715,7 @@ const docTemplate = `{
                 "tags": [
                     "me"
                 ],
-                "summary": "Change username and email (needs the current password)",
+                "summary": "Change the username (needs the current password); email changes go through /api/me/email",
                 "parameters": [
                     {
                         "description": "identity",
@@ -1158,9 +1735,162 @@ const docTemplate = `{
                         }
                     },
                     "409": {
-                        "description": "username or email taken",
+                        "description": "username taken",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/email": {
+            "post": {
+                "description": "After the first-login wizard the current password is required. The address changes only when the code is confirmed.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "Mail a 6-digit code to verify the current or a new address",
+                "parameters": [
+                    {
+                        "description": "address",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.startEmailRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "409": {
+                        "description": "email taken, already_verified, mail_failed",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/email/confirm": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "Confirm the emailed code; the address becomes verified (and current)",
+                "parameters": [
+                    {
+                        "description": "code",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.codeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.UserDTO"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/email/pending": {
+            "delete": {
+                "tags": [
+                    "me"
+                ],
+                "summary": "Drop a pending address change",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/me/events": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "Recent sign-in and security events of the signed-in user",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/routes.AuthEventDTO"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/onboarding": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "Finish the first-login wizard (needs a verified address)",
+                "parameters": [
+                    {
+                        "description": "profile",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.onboardingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.UserDTO"
                         }
                     },
                     "422": {
@@ -1201,6 +1931,50 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.ErrorBody"
                         }
+                    }
+                }
+            }
+        },
+        "/api/me/sessions": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "The signed-in user's open sessions",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/routes.SessionDTO"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/sessions/{sessionID}": {
+            "delete": {
+                "tags": [
+                    "me"
+                ],
+                "summary": "Sign out one of your sessions",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "session id",
+                        "name": "sessionID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
                     }
                 }
             }
@@ -1340,6 +2114,35 @@ const docTemplate = `{
                 }
             }
         },
+        "routes.AccessRequestDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "decided_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "ip": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "routes.AccountBalanceDTO": {
             "type": "object",
             "properties": {
@@ -1403,6 +2206,171 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "template_key": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.AdminSettingsDTO": {
+            "type": "object",
+            "properties": {
+                "default_date_format": {
+                    "type": "string"
+                },
+                "default_display_currency": {
+                    "type": "string"
+                },
+                "default_language": {
+                    "type": "string"
+                },
+                "default_theme": {
+                    "type": "string"
+                },
+                "default_timezone": {
+                    "type": "string"
+                },
+                "invite_ttl_seconds": {
+                    "type": "integer"
+                },
+                "login_ip_max_failures": {
+                    "type": "integer"
+                },
+                "login_max_failures": {
+                    "type": "integer"
+                },
+                "login_user_max_failures": {
+                    "type": "integer"
+                },
+                "login_window_seconds": {
+                    "type": "integer"
+                },
+                "mail_configured": {
+                    "type": "boolean"
+                },
+                "mail_driver": {
+                    "type": "string"
+                },
+                "mail_from": {
+                    "type": "string"
+                },
+                "mail_from_name": {
+                    "type": "string"
+                },
+                "mfa_methods": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "mfa_required": {
+                    "type": "boolean"
+                },
+                "registration": {
+                    "type": "string"
+                },
+                "session_ttl_seconds": {
+                    "description": "null: SESSION_TTL from the environment.",
+                    "type": "integer"
+                },
+                "smtp_host": {
+                    "type": "string"
+                },
+                "smtp_password_set": {
+                    "type": "boolean"
+                },
+                "smtp_port": {
+                    "type": "integer"
+                },
+                "smtp_security": {
+                    "type": "string"
+                },
+                "smtp_user": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.AdminUserDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "email_verified": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "initialized": {
+                    "type": "boolean"
+                },
+                "invite_pending": {
+                    "type": "boolean"
+                },
+                "invited": {
+                    "description": "has not accepted yet",
+                    "type": "boolean"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "is_admin": {
+                    "type": "boolean"
+                },
+                "last_login_at": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.AuthConfigDTO": {
+            "type": "object",
+            "properties": {
+                "registration": {
+                    "description": "closed: invitations only; request: /request-access; open: /register.",
+                    "type": "string"
+                }
+            }
+        },
+        "routes.AuthEventDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "detail": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "event": {
+                    "type": "string"
+                },
+                "failure": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "ip": {
+                    "type": "string"
+                },
+                "user_agent": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "username": {
                     "type": "string"
                 }
             }
@@ -1519,6 +2487,35 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.InvitationDTO": {
+            "type": "object",
+            "properties": {
+                "date_format": {
+                    "type": "string"
+                },
+                "display_currency": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "language": {
+                    "type": "string"
+                },
+                "theme": {
+                    "type": "string"
+                },
+                "timezone": {
+                    "type": "string"
+                },
+                "username": {
                     "type": "string"
                 }
             }
@@ -1645,6 +2642,35 @@ const docTemplate = `{
                 }
             }
         },
+        "routes.SessionDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "current": {
+                    "type": "boolean"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "ip": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "last_used_at": {
+                    "type": "string"
+                },
+                "user_agent": {
+                    "type": "string"
+                }
+            }
+        },
         "routes.TransactionDTO": {
             "type": "object",
             "properties": {
@@ -1743,8 +2769,15 @@ const docTemplate = `{
                 "email": {
                     "type": "string"
                 },
+                "email_verified": {
+                    "type": "boolean"
+                },
                 "id": {
                     "type": "integer"
+                },
+                "initialized": {
+                    "description": "False until the first-login wizard is done; most of the API answers\n403 onboarding_required meanwhile.",
+                    "type": "boolean"
                 },
                 "is_admin": {
                     "type": "boolean"
@@ -1752,10 +2785,60 @@ const docTemplate = `{
                 "language": {
                     "type": "string"
                 },
+                "password_must_change": {
+                    "type": "boolean"
+                },
+                "pending_email": {
+                    "description": "An address a verification code was sent to and not yet confirmed\n(only on GET /api/me).",
+                    "type": "string"
+                },
                 "theme": {
                     "type": "string"
                 },
                 "timezone": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.acceptInviteRequest": {
+            "type": "object",
+            "properties": {
+                "date_format": {
+                    "type": "string"
+                },
+                "display_currency": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "language": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "theme": {
+                    "type": "string"
+                },
+                "timezone": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.accessRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "message": {
                     "type": "string"
                 },
                 "username": {
@@ -1774,11 +2857,113 @@ const docTemplate = `{
                 }
             }
         },
+        "routes.adminMailRequest": {
+            "type": "object",
+            "properties": {
+                "clear_smtp_password": {
+                    "type": "boolean"
+                },
+                "mail_driver": {
+                    "type": "string"
+                },
+                "mail_from": {
+                    "type": "string"
+                },
+                "mail_from_name": {
+                    "type": "string"
+                },
+                "smtp_host": {
+                    "type": "string"
+                },
+                "smtp_password": {
+                    "description": "Empty or absent keeps the stored password.",
+                    "type": "string"
+                },
+                "smtp_port": {
+                    "type": "integer"
+                },
+                "smtp_security": {
+                    "type": "string"
+                },
+                "smtp_user": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.adminSettingsRequest": {
+            "type": "object",
+            "properties": {
+                "default_date_format": {
+                    "type": "string"
+                },
+                "default_display_currency": {
+                    "type": "string"
+                },
+                "default_language": {
+                    "type": "string"
+                },
+                "default_theme": {
+                    "type": "string"
+                },
+                "default_timezone": {
+                    "type": "string"
+                },
+                "invite_ttl_seconds": {
+                    "type": "integer"
+                },
+                "login_ip_max_failures": {
+                    "type": "integer"
+                },
+                "login_max_failures": {
+                    "type": "integer"
+                },
+                "login_user_max_failures": {
+                    "type": "integer"
+                },
+                "login_window_seconds": {
+                    "type": "integer"
+                },
+                "mfa_methods": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "mfa_required": {
+                    "type": "boolean"
+                },
+                "registration": {
+                    "type": "string"
+                },
+                "session_ttl_seconds": {
+                    "type": "integer"
+                }
+            }
+        },
+        "routes.adminUserRequest": {
+            "type": "object",
+            "properties": {
+                "is_active": {
+                    "type": "boolean"
+                },
+                "is_admin": {
+                    "type": "boolean"
+                }
+            }
+        },
         "routes.archiveRequest": {
             "type": "object",
             "properties": {
                 "archived": {
                     "type": "boolean"
+                }
+            }
+        },
+        "routes.codeRequest": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
                 }
             }
         },
@@ -1860,6 +3045,14 @@ const docTemplate = `{
                 "current_password": {
                     "type": "string"
                 },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.inviteRequest": {
+            "type": "object",
+            "properties": {
                 "email": {
                     "type": "string"
                 },
@@ -1891,6 +3084,36 @@ const docTemplate = `{
                 },
                 "user": {
                     "$ref": "#/definitions/routes.UserDTO"
+                }
+            }
+        },
+        "routes.onboardingRequest": {
+            "type": "object",
+            "properties": {
+                "date_format": {
+                    "type": "string"
+                },
+                "display_currency": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "language": {
+                    "type": "string"
+                },
+                "new_password": {
+                    "description": "Required when password_must_change (a bootstrap admin).",
+                    "type": "string"
+                },
+                "theme": {
+                    "type": "string"
+                },
+                "timezone": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
                 }
             }
         },
@@ -1938,6 +3161,23 @@ const docTemplate = `{
                 }
             }
         },
+        "routes.registerRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "language": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "routes.roleRequest": {
             "type": "object",
             "properties": {
@@ -1968,6 +3208,33 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "timezone": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.signedInResponse": {
+            "type": "object",
+            "properties": {
+                "user": {
+                    "$ref": "#/definitions/routes.UserDTO"
+                }
+            }
+        },
+        "routes.startEmailRequest": {
+            "type": "object",
+            "properties": {
+                "current_password": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.tokenRequest": {
+            "type": "object",
+            "properties": {
+                "token": {
                     "type": "string"
                 }
             }

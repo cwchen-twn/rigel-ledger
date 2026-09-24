@@ -1,5 +1,5 @@
 import { A, useLocation, useNavigate } from '@solidjs/router';
-import { BookOpen, ChevronsUpDown, LayoutDashboard, List, LogOut, Menu, Plus, Settings, SlidersHorizontal, Wallet } from 'lucide-solid';
+import { BookOpen, ChevronsUpDown, LayoutDashboard, List, LogOut, Menu, Plus, Settings, Shield, SlidersHorizontal, Wallet } from 'lucide-solid';
 import { createResource, createSignal, Show, type JSX, type ParentComponent } from 'solid-js';
 import { api } from '~/api/client';
 import { DropdownMenu, type MenuItem } from '~/components/ui/dropdown-menu';
@@ -91,6 +91,9 @@ export const AppShell: ParentComponent<{ bookId: number | null }> = (props) => {
       </Show>
 
       <div class="mt-auto grid gap-0.5 border-t pt-3">
+        <Show when={user()?.is_admin}>
+          <NavLink href="/admin" icon={<Shield />} label={t('nav.admin')} onClick={close} />
+        </Show>
         <NavLink href="/settings" icon={<Settings />} label={t('nav.settings')} onClick={close} />
         <button
           type="button"

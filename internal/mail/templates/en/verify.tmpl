@@ -1,0 +1,8 @@
+{{define "subject"}}Your {{.AppName}} verification code{{end}}
+{{define "body"}}
+Hi {{.Name}},
+
+Enter this code in {{.AppName}} to verify {{.Email}}. It expires in {{.Expires}}.
+
+If you did not ask for it, someone may know your password: change it.
+{{end}}

@@ -7,6 +7,7 @@ package db
 import (
 	"database/sql/driver"
 	"fmt"
+	"net/netip"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -281,6 +282,18 @@ func (e PostingStatus) Valid() bool {
 	return false
 }
 
+type AccessRequest struct {
+	ID        int64
+	Username  string
+	Email     string
+	Message   string
+	Ip        *netip.Addr
+	Status    string
+	DecidedBy *int64
+	DecidedAt *time.Time
+	CreatedAt time.Time
+}
+
 type Account struct {
 	ID            int64
 	BookID        int64
@@ -311,6 +324,18 @@ type AuditLog struct {
 	ChangedAt time.Time
 }
 
+type AuthEvent struct {
+	ID        int64
+	Username  string
+	UserID    *int64
+	Ip        *netip.Addr
+	UserAgent string
+	Event     string
+	Failure   bool
+	Detail    []byte
+	CreatedAt time.Time
+}
+
 type Book struct {
 	ID                      int64
 	Name                    string
@@ -337,6 +362,21 @@ type Commodity struct {
 	QuoteCurrency *string
 	ExchangeMic   *string
 	ContractSize  decimal.NullDecimal
+}
+
+type EmailToken struct {
+	ID        int64
+	UserID    *int64
+	Kind      string
+	Email     string
+	TokenHash []byte
+	CodeHash  []byte
+	Payload   []byte
+	Attempts  int32
+	ExpiresAt time.Time
+	UsedAt    *time.Time
+	CreatedBy *int64
+	CreatedAt time.Time
 }
 
 type Posting struct {
@@ -374,6 +414,36 @@ type Session struct {
 	CreatedAt  time.Time
 	LastUsedAt time.Time
 	ExpiresAt  time.Time
+	Ip         *netip.Addr
+}
+
+type SystemSetting struct {
+	ID                     bool
+	Registration           string
+	MfaRequired            bool
+	MfaMethods             []string
+	DefaultLanguage        string
+	DefaultDisplayCurrency string
+	DefaultTimezone        string
+	DefaultDateFormat      string
+	DefaultTheme           string
+	SessionTtlSeconds      *int64
+	InviteTtlSeconds       int64
+	LoginMaxFailures       int32
+	LoginIpMaxFailures     int32
+	LoginUserMaxFailures   int32
+	LoginWindowSeconds     int64
+	MailConfigured         bool
+	MailDriver             string
+	SmtpHost               string
+	SmtpPort               int32
+	SmtpSecurity           string
+	SmtpUser               string
+	SmtpPassEnc            []byte
+	MailFrom               string
+	MailFromName           string
+	UpdatedBy              *int64
+	UpdatedAt              time.Time
 }
 
 type Tag struct {
@@ -402,20 +472,24 @@ type TransactionTag struct {
 }
 
 type User struct {
-	ID              int64
-	Username        string
-	Email           string
-	PasswordHash    string
-	DisplayName     string
-	IsAdmin         bool
-	IsActive        bool
-	Language        string
-	DisplayCurrency string
-	Timezone        string
-	DateFormat      string
-	Theme           string
-	DefaultBookID   *int64
-	LastLoginAt     *time.Time
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID                 int64
+	Username           string
+	Email              string
+	PasswordHash       string
+	DisplayName        string
+	IsAdmin            bool
+	IsActive           bool
+	Language           string
+	DisplayCurrency    string
+	Timezone           string
+	DateFormat         string
+	Theme              string
+	DefaultBookID      *int64
+	LastLoginAt        *time.Time
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	EmailVerifiedAt    *time.Time
+	InitializedAt      *time.Time
+	PasswordMustChange bool
+	InvitedBy          *int64
 }

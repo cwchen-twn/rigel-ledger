@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-RigelLedger is a personal and family finance web application built with Go (backend) and SolidJS (frontend): double-entry bookkeeping, multi-currency, IFRS-flavoured reports, statement imports and stock investments. It has never been deployed, so schema and design may change freely.
+RigelLedger is a personal and family finance web application built with Go (backend) and SolidJS (frontend): double-entry bookkeeping, multi-currency, IFRS-flavoured reports, statement imports and stock investments. It is deployed (ledger.chenantunez.com, tailnet-only), so **applied migrations are frozen**: schema changes are new migration pairs.
 
-**Read `docs/ARCHITECTURE.md` before designing anything.** It is the accepted target design and the roadmap P1-P6; P1 (schema, sqlc, sessions, the book-scoped API and the SolidJS UI) is implemented.
+**Read `docs/ARCHITECTURE.md` before designing anything.** It is the accepted target design and the roadmap P1-P7; P1 and P2 are done, and P2.5a (accounts, administration, throttling) is implemented; P2.5b (two-factor sign-in) is next.
 
 ## Common Commands
 
@@ -28,13 +28,14 @@ make test/cover        # HTML coverage report
 # Database
 make sqlc              # Regenerate internal/db after touching migrations/ or internal/db/queries/
 make db/reset          # Drop the dev database's tables and re-migrate (destroys local data)
-make migrations/new name=<name>   # New migration pair (only after the first deploy)
+make migrations/new name=<name>   # New migration pair: the only way to change the schema now
 
 # Docs
 make swag              # Regenerate Swagger/OpenAPI docs (writes to api/)
 
 # Admin CLI (also shipped in the image as rigel-ledger-cli)
-go run ./cmd/cli create-user -u alice -e alice@example.com   # password read from stdin
+go run ./cmd/cli create-user -u alice -e alice@example.com   # password read from stdin; walks the wizard at first sign-in
+go run ./cmd/cli set-admin -u alice                          # promote (the Administration page needs an admin)
 ```
 
 To run a single test: `go test -run TestName ./internal/ledger/` (with `TEST_DATABASE_URL` set, e.g. from `.env`).
@@ -47,13 +48,17 @@ To run a single test: `go test -run TestName ./internal/ledger/` (with `TEST_DAT
 cmd/rigel-ledger/   # HTTP server entry point
 cmd/cli/            # Admin CLI: create-user, reset-password, set-admin
 internal/
-  application.go    # Bootstrap: config -> migrate -> pgx pool -> router; session sweeper
+  application.go    # Bootstrap: config -> migrate -> pgx pool -> mail seed, bootstrap admin -> router; sweeper
   config.go         # caarlos0/env config; .env fills only what the environment leaves unset
   db/               # sqlc-generated queries (DO NOT EDIT *.sql.go, models.go, db.go),
                     #   queries/*.sql, store.go (pool, WithTx, Migrate)
   dbtest/           # Throwaway migrated database per test
-  ledger/           # Bookkeeping rules: books, accounts, transactions, balances, rates, users
-  auth/             # Opaque session tokens (cookie or Bearer), CSRF header check
+  ledger/           # Bookkeeping rules: books, accounts, transactions, balances, rates, preferences
+  identity/         # Who may use the app: system settings, mail, bootstrap admin, invitations,
+                    #   registration, email verification, the first-login wizard, admin users
+  auth/             # Opaque session tokens, CSRF header, client IP, sign-in throttle + auth_events
+  mail/             # SMTP/log senders and the embedded mail templates (en, zh, es)
+  secretbox/        # AES-256-GCM sealing of secrets the DB holds (APP_ENCRYPTION_KEY)
   routes/           # chi router, handlers, JSON DTOs
   response/         # JSON helpers and the SPA shell template
 web/
@@ -61,17 +66,17 @@ web/
   src/              # SolidJS app
   static/           # Vite build output (static/dist/, gitignored) and icons
   templates/        # Thin Go html/template shell -- renders <div id="app"> only
-migrations/         # golang-migrate SQL, embedded; 000001_init is the whole schema
+migrations/         # golang-migrate SQL, embedded; 000001_init, then one pair per change (frozen once applied)
 docs/               # ARCHITECTURE.md -- target design and roadmap
 api/                # Generated Swagger output (do not edit manually)
 ```
 
 ### Request Flow
 
-1. `internal/routes/router.go`: `auth.Authenticate` resolves the session from the `rigel_session` cookie or an `Authorization: Bearer` token on every request.
-2. `/api/*` routes behind `auth.RequireUser` return 401 when anonymous and 403 `csrf` when a cookie-authenticated POST/PUT/PATCH/DELETE lacks `X-Rigel-Client`.
+1. `internal/routes/router.go`: `auth.ResolveClientIP` (rightmost untrusted `X-Forwarded-For`, see `TRUSTED_PROXIES`), then `auth.Authenticate` resolves the session from the `rigel_session` cookie or an `Authorization: Bearer` token on every request.
+2. `/api/*` routes behind `auth.RequireUser` return 401 when anonymous and 403 `csrf` when a cookie-authenticated POST/PUT/PATCH/DELETE lacks `X-Rigel-Client`. Behind `auth.RequireInitialized`, a user who has not finished the first-login wizard gets 403 `onboarding_required` (only `/api/me`, logout, `/api/me/email*` and `/api/me/onboarding` are open to them). `/api/admin/*` is behind `auth.RequireAdmin` (404 for non-admins).
 3. `/api/books/{bookID}/*` goes through `bookAccess`, which loads the caller's membership (`ledger.Access`); a non-member gets 404, never 403.
-4. Handlers decode DTOs, call `ledger.Service`, and map `*ledger.Error` to 404/403/409/422 with `{"error":{"code","message","fields"}}`.
+4. Handlers decode DTOs, call `ledger.Service` or `identity.Service`, and map `*ledger.Error` to 404/403/409/422 and `*auth.ThrottledError` to 429 (+ `Retry-After`), with `{"error":{"code","message","fields"}}`.
 5. `/livez` (process up, never touches the DB) and `/readyz` (pings the DB, 503 when down) are the kubelet probes.
 6. Every other GET renders the SPA shell with the user's language and theme and a CSP nonce.
 
@@ -95,12 +100,13 @@ api/         client.ts (fetch + X-Rigel-Client + ApiError), types.ts (mirrors ro
 stores/      session (me, currencies, live language/theme), book (book, accounts, names, paths, roles)
 components/  ui/ -- shadcn-style kit (tokens only, cva variants, Kobalte where a11y is hard)
              AppShell, AccountCombobox, Money/MoneyInput, TransactionSheet (simple + split entry)
-pages/       Login, Onboarding, Overview (balances), Transactions, Accounts, BookSettings, UserSettings
+pages/       Login, Register, RequestAccess, Invite, VerifyLink, Welcome (wizard), Onboarding (new book),
+             Overview (balances), Transactions, Accounts, BookSettings, UserSettings, admin/ (tabs)
 i18n/        en.json, zh.json (Traditional), es.json -- same keys; account names under account.template.*
 lib/         money.ts (decimal strings via js-big-decimal), dates.ts, cn.ts
 ```
 
-Routes: `/login`, `/onboarding`, `/settings`, `/b/:bookId/{,transactions,accounts,settings}`; `/` redirects to the default book.
+Routes: signed out `/login`, `/register`, `/request-access`, `/invite/:token`, `/verify?token=`; `/welcome` (first-login wizard); `/onboarding` (new book), `/settings`, `/admin/:tab`, `/b/:bookId/{,transactions,accounts,settings}`; `/` redirects to the default book.
 
 ## Configuration
 
@@ -114,6 +120,11 @@ Copy `.env.example` to `.env`. Real environment variables always win over `.env`
 | `DATABASE_URL` | Full postgres URL; wins over the `PG_*` parts (hcloud sets this) |
 | `PG_HOST/PORT/USER/PASS/APP_DBNAME` | PostgreSQL connection parts |
 | `TEST_DATABASE_URL` | Server where tests may create/drop databases; `REQUIRE_DB_TESTS=1` makes a missing one fatal |
+| `APP_ORIGIN` | Public base URL that mail links point at (`https://ledger.chenantunez.com`); development defaults to `http://localhost:<port>` |
+| `APP_ENCRYPTION_KEY` | 32 bytes base64 (`openssl rand -base64 32`); seals the SMTP password (and TOTP seeds). Required in production; development uses a public dev key |
+| `TRUSTED_PROXIES` | CIDRs whose `X-Forwarded-For` is believed (default pod network + loopback) |
+| `ADMIN_USERNAME` / `ADMIN_INITIAL_PASSWORD` / `ADMIN_EMAIL` | Bootstrap admin, created only while no admin exists; must change the password in the wizard |
+| `MAIL_DRIVER`, `SMTP_HOST/PORT/SECURITY/USER/PASS`, `MAIL_FROM(_NAME)` | Seed the mail settings on the first start only; afterwards the Administration page owns them. `MAIL_DRIVER=log` prints mails (links, codes) to the log |
 
 ## Build Tags
 
@@ -128,7 +139,8 @@ Copy `.env.example` to `.env`. Real environment variables always win over `.env`
 - Every write goes through `db.Store.WithTx(ctx, userID, ...)`, which sets `app.current_user` for the audit trigger. Pass 0 only for CLI/system changes.
 - Schema or query change: follow the `db-change` skill (`.claude/skills/db-change/SKILL.md`) -- edit `000001_init` in place until the first deploy, run `make sqlc`, add a DB test for any trigger.
 - Money: `NUMERIC` in Postgres, `shopspring/decimal` in Go, strings in JSON -- never floats anywhere. Dates are `YYYY-MM-DD` (`routes.Date`).
-- UI text, including account names, lives in the frontend i18n files keyed by stable codes; the database stores no translations. API error codes are translated as `error.<code>`, per-field codes as `field.<code>`.
+- UI text, including account names, lives in the frontend i18n files keyed by stable codes; the database stores no translations. API error codes are translated as `error.<code>`, per-field codes as `field.<code>`, sign-in events as `event.<name>`. The one server-side exception is mail: `internal/mail/templates/{en,zh,es}/*.tmpl`, one file per message per language.
+- Sign-in and account flows go through `identity.Service`, which records every outcome in `auth_events` (also the throttle's source). New anonymous or code-checking endpoints call `auth.Manager.Check` first and record failures with `Failure: true`.
 - Sync and imports: design in `docs/ARCHITECTURE.md` ("Data sources and sync"). Taiwan bank, card, 集保 and e-invoice connectors come from [all-set-tw](https://github.com/TedLin1993/all-set-tw) (MIT) via a Node runner; Shioaji and Firstrade via a Python runner. Institution credentials live only in the runners' SOPS secrets, never in the database.
 - Deployment target: the Helm chart lives in the hcloud repo (`k3s/helm/rigel-ledger/`); this repo only builds the image. See `docs/ARCHITECTURE.md#deployment`.
 

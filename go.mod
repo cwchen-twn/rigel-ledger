@@ -13,6 +13,7 @@ require (
 	github.com/spf13/pflag v1.0.10
 	github.com/swaggo/http-swagger/v2 v2.0.2
 	github.com/swaggo/swag v1.16.6
+	github.com/wneessen/go-mail v0.8.1
 	golang.org/x/crypto v0.57.0
 )
 

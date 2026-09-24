@@ -2,7 +2,6 @@ package ledger
 
 import (
 	"context"
-	"errors"
 	"regexp"
 	"strings"
 	"time"
@@ -29,23 +28,47 @@ var (
 	themes      = map[string]bool{"system": true, "light": true, "dark": true}
 )
 
+// Preferences are the per-user display choices; the admin's defaults for
+// new users are the same five.
+type Preferences struct {
+	Language        string
+	DisplayCurrency string
+	Timezone        string
+	DateFormat      string
+	Theme           string
+}
+
+// ValidatePreferences checks p, reporting fields as prefix+name (the admin
+// form uses "default_"). DisplayCurrency must already be upper case.
+func (s *Service) ValidatePreferences(ctx context.Context, p Preferences, prefix string) error {
+	switch {
+	case !languages[p.Language]:
+		return fieldError(prefix+"language", "invalid", "language must be en, zh or es")
+	case !dateFormats[p.DateFormat]:
+		return fieldError(prefix+"date_format", "invalid", "unsupported date format")
+	case !themes[p.Theme]:
+		return fieldError(prefix+"theme", "invalid", "theme must be system, light or dark")
+	}
+	if _, err := time.LoadLocation(p.Timezone); err != nil || p.Timezone == "" {
+		return fieldError(prefix+"timezone", "invalid", "unknown time zone %q", p.Timezone)
+	}
+	if err := s.validCurrency(ctx, p.DisplayCurrency); err != nil {
+		return fieldError(prefix+"display_currency", "unknown", "unknown currency %q", p.DisplayCurrency)
+	}
+	return nil
+}
+
 // UpdateSettings changes a user's preferences. None of them touches stored
-// amounts, so every one can change at any time.
+// amounts, so every one can change at any time: reports are computed per
+// request and translated into the display currency when they are drawn, so
+// a new display currency shows in every report on its next render.
 func (s *Service) UpdateSettings(ctx context.Context, userID int64, in UserSettings) (db.User, error) {
 	in.DisplayCurrency = strings.ToUpper(strings.TrimSpace(in.DisplayCurrency))
-	switch {
-	case !languages[in.Language]:
-		return db.User{}, fieldError("language", "invalid", "language must be en, zh or es")
-	case !dateFormats[in.DateFormat]:
-		return db.User{}, fieldError("date_format", "invalid", "unsupported date format")
-	case !themes[in.Theme]:
-		return db.User{}, fieldError("theme", "invalid", "theme must be system, light or dark")
-	}
-	if _, err := time.LoadLocation(in.Timezone); err != nil || in.Timezone == "" {
-		return db.User{}, fieldError("timezone", "invalid", "unknown time zone %q", in.Timezone)
-	}
-	if err := s.validCurrency(ctx, in.DisplayCurrency); err != nil {
-		return db.User{}, fieldError("display_currency", "unknown", "unknown currency %q", in.DisplayCurrency)
+	if err := s.ValidatePreferences(ctx, Preferences{
+		Language: in.Language, DisplayCurrency: in.DisplayCurrency, Timezone: in.Timezone,
+		DateFormat: in.DateFormat, Theme: in.Theme,
+	}, ""); err != nil {
+		return db.User{}, err
 	}
 	if in.DefaultBookID != nil {
 		if _, err := s.ResolveAccess(ctx, userID, *in.DefaultBookID); err != nil {
@@ -99,7 +122,8 @@ type NewUser struct {
 	IsAdmin         bool
 }
 
-// CreateUser is used by the CLI; there is no public sign-up.
+// CreateUser is the CLI's way to add a user directly. The user still walks
+// the first-login wizard (and verifies the address) at the first sign-in.
 func (s *Service) CreateUser(ctx context.Context, in NewUser) (db.User, error) {
 	in.Username = strings.ToLower(strings.TrimSpace(in.Username))
 	in.Email = strings.TrimSpace(in.Email)
@@ -249,33 +273,57 @@ func (s *Service) Rate(ctx context.Context, from, to string, on time.Time) (deci
 // Same rule as the users.username CHECK in the schema.
 var usernamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{1,49}$`)
 
-// UpdateIdentity changes the sign-in name and email. The current password is
-// required because the username is what the next login uses. Nothing refers
-// to a username (foreign keys use users.id), so a rename is safe.
-func (s *Service) UpdateIdentity(ctx context.Context, user db.User, currentPassword, username, email string) (db.User, error) {
+// NormalizeUsername lowercases and trims; ValidUsername applies the schema's rule.
+func NormalizeUsername(u string) string { return strings.ToLower(strings.TrimSpace(u)) }
+func ValidUsername(u string) bool       { return usernamePattern.MatchString(u) }
+
+// ValidEmail is deliberately loose: the verification mail is the real test.
+func ValidEmail(e string) bool {
+	at := strings.LastIndex(e, "@")
+	return at > 0 && at < len(e)-1 && !strings.ContainsAny(e, " \t\r\n<>,;")
+}
+
+const MinPasswordLength = minPasswordLength
+
+// UpdateUsername changes the sign-in name. The current password is required
+// because the username is what the next login uses. Nothing refers to a
+// username (foreign keys use users.id), so a rename is safe. The email
+// address changes through the identity package instead, because a new
+// address must be verified before it is used.
+func (s *Service) UpdateUsername(ctx context.Context, user db.User, currentPassword, username string) (db.User, error) {
 	if !auth.CheckPassword(user.PasswordHash, currentPassword) {
 		return db.User{}, fieldError("current_password", "wrong", "the current password is wrong")
 	}
-	username = strings.ToLower(strings.TrimSpace(username))
-	email = strings.TrimSpace(email)
-	if !usernamePattern.MatchString(username) {
+	return s.SetUsername(ctx, user.ID, username)
+}
+
+// SetUsername validates and stores a username, answering a clash as the
+// field error username: taken.
+func (s *Service) SetUsername(ctx context.Context, userID int64, username string) (db.User, error) {
+	username = NormalizeUsername(username)
+	if !ValidUsername(username) {
 		return db.User{}, fieldError("username", "invalid", "2-50 characters: a-z, 0-9, dot, dash, underscore")
 	}
-	if !strings.Contains(email, "@") || strings.ContainsAny(email, " \t") {
-		return db.User{}, fieldError("email", "invalid", "not an email address")
-	}
-	u, err := s.store.UpdateUserIdentity(ctx, db.UpdateUserIdentityParams{ID: user.ID, Username: username, Email: email})
+	taken, err := s.store.UsernameTaken(ctx, db.UsernameTakenParams{Username: username, ExceptID: userID})
 	if err != nil {
-		err = translate(err, "user")
-		var le *Error
-		if errors.As(err, &le) && le.Code == "duplicate" {
-			field := "username"
-			if strings.Contains(le.Message, "email") {
-				field = "email"
-			}
-			return db.User{}, &Error{Kind: KindConflict, Code: "duplicate", Message: le.Message, Fields: map[string]string{field: "taken"}}
+		return db.User{}, err
+	}
+	if taken {
+		return db.User{}, takenError("username")
+	}
+	u, err := s.store.SetUserUsername(ctx, db.SetUserUsernameParams{ID: userID, Username: username})
+	if err != nil {
+		if le, ok := translate(err, "user").(*Error); ok && le.Code == "duplicate" {
+			return db.User{}, takenError("username") // lost a race with another rename
 		}
 		return db.User{}, err
 	}
 	return u, nil
+}
+
+// TakenError is a conflict on a unique field: "username" or "email".
+func TakenError(field string) *Error { return takenError(field) }
+
+func takenError(field string) *Error {
+	return &Error{Kind: KindConflict, Code: "duplicate", Message: field + " already in use", Fields: map[string]string{field: "taken"}}
 }

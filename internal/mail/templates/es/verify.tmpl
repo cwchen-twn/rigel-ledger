@@ -1,0 +1,8 @@
+{{define "subject"}}Tu código de verificación de {{.AppName}}{{end}}
+{{define "body"}}
+Hola {{.Name}}:
+
+Ingresa este código en {{.AppName}} para verificar {{.Email}}. Vence en {{.Expires}}.
+
+Si no lo pediste, alguien podría conocer tu contraseña: cámbiala.
+{{end}}

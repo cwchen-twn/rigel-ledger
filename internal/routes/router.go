@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -15,20 +16,24 @@ import (
 	"github.com/go-chi/httplog/v3"
 
 	"github.com/cwchen-twn/rigel-ledger/internal/auth"
+	"github.com/cwchen-twn/rigel-ledger/internal/identity"
 	"github.com/cwchen-twn/rigel-ledger/internal/ledger"
 	"github.com/cwchen-twn/rigel-ledger/internal/response"
 )
 
 type Deps struct {
-	Service      *ledger.Service
-	Auth         *auth.Manager
-	Templates    *response.TemplateEngine
-	StaticFiles  fs.FS
-	Logger       *slog.Logger
-	AccessLogger *slog.Logger // nil disables request logging (tests)
-	LogLevel     slog.Level
-	AppURL       string
-	AppPort      int
+	Service  *ledger.Service
+	Identity *identity.Service
+	Auth     *auth.Manager
+	// TrustedProxies are the hops whose X-Forwarded-For is believed.
+	TrustedProxies []netip.Prefix
+	Templates      *response.TemplateEngine
+	StaticFiles    fs.FS
+	Logger         *slog.Logger
+	AccessLogger   *slog.Logger // nil disables request logging (tests)
+	LogLevel       slog.Level
+	AppURL         string
+	AppPort        int
 	// Ready reports whether the app can serve (the database answers). Nil
 	// means always ready -- tests that do not care.
 	Ready func(ctx context.Context) error
@@ -36,6 +41,7 @@ type Deps struct {
 
 type handlers struct {
 	svc       *ledger.Service
+	identity  *identity.Service
 	auth      *auth.Manager
 	templates *response.TemplateEngine
 	logger    *slog.Logger
@@ -47,7 +53,7 @@ type handlers struct {
 //	@version	1.0
 //	@description	Session cookie (browser) or Bearer token (scripts, mobile). Cookie-authenticated POST/PUT/PATCH/DELETE must send X-Rigel-Client.
 func New(d Deps) http.Handler {
-	h := &handlers{svc: d.Service, auth: d.Auth, templates: d.Templates, logger: d.Logger}
+	h := &handlers{svc: d.Service, identity: d.Identity, auth: d.Auth, templates: d.Templates, logger: d.Logger}
 	r := chi.NewRouter()
 
 	r.Use(middleware.Compress(6, "text/*", "application/*"))
@@ -60,6 +66,7 @@ func New(d Deps) http.Handler {
 	} else {
 		r.Use(middleware.Recoverer)
 	}
+	r.Use(auth.ResolveClientIP(d.TrustedProxies))
 	r.Use(d.Auth.Authenticate)
 
 	// Kubelet probes. Registered after every middleware because chi panics on
@@ -104,50 +111,85 @@ func New(d Deps) http.Handler {
 
 	r.Route("/api", func(r chi.Router) {
 		r.Post("/auth/login", h.login)
+		r.Get("/auth/config", h.authConfig)
+		r.Post("/auth/register", h.register)
+		r.Post("/auth/verify-link", h.verifyLink)
+		r.Post("/auth/request-access", h.requestAccess)
+		r.Get("/auth/invite/{token}", h.invitePreview)
+		r.Post("/auth/invite/{token}", h.acceptInvite)
 		r.Get("/currencies", h.currencies)
 		r.Get("/commodities", h.commodities)
 
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireUser(writeAuthError))
+			// Reachable before the first-login wizard is finished: it uses them.
 			r.Post("/auth/logout", h.logout)
 			r.Get("/me", h.me)
-			r.Patch("/me/settings", h.updateSettings)
-			r.Post("/me/password", h.changePassword)
-			r.Patch("/me/account", h.updateIdentity)
+			r.Post("/me/email", h.startEmail)
+			r.Post("/me/email/confirm", h.confirmEmail)
+			r.Delete("/me/email/pending", h.cancelEmail)
+			r.Post("/me/onboarding", h.onboarding)
 
-			r.Get("/books", h.listBooks)
-			r.Post("/books", h.createBook)
-			r.Route("/books/{bookID}", func(r chi.Router) {
-				r.Use(h.bookAccess)
-				r.Get("/", h.getBook)
-				r.Patch("/", h.updateBook)
+			r.Group(func(r chi.Router) {
+				r.Use(auth.RequireInitialized(writeAuthError))
+				r.Patch("/me/settings", h.updateSettings)
+				r.Post("/me/password", h.changePassword)
+				r.Patch("/me/account", h.updateIdentity)
+				r.Get("/me/sessions", h.listSessions)
+				r.Delete("/me/sessions/{sessionID}", h.revokeSession)
+				r.Get("/me/events", h.myEvents)
 
-				r.Get("/members", h.listMembers)
-				r.Post("/members", h.addMember)
-				r.Patch("/members/{userID}", h.updateMember)
-				r.Delete("/members/{userID}", h.removeMember)
+				r.Route("/admin", func(r chi.Router) {
+					r.Use(auth.RequireAdmin(writeAuthError))
+					r.Get("/settings", h.adminSettings)
+					r.Patch("/settings", h.updateAdminSettings)
+					r.Patch("/mail", h.updateAdminMail)
+					r.Post("/mail/test", h.testMail)
+					r.Get("/users", h.adminUsers)
+					r.Patch("/users/{userID}", h.adminUpdateUser)
+					r.Post("/invitations", h.invite)
+					r.Post("/invitations/{userID}/resend", h.resendInvite)
+					r.Delete("/invitations/{userID}", h.revokeInvite)
+					r.Get("/access-requests", h.accessRequests)
+					r.Post("/access-requests/{requestID}/approve", h.approveRequest)
+					r.Post("/access-requests/{requestID}/reject", h.rejectRequest)
+					r.Get("/events", h.adminEvents)
+				})
 
-				r.Get("/accounts", h.listAccounts)
-				r.Post("/accounts", h.createAccount)
-				r.Patch("/accounts/{accountID}", h.updateAccount)
-				r.Post("/accounts/{accountID}/archive", h.archiveAccount)
-				r.Delete("/accounts/{accountID}", h.deleteAccount)
-				r.Get("/accounts/{accountID}/cost", h.costBasis)
-				r.Post("/commodities", h.createCommodity)
+				r.Get("/books", h.listBooks)
+				r.Post("/books", h.createBook)
+				r.Route("/books/{bookID}", func(r chi.Router) {
+					r.Use(h.bookAccess)
+					r.Get("/", h.getBook)
+					r.Patch("/", h.updateBook)
 
-				r.Get("/transactions", h.listTransactions)
-				r.Post("/transactions", h.createTransaction)
-				r.Get("/transactions/{transactionID}", h.getTransaction)
-				r.Put("/transactions/{transactionID}", h.updateTransaction)
-				r.Delete("/transactions/{transactionID}", h.deleteTransaction)
-				r.Get("/tags", h.listTags)
+					r.Get("/members", h.listMembers)
+					r.Post("/members", h.addMember)
+					r.Patch("/members/{userID}", h.updateMember)
+					r.Delete("/members/{userID}", h.removeMember)
 
-				r.Get("/balances", h.balances)
+					r.Get("/accounts", h.listAccounts)
+					r.Post("/accounts", h.createAccount)
+					r.Patch("/accounts/{accountID}", h.updateAccount)
+					r.Post("/accounts/{accountID}/archive", h.archiveAccount)
+					r.Delete("/accounts/{accountID}", h.deleteAccount)
+					r.Get("/accounts/{accountID}/cost", h.costBasis)
+					r.Post("/commodities", h.createCommodity)
 
-				r.Get("/prices", h.listPrices)
-				r.Post("/prices", h.addPrice)
-				r.Delete("/prices/{priceID}", h.deletePrice)
-				r.Get("/rate", h.rate)
+					r.Get("/transactions", h.listTransactions)
+					r.Post("/transactions", h.createTransaction)
+					r.Get("/transactions/{transactionID}", h.getTransaction)
+					r.Put("/transactions/{transactionID}", h.updateTransaction)
+					r.Delete("/transactions/{transactionID}", h.deleteTransaction)
+					r.Get("/tags", h.listTags)
+
+					r.Get("/balances", h.balances)
+
+					r.Get("/prices", h.listPrices)
+					r.Post("/prices", h.addPrice)
+					r.Delete("/prices/{priceID}", h.deletePrice)
+					r.Get("/rate", h.rate)
+				})
 			})
 		})
 

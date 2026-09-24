@@ -113,19 +113,18 @@ func (h *handlers) costBasis(w http.ResponseWriter, r *http.Request) {
 
 type identityRequest struct {
 	Username        string `json:"username"`
-	Email           string `json:"email"`
 	CurrentPassword string `json:"current_password"`
 }
 
 // updateIdentity
 //
-//	@Summary	Change username and email (needs the current password)
+//	@Summary	Change the username (needs the current password); email changes go through /api/me/email
 //	@Tags		me
 //	@Accept		json
 //	@Produce	json
 //	@Param		body	body		identityRequest	true	"identity"
 //	@Success	200		{object}	UserDTO
-//	@Failure	409		{object}	response.ErrorBody	"username or email taken"
+//	@Failure	409		{object}	response.ErrorBody	"username taken"
 //	@Failure	422		{object}	response.ErrorBody
 //	@Router		/api/me/account [patch]
 func (h *handlers) updateIdentity(w http.ResponseWriter, r *http.Request) {
@@ -135,7 +134,7 @@ func (h *handlers) updateIdentity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := auth.FromContext(r.Context())
-	u, err := h.svc.UpdateIdentity(r.Context(), id.User, req.CurrentPassword, req.Username, req.Email)
+	u, err := h.svc.UpdateUsername(r.Context(), id.User, req.CurrentPassword, req.Username)
 	if err != nil {
 		h.fail(w, r, err)
 		return

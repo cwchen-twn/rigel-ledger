@@ -168,23 +168,23 @@ func TestCreateCommodityRules(t *testing.T) {
 	wantCode(t, err, "duplicate")
 }
 
-func TestUpdateIdentity(t *testing.T) {
+func TestUpdateUsername(t *testing.T) {
 	f := setup(t)
 	newUser(t, f, "bob")
-	_, err := f.svc.UpdateIdentity(f.ctx, f.user, "wrong", "alicia", "alicia@example.com")
+	_, err := f.svc.UpdateUsername(f.ctx, f.user, "wrong", "alicia")
 	if le := wantCode(t, err, "invalid_input"); le.Fields["current_password"] != "wrong" {
 		t.Fatalf("fields = %v", le.Fields)
 	}
-	_, err = f.svc.UpdateIdentity(f.ctx, f.user, "correct horse", "bob", "alicia@example.com")
+	_, err = f.svc.UpdateUsername(f.ctx, f.user, "correct horse", "bob")
 	if le := wantCode(t, err, "duplicate"); le.Fields["username"] != "taken" {
 		t.Fatalf("fields = %v", le.Fields)
 	}
-	_, err = f.svc.UpdateIdentity(f.ctx, f.user, "correct horse", "alicia", "bob@example.com")
-	if le := wantCode(t, err, "duplicate"); le.Fields["email"] != "taken" {
+	_, err = f.svc.UpdateUsername(f.ctx, f.user, "correct horse", "No Spaces")
+	if le := wantCode(t, err, "invalid_input"); le.Fields["username"] != "invalid" {
 		t.Fatalf("fields = %v", le.Fields)
 	}
-	u, err := f.svc.UpdateIdentity(f.ctx, f.user, "correct horse", " Alicia ", "alicia@example.com")
-	if err != nil || u.Username != "alicia" || u.Email != "alicia@example.com" {
+	u, err := f.svc.UpdateUsername(f.ctx, f.user, "correct horse", " Alicia ")
+	if err != nil || u.Username != "alicia" {
 		t.Fatalf("u = %+v, err %v", u, err)
 	}
 }

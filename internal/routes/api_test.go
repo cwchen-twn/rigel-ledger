@@ -10,41 +10,90 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/cwchen-twn/rigel-ledger/internal/auth"
+	"github.com/cwchen-twn/rigel-ledger/internal/db"
 	"github.com/cwchen-twn/rigel-ledger/internal/dbtest"
+	"github.com/cwchen-twn/rigel-ledger/internal/identity"
 	"github.com/cwchen-twn/rigel-ledger/internal/ledger"
+	"github.com/cwchen-twn/rigel-ledger/internal/mail"
 	"github.com/cwchen-twn/rigel-ledger/internal/response"
+	"github.com/cwchen-twn/rigel-ledger/internal/secretbox"
 	"github.com/cwchen-twn/rigel-ledger/web"
 )
 
 type apiFixture struct {
-	t   *testing.T
-	srv *httptest.Server
-	svc *ledger.Service
+	t      *testing.T
+	srv    *httptest.Server
+	svc    *ledger.Service
+	ids    *identity.Service
+	store  *db.Store
+	outbox *outbox
 }
 
+// outbox keeps every message instead of sending it.
+type outbox struct {
+	mu   sync.Mutex
+	msgs []mail.Message
+}
+
+func (o *outbox) Send(_ context.Context, m mail.Message) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.msgs = append(o.msgs, m)
+	return nil
+}
+
+// last is the newest message to address, or fails the test.
+func (o *outbox) last(t *testing.T, to string) mail.Message {
+	t.Helper()
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	for i := len(o.msgs) - 1; i >= 0; i-- {
+		if o.msgs[i].To == to {
+			return o.msgs[i]
+		}
+	}
+	t.Fatalf("no mail to %s", to)
+	return mail.Message{}
+}
+
+// newAPI starts the router on a fresh database with three finished users:
+// alice (an admin), bob and carol.
 func newAPI(t *testing.T) *apiFixture {
 	t.Helper()
 	store := dbtest.New(t)
 	svc := ledger.NewService(store)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	box, _ := secretbox.New("", true)
+	mgr := auth.NewManager(store, time.Hour, false)
+	ob := &outbox{}
+	ids := identity.New(identity.Options{Store: store, Ledger: svc, Auth: mgr, Box: box, Logger: logger,
+		Origin: "https://ledger.test", Sender: ob})
+	mgr.SetPolicy(ids)
 	h := New(Deps{
 		Service:     svc,
-		Auth:        auth.NewManager(store, time.Hour, false),
+		Identity:    ids,
+		Auth:        mgr,
 		Templates:   response.NewTemplateEngine("test", web.TemplateFiles, true),
 		StaticFiles: web.StaticFiles,
-		Logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Logger:      logger,
 	})
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
 	for _, name := range []string{"alice", "bob", "carol"} {
-		if _, err := svc.CreateUser(context.Background(), ledger.NewUser{Username: name, Email: name + "@example.com", Password: "correct horse"}); err != nil {
+		if _, err := svc.CreateUser(context.Background(), ledger.NewUser{Username: name, Email: name + "@example.com", Password: "correct horse", IsAdmin: name == "alice"}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	return &apiFixture{t: t, srv: srv, svc: svc}
+	// CLI-created users walk the first-login wizard; these three are past it.
+	if _, err := store.Pool.Exec(context.Background(), "UPDATE users SET initialized_at = now(), email_verified_at = now()"); err != nil {
+		t.Fatal(err)
+	}
+	return &apiFixture{t: t, srv: srv, svc: svc, ids: ids, store: store, outbox: ob}
 }
 
 // client is one signed-in browser (cookie) or script (bearer).
@@ -314,12 +363,12 @@ func TestIdentityAndCommoditiesAPI(t *testing.T) {
 	f := newAPI(t)
 	alice := f.browser("alice")
 
-	res, b := alice.do("PATCH", "/api/me/account", map[string]string{"username": "alicia", "email": "a@example.com", "current_password": "nope"})
+	res, b := alice.do("PATCH", "/api/me/account", map[string]string{"username": "alicia", "current_password": "nope"})
 	if res.StatusCode != 422 || errorCode(t, b) != "invalid_input" {
 		t.Fatalf("wrong password = %d %s", res.StatusCode, b)
 	}
 	var me UserDTO
-	alice.json("PATCH", "/api/me/account", map[string]string{"username": "alicia", "email": "a@example.com", "current_password": "correct horse"}, 200, &me)
+	alice.json("PATCH", "/api/me/account", map[string]string{"username": "alicia", "current_password": "correct horse"}, 200, &me)
 	if me.Username != "alicia" {
 		t.Fatalf("me = %+v", me)
 	}

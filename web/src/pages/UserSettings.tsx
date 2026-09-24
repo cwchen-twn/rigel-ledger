@@ -1,30 +1,23 @@
-import { createEffect, createResource, createSignal, For, on } from 'solid-js';
+import { LogOut } from 'lucide-solid';
+import { createEffect, createResource, createSignal, For, on, Show } from 'solid-js';
 import { api } from '~/api/client';
 import type { Language, Theme } from '~/api/types';
 import { PageHeader } from '~/components/AppShell';
+import { EmailVerification } from '~/components/EmailVerification';
+import { EventList } from '~/components/EventList';
+import { DATE_FORMATS, LANGUAGES, THEMES, timeZones } from '~/components/ProfileFields';
 import { Button } from '~/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Field, Input, Select } from '~/components/ui/input';
+import { Badge, Table, tdClass, thClass, trClass } from '~/components/ui/misc';
 import { toast } from '~/components/ui/toast';
 import { useI18n } from '~/i18n';
-import { formatDate, today } from '~/lib/dates';
+import { formatDate, formatDateTime, today } from '~/lib/dates';
 import { useSession } from '~/stores/session';
-
-const DATE_FORMATS = ['YYYY-MM-DD', 'YYYY/MM/DD', 'DD/MM/YYYY', 'MM/DD/YYYY'];
-const LANGUAGES: Language[] = ['en', 'zh', 'es'];
-const THEMES: Theme[] = ['system', 'light', 'dark'];
-
-function timeZones(): string[] {
-  try {
-    return (Intl as unknown as { supportedValuesOf(k: string): string[] }).supportedValuesOf('timeZone');
-  } catch {
-    return ['UTC'];
-  }
-}
 
 export default function UserSettings() {
   const { t, te, fieldErrors } = useI18n();
-  const { user, currencies, saveSettings, setUser: mutateUser } = useSession();
+  const { user, currencies, saveSettings, setUser: mutateUser, refresh, logout } = useSession();
   const [books] = createResource(() => api.books());
 
   const [displayName, setDisplayName] = createSignal('');
@@ -67,20 +60,18 @@ export default function UserSettings() {
     }
   };
 
-  // ---- sign-in identity ----
+  // ---- sign-in name ----
   const [username, setUsername] = createSignal('');
-  const [email, setEmail] = createSignal('');
   const [idPassword, setIdPassword] = createSignal('');
   const [idErrors, setIdErrors] = createSignal<Record<string, string>>({});
   createEffect(on(user, (u) => {
     if (!u) return;
     setUsername(u.username);
-    setEmail(u.email);
   }, { defer: false }));
   const saveIdentity = async (e: Event) => {
     e.preventDefault();
     try {
-      mutateUser(await api.updateIdentity(username(), email(), idPassword()));
+      mutateUser(await api.updateUsername(username(), idPassword()));
       setIdPassword('');
       setIdErrors({});
       toast.success(t('settings.identity_saved'));
@@ -101,10 +92,28 @@ export default function UserSettings() {
       setNext('');
       setPwErrors({});
       toast.success(t('settings.password_changed'));
+      refetchSessions();
     } catch (err) {
       setPwErrors(fieldErrors(err));
       toast.error(te(err));
     }
+  };
+
+  // ---- security: sessions and sign-in history ----
+  const [sessions, { refetch: refetchSessions }] = createResource(() => api.sessions());
+  const [events] = createResource(() => api.myEvents());
+  const revoke = async (id: number, current: boolean) => {
+    if (current) {
+      await logout();
+      return;
+    }
+    try {
+      await api.revokeSession(id);
+      toast.success(t('security.revoked'));
+    } catch (err) {
+      toast.error(te(err));
+    }
+    refetchSessions();
   };
 
   return (
@@ -159,20 +168,27 @@ export default function UserSettings() {
         <Card>
           <CardHeader><CardTitle>{t('settings.identity')}</CardTitle></CardHeader>
           <CardContent>
-            <form class="grid gap-4 sm:grid-cols-3" onSubmit={saveIdentity}>
+            <form class="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end" onSubmit={saveIdentity}>
               <Field label={t('auth.username')} error={idErrors().username}>
                 <Input autocomplete="username" required value={username()} onInput={(e) => setUsername(e.currentTarget.value)} />
-              </Field>
-              <Field label={t('settings.email')} error={idErrors().email}>
-                <Input type="email" autocomplete="email" required value={email()} onInput={(e) => setEmail(e.currentTarget.value)} />
               </Field>
               <Field label={t('settings.current_password')} error={idErrors().current_password}>
                 <Input type="password" autocomplete="current-password" required value={idPassword()} onInput={(e) => setIdPassword(e.currentTarget.value)} />
               </Field>
-              <div class="sm:col-span-3">
-                <Button type="submit" variant="outline">{t('common.save')}</Button>
-              </div>
+              <Button type="submit" variant="outline">{t('common.save')}</Button>
             </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('settings.email')}</CardTitle>
+            <CardDescription>{t('email.change_hint')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Show when={user()} keyed>
+              {(u) => <EmailVerification user={u} needsPassword onChange={mutateUser} onPending={refresh} />}
+            </Show>
           </CardContent>
         </Card>
 
@@ -190,6 +206,51 @@ export default function UserSettings() {
                 <Button type="submit" variant="outline">{t('settings.change_password')}</Button>
               </div>
             </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('security.sessions')}</CardTitle>
+            <CardDescription>{t('security.sessions_hint')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <thead>
+                <tr class="border-b">
+                  <th class={thClass}>{t('security.device')}</th>
+                  <th class={thClass}>{t('security.ip')}</th>
+                  <th class={thClass}>{t('security.last_used')}</th>
+                  <th class={thClass}><span class="sr-only">{t('common.actions')}</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <For each={sessions() ?? []}>
+                  {(s) => (
+                    <tr class={trClass}>
+                      <td class={`${tdClass} max-w-sm`}>
+                        <div class="truncate text-xs" title={s.user_agent}>{s.user_agent || s.kind}</div>
+                        <Show when={s.current}><Badge class="mt-1">{t('security.this_device')}</Badge></Show>
+                      </td>
+                      <td class={`${tdClass} font-mono text-xs`}>{s.ip || '—'}</td>
+                      <td class={`${tdClass} whitespace-nowrap`}>{formatDateTime(s.last_used_at)}</td>
+                      <td class={`${tdClass} text-right`}>
+                        <Button size="sm" variant="ghost" onClick={() => revoke(s.id, s.current)}>
+                          <LogOut /> {t('security.sign_out')}
+                        </Button>
+                      </td>
+                    </tr>
+                  )}
+                </For>
+              </tbody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>{t('security.history')}</CardTitle></CardHeader>
+          <CardContent>
+            <EventList events={events() ?? []} />
           </CardContent>
         </Card>
       </div>

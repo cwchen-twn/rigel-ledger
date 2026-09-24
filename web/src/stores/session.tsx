@@ -17,8 +17,10 @@ interface Session {
   login: (username: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
   saveSettings: (s: Settings) => Promise<User>;
-  /** Replace the signed-in user after an update elsewhere (identity change). */
+  /** Replace the signed-in user after an update elsewhere (identity change, sign-in by link). */
   setUser: (u: User) => void;
+  /** Reload /api/me (e.g. to pick up pending_email). */
+  refresh: () => void;
 }
 
 const Ctx = createContext<Session>();
@@ -43,7 +45,7 @@ function applyTheme(theme: Theme) {
 export const SessionProvider: ParentComponent = (props) => {
   const navigate = useNavigate();
   const { setLocale } = useI18n();
-  const [user, { mutate }] = createResource(fetchMe);
+  const [user, { mutate, refetch }] = createResource(fetchMe);
   const [commodities, { refetch: refetchCommodities }] = createResource(() => api.commodities());
   const currencies = () => commodities()?.filter((c) => c.kind === 'currency');
   const commodity = (code: string) => commodities()?.find((c) => c.code === code);
@@ -54,8 +56,14 @@ export const SessionProvider: ParentComponent = (props) => {
   });
 
   // Language and theme apply the moment settings change -- no reload.
+  // Signed out, the pages follow the browser's language.
   createEffect(() => {
     const u = user();
+    if (u === null) {
+      const l = navigator.language?.slice(0, 2);
+      if (l === 'en' || l === 'zh' || l === 'es') setLocale(l);
+      return;
+    }
     if (!u) return;
     setLocale(u.language);
     applyTheme(u.theme);
@@ -95,6 +103,7 @@ export const SessionProvider: ParentComponent = (props) => {
       return u;
     },
     setUser: (u) => mutate(u),
+    refresh: () => void refetch(),
   };
 
   return <Ctx.Provider value={session}>{props.children}</Ctx.Provider>;

@@ -16,9 +16,12 @@ import (
 
 	"github.com/cwchen-twn/rigel-ledger/internal/auth"
 	"github.com/cwchen-twn/rigel-ledger/internal/db"
+	"github.com/cwchen-twn/rigel-ledger/internal/identity"
 	"github.com/cwchen-twn/rigel-ledger/internal/ledger"
+	"github.com/cwchen-twn/rigel-ledger/internal/mail"
 	"github.com/cwchen-twn/rigel-ledger/internal/response"
 	"github.com/cwchen-twn/rigel-ledger/internal/routes"
+	"github.com/cwchen-twn/rigel-ledger/internal/secretbox"
 	"github.com/cwchen-twn/rigel-ledger/web"
 )
 
@@ -71,23 +74,59 @@ func NewApp(cfg *Config, logger *slog.Logger) (*App, error) {
 		}),
 	})
 
+	box, err := secretbox.New(cfg.EncryptionKey, cfg.IsDevelopment())
+	if err != nil {
+		return nil, err
+	}
+	if box.Dev {
+		logger.Warn("APP_ENCRYPTION_KEY is not set; using the public development key")
+	}
+	trusted, err := auth.ParseCIDRs(cfg.TrustedProxies)
+	if err != nil {
+		return nil, err
+	}
+
+	svc := ledger.NewService(store)
+	authMgr := auth.NewManager(store, cfg.SessionTTL, !cfg.IsDevelopment())
+	ids := identity.New(identity.Options{
+		Store: store, Ledger: svc, Auth: authMgr, Box: box, Logger: logger, Origin: cfg.Origin(),
+	})
+	authMgr.SetPolicy(ids)
+
+	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
+	defer cancel()
+	if err := ids.SeedMailFromEnv(ctx, mail.Config{
+		Driver: cfg.MailDriver, Host: cfg.SMTPHost, Port: cfg.SMTPPort, Security: cfg.SMTPSecurity,
+		User: cfg.SMTPUser, Pass: cfg.SMTPPass, From: cfg.MailFrom, FromName: cfg.MailFromName,
+	}); err != nil {
+		return nil, fmt.Errorf("seed mail settings: %w", err)
+	}
+	if _, err := ids.EnsureAdmin(ctx, identity.BootstrapAdmin{
+		Username: cfg.AdminUsername, Password: cfg.AdminInitialPassword, Email: cfg.AdminEmail,
+	}); err != nil {
+		return nil, fmt.Errorf("bootstrap admin: %w", err)
+	}
+
 	handler := routes.New(routes.Deps{
-		Service:      ledger.NewService(store),
-		Auth:         auth.NewManager(store, cfg.SessionTTL, !cfg.IsDevelopment()),
-		Templates:    response.NewTemplateEngine(cfg.AppVersion, web.TemplateFiles, cfg.IsDevelopment()),
-		StaticFiles:  web.StaticFiles,
-		Logger:       logger,
-		AccessLogger: accessLogger,
-		LogLevel:     cfg.GetLogLevel(),
-		AppURL:       cfg.AppURL,
-		AppPort:      cfg.AppPort,
-		Ready:        store.Pool.Ping,
+		Service:        svc,
+		Identity:       ids,
+		Auth:           authMgr,
+		TrustedProxies: trusted,
+		Templates:      response.NewTemplateEngine(cfg.AppVersion, web.TemplateFiles, cfg.IsDevelopment()),
+		StaticFiles:    web.StaticFiles,
+		Logger:         logger,
+		AccessLogger:   accessLogger,
+		LogLevel:       cfg.GetLogLevel(),
+		AppURL:         cfg.AppURL,
+		AppPort:        cfg.AppPort,
+		Ready:          store.Pool.Ping,
 	})
 
 	return &App{cfg: cfg, handler: handler, store: store, logger: logger}, nil
 }
 
-// sweepSessions deletes expired sessions once an hour until ctx ends.
+// sweepSessions deletes expired sessions, old email tokens and sign-in
+// events past their retention once an hour until ctx ends.
 func (app *App) sweepSessions(ctx context.Context) {
 	defer app.wg.Done()
 	t := time.NewTicker(sessionSweepInterval)
@@ -101,6 +140,12 @@ func (app *App) sweepSessions(ctx context.Context) {
 				app.logger.Warn("Session sweep failed", "error", err)
 			} else if n > 0 {
 				app.logger.Info("Swept expired sessions", "count", n)
+			}
+			if _, err := app.store.DeleteStaleEmailTokens(ctx); err != nil {
+				app.logger.Warn("Email token sweep failed", "error", err)
+			}
+			if _, err := app.store.DeleteOldAuthEvents(ctx); err != nil {
+				app.logger.Warn("Auth event sweep failed", "error", err)
 			}
 		}
 	}

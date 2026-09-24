@@ -24,3 +24,20 @@ DELETE FROM sessions WHERE user_id = $1 AND id <> $2;
 
 -- name: DeleteExpiredSessions :execrows
 DELETE FROM sessions WHERE expires_at <= now();
+
+-- name: CreateSessionWithIP :one
+INSERT INTO sessions (user_id, token_hash, kind, label, user_agent, expires_at, ip)
+VALUES (@user_id, @token_hash, @kind, @label, @user_agent, @expires_at, sqlc.narg(ip)::inet)
+RETURNING *;
+
+-- name: ListUserSessions :many
+SELECT id, kind, label, user_agent, coalesce(host(ip), '')::TEXT AS ip, created_at, last_used_at, expires_at
+FROM sessions
+WHERE user_id = @user_id AND expires_at > now()
+ORDER BY last_used_at DESC;
+
+-- name: DeleteUserSession :execrows
+DELETE FROM sessions WHERE id = @id AND user_id = @user_id;
+
+-- name: DeleteUserSessions :exec
+DELETE FROM sessions WHERE user_id = @user_id;

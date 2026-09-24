@@ -9,7 +9,7 @@ import { useSession } from '~/stores/session';
 
 export default function Onboarding() {
   const { t, te, fieldErrors } = useI18n();
-  const { user, currencies } = useSession();
+  const { user, currencies, refresh } = useSession();
   const navigate = useNavigate();
   const [name, setName] = createSignal('');
   const [currency, setCurrency] = createSignal(user()?.display_currency ?? 'USD');
@@ -23,6 +23,8 @@ export default function Onboarding() {
     setError('');
     try {
       const b = await api.createBook(name(), currency());
+      // The first book becomes the default one: reload the user to know it.
+      refresh();
       navigate(`/b/${b.id}`, { replace: true });
     } catch (err) {
       setErrors(fieldErrors(err));

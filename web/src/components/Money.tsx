@@ -1,4 +1,5 @@
 import { splitProps, type JSX } from 'solid-js';
+import { useFieldProps } from '~/components/ui/input';
 import { useI18n } from '~/i18n';
 import { cn } from '~/lib/cn';
 import { cmp, formatMoney, formatNumber } from '~/lib/money';
@@ -29,11 +30,14 @@ export function Money(props: { amount: string; currency: string; signed?: boolea
 /** A text input for decimal amounts: numeric keypad on phones, right-aligned digits. */
 export function MoneyInput(props: JSX.InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }) {
   const [local, rest] = splitProps(props, ['class', 'invalid']);
+  const field = useFieldProps();
   return (
     <input
+      id={field.id}
+      aria-describedby={field['aria-describedby']}
       inputmode="decimal"
       autocomplete="off"
-      aria-invalid={local.invalid || undefined}
+      aria-invalid={local.invalid || field['aria-invalid'] || undefined}
       class={cn(
         'h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 text-right text-sm tabular-nums shadow-xs',
         'placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',

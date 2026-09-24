@@ -91,6 +91,21 @@ func Migrate(dsn string) error {
 	return nil
 }
 
+// MigrateDown reverts the newest n migrations. Only tests use it; production
+// rolls back with a restore, never by running a down file.
+func MigrateDown(dsn string, n int) error {
+	src, err := iofs.New(migrations.MigrationsFiles, ".")
+	if err != nil {
+		return err
+	}
+	m, err := migrate.NewWithSourceInstance("iofs", src, toMigrateURL(dsn))
+	if err != nil {
+		return err
+	}
+	defer m.Close()
+	return m.Steps(-n)
+}
+
 func toMigrateURL(dsn string) string {
 	for _, p := range []string{"postgresql://", "postgres://"} {
 		if strings.HasPrefix(dsn, p) {

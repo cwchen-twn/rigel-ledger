@@ -1,0 +1,7 @@
+{{define "subject"}}{{.Username}} pidió acceso a {{.AppName}}{{end}}
+{{define "action"}}Revisar la solicitud{{end}}
+{{define "body"}}
+{{.Username}} ({{.Email}}) pidió una cuenta.
+
+{{if .Message}}Su mensaje: {{.Message}}{{end}}
+{{end}}

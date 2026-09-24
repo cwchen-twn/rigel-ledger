@@ -68,6 +68,13 @@ repo (`web/src/components/ui/`), not in node_modules, and we change them freely.
   Chinese). Add a key to all three.
 - API errors: `te(err)` (-> `error.<code>`); per-field: `fieldErrors(err)` (->
   `field.<code>`) -- pass to `<Field error=...>`.
+- `<Field>` ties its label to the control: `Input`, `Select`, `Textarea` and
+  `MoneyInput` take the id, `aria-describedby` and `aria-invalid` from it, so every
+  field has an accessible name (and Playwright's `get_by_label` works). A new custom
+  control inside a Field spreads `useFieldProps()` from `~/components/ui/input`.
+- Signed-out pages and the first-login wizard sit in `<AuthCard>`. `RequireUser` in
+  `App.tsx` sends a user with `initialized === false` or `password_must_change` to
+  `/welcome`; the API refuses them everything else with `onboarding_required`.
 - Account names: `book.name(account)` (template key -> `account.template.<key>`
   unless the user renamed it); paths: `book.path(id)`.
 

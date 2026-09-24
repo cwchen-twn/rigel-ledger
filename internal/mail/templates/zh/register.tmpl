@@ -1,0 +1,9 @@
+{{define "subject"}}確認您的 {{.AppName}} 註冊{{end}}
+{{define "action"}}確認我的信箱{{end}}
+{{define "body"}}
+{{.Username}} 您好：
+
+請開啟下方連結確認此信箱並完成帳號建立。連結將於 {{.Expires}} 後失效。
+
+若您並未註冊，請忽略此信，系統不會建立任何帳號。
+{{end}}

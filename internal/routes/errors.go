@@ -2,8 +2,11 @@ package routes
 
 import (
 	"errors"
+	"math"
 	"net/http"
+	"strconv"
 
+	"github.com/cwchen-twn/rigel-ledger/internal/auth"
 	"github.com/cwchen-twn/rigel-ledger/internal/ledger"
 	"github.com/cwchen-twn/rigel-ledger/internal/response"
 )
@@ -24,6 +27,11 @@ func (h *handlers) fail(w http.ResponseWriter, r *http.Request, err error) {
 			status = http.StatusConflict
 		}
 		response.Error(w, status, le.Code, le.Message, le.Fields)
+		return
+	}
+	if te, ok := auth.IsThrottled(err); ok {
+		w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(te.RetryAfter.Seconds()))))
+		response.Error(w, http.StatusTooManyRequests, "too_many_attempts", te.Error(), nil)
 		return
 	}
 	if errors.Is(err, response.ErrBadJSON) {

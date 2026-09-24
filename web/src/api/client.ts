@@ -35,7 +35,10 @@ async function request<R>(method: string, path: string, body?: unknown): Promise
   const data = await res.json().catch(() => null);
   if (!res.ok) {
     const e = data?.error ?? {};
-    if (res.status === 401 && path !== '/api/auth/login') onUnauthenticated();
+    // A 401 mid-session means the session ended. Signed-out pages expect their
+    // own 401s, and the session probe (/api/me) handles its answer itself --
+    // otherwise an anonymous visit to /invite/... would bounce to /login.
+    if (res.status === 401 && !path.startsWith('/api/auth/') && path !== '/api/me') onUnauthenticated();
     throw new ApiError(res.status, e.code ?? 'internal', e.message ?? res.statusText, e.fields ?? {});
   }
   return data as R;
@@ -63,8 +66,43 @@ export const api = {
   updateSettings: (s: T.Settings) => patch<T.User>('/api/me/settings', s),
   changePassword: (current_password: string, new_password: string) =>
     post<void>('/api/me/password', { current_password, new_password }),
-  updateIdentity: (username: string, email: string, current_password: string) =>
-    patch<T.User>('/api/me/account', { username, email, current_password }),
+  updateUsername: (username: string, current_password: string) =>
+    patch<T.User>('/api/me/account', { username, current_password }),
+
+  // Signed-out flows.
+  authConfig: () => get<T.AuthConfig>('/api/auth/config'),
+  register: (r: { username: string; email: string; password: string; language: string }) => post<void>('/api/auth/register', r),
+  verifyLink: (token: string) => post<{ user: T.User }>('/api/auth/verify-link', { token }),
+  requestAccess: (r: { username: string; email: string; message: string }) => post<void>('/api/auth/request-access', r),
+  invitation: (token: string) => get<T.Invitation>(`/api/auth/invite/${encodeURIComponent(token)}`),
+  acceptInvite: (token: string, p: T.Profile & { password: string }) =>
+    post<{ user: T.User }>(`/api/auth/invite/${encodeURIComponent(token)}`, p),
+
+  // Email verification, the first-login wizard, sessions.
+  startEmail: (email: string, current_password = '') => post<void>('/api/me/email', { email, current_password }),
+  confirmEmail: (code: string) => post<T.User>('/api/me/email/confirm', { code }),
+  cancelEmail: () => del('/api/me/email/pending'),
+  onboarding: (p: T.Profile & { new_password?: string }) => post<T.User>('/api/me/onboarding', p),
+  sessions: () => get<T.SessionInfo[]>('/api/me/sessions'),
+  revokeSession: (id: number) => del(`/api/me/sessions/${id}`),
+  myEvents: () => get<T.AuthEvent[]>('/api/me/events'),
+
+  // Administration.
+  admin: {
+    settings: () => get<T.SystemSettings>('/api/admin/settings'),
+    updateSettings: (s: T.SystemSettingsInput) => patch<T.SystemSettings>('/api/admin/settings', s),
+    updateMail: (m: T.MailSettingsInput) => patch<T.SystemSettings>('/api/admin/mail', m),
+    testMail: () => post<void>('/api/admin/mail/test'),
+    users: () => get<T.AdminUser[]>('/api/admin/users'),
+    updateUser: (id: number, c: { is_active?: boolean; is_admin?: boolean }) => patch<T.AdminUser>(`/api/admin/users/${id}`, c),
+    invite: (username: string, email: string) => post<T.AdminUser>('/api/admin/invitations', { username, email }),
+    resendInvite: (id: number) => post<void>(`/api/admin/invitations/${id}/resend`),
+    revokeInvite: (id: number) => del(`/api/admin/invitations/${id}`),
+    accessRequests: (status?: string) => get<T.AccessRequest[]>(`/api/admin/access-requests${qs({ status })}`),
+    approve: (id: number) => post<void>(`/api/admin/access-requests/${id}/approve`),
+    reject: (id: number) => post<void>(`/api/admin/access-requests/${id}/reject`),
+    events: (limit = 100) => get<T.AuthEvent[]>(`/api/admin/events${qs({ limit })}`),
+  },
   currencies: () => get<T.Currency[]>('/api/currencies'),
   commodities: () => get<T.Commodity[]>('/api/commodities'),
   createCommodity: (id: number, c: T.CommodityInput) => post<T.Commodity>(`${book(id)}/commodities`, c),

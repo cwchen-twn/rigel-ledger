@@ -1,0 +1,8 @@
+{{define "subject"}}您的 {{.AppName}} 驗證碼{{end}}
+{{define "body"}}
+{{.Name}} 您好：
+
+請在 {{.AppName}} 輸入此驗證碼以驗證 {{.Email}}。驗證碼將於 {{.Expires}} 後失效。
+
+若您並未提出此要求，可能有人知道您的密碼，請立即變更。
+{{end}}

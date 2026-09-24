@@ -7,13 +7,14 @@ package db
 
 import (
 	"context"
+	"net/netip"
 	"time"
 )
 
 const createSession = `-- name: CreateSession :one
 INSERT INTO sessions (user_id, token_hash, kind, label, user_agent, expires_at)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, user_id, token_hash, kind, label, user_agent, created_at, last_used_at, expires_at
+RETURNING id, user_id, token_hash, kind, label, user_agent, created_at, last_used_at, expires_at, ip
 `
 
 type CreateSessionParams struct {
@@ -45,6 +46,49 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		&i.CreatedAt,
 		&i.LastUsedAt,
 		&i.ExpiresAt,
+		&i.Ip,
+	)
+	return i, err
+}
+
+const createSessionWithIP = `-- name: CreateSessionWithIP :one
+INSERT INTO sessions (user_id, token_hash, kind, label, user_agent, expires_at, ip)
+VALUES ($1, $2, $3, $4, $5, $6, $7::inet)
+RETURNING id, user_id, token_hash, kind, label, user_agent, created_at, last_used_at, expires_at, ip
+`
+
+type CreateSessionWithIPParams struct {
+	UserID    int64
+	TokenHash []byte
+	Kind      string
+	Label     string
+	UserAgent string
+	ExpiresAt time.Time
+	Ip        *netip.Addr
+}
+
+func (q *Queries) CreateSessionWithIP(ctx context.Context, arg CreateSessionWithIPParams) (Session, error) {
+	row := q.db.QueryRow(ctx, createSessionWithIP,
+		arg.UserID,
+		arg.TokenHash,
+		arg.Kind,
+		arg.Label,
+		arg.UserAgent,
+		arg.ExpiresAt,
+		arg.Ip,
+	)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.Kind,
+		&i.Label,
+		&i.UserAgent,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.ExpiresAt,
+		&i.Ip,
 	)
 	return i, err
 }
@@ -70,6 +114,32 @@ func (q *Queries) DeleteSessionByTokenHash(ctx context.Context, tokenHash []byte
 	return err
 }
 
+const deleteUserSession = `-- name: DeleteUserSession :execrows
+DELETE FROM sessions WHERE id = $1 AND user_id = $2
+`
+
+type DeleteUserSessionParams struct {
+	ID     int64
+	UserID int64
+}
+
+func (q *Queries) DeleteUserSession(ctx context.Context, arg DeleteUserSessionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUserSession, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteUserSessions = `-- name: DeleteUserSessions :exec
+DELETE FROM sessions WHERE user_id = $1
+`
+
+func (q *Queries) DeleteUserSessions(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, deleteUserSessions, userID)
+	return err
+}
+
 const deleteUserSessionsExcept = `-- name: DeleteUserSessionsExcept :exec
 DELETE FROM sessions WHERE user_id = $1 AND id <> $2
 `
@@ -86,7 +156,7 @@ func (q *Queries) DeleteUserSessionsExcept(ctx context.Context, arg DeleteUserSe
 }
 
 const getSessionUser = `-- name: GetSessionUser :one
-SELECT s.id, s.user_id, s.token_hash, s.kind, s.label, s.user_agent, s.created_at, s.last_used_at, s.expires_at, u.id, u.username, u.email, u.password_hash, u.display_name, u.is_admin, u.is_active, u.language, u.display_currency, u.timezone, u.date_format, u.theme, u.default_book_id, u.last_login_at, u.created_at, u.updated_at
+SELECT s.id, s.user_id, s.token_hash, s.kind, s.label, s.user_agent, s.created_at, s.last_used_at, s.expires_at, s.ip, u.id, u.username, u.email, u.password_hash, u.display_name, u.is_admin, u.is_active, u.language, u.display_currency, u.timezone, u.date_format, u.theme, u.default_book_id, u.last_login_at, u.created_at, u.updated_at, u.email_verified_at, u.initialized_at, u.password_must_change, u.invited_by
 FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.token_hash = $1
@@ -113,6 +183,7 @@ func (q *Queries) GetSessionUser(ctx context.Context, tokenHash []byte) (GetSess
 		&i.Session.CreatedAt,
 		&i.Session.LastUsedAt,
 		&i.Session.ExpiresAt,
+		&i.Session.Ip,
 		&i.User.ID,
 		&i.User.Username,
 		&i.User.Email,
@@ -129,8 +200,59 @@ func (q *Queries) GetSessionUser(ctx context.Context, tokenHash []byte) (GetSess
 		&i.User.LastLoginAt,
 		&i.User.CreatedAt,
 		&i.User.UpdatedAt,
+		&i.User.EmailVerifiedAt,
+		&i.User.InitializedAt,
+		&i.User.PasswordMustChange,
+		&i.User.InvitedBy,
 	)
 	return i, err
+}
+
+const listUserSessions = `-- name: ListUserSessions :many
+SELECT id, kind, label, user_agent, coalesce(host(ip), '')::TEXT AS ip, created_at, last_used_at, expires_at
+FROM sessions
+WHERE user_id = $1 AND expires_at > now()
+ORDER BY last_used_at DESC
+`
+
+type ListUserSessionsRow struct {
+	ID         int64
+	Kind       string
+	Label      string
+	UserAgent  string
+	Ip         string
+	CreatedAt  time.Time
+	LastUsedAt time.Time
+	ExpiresAt  time.Time
+}
+
+func (q *Queries) ListUserSessions(ctx context.Context, userID int64) ([]ListUserSessionsRow, error) {
+	rows, err := q.db.Query(ctx, listUserSessions, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUserSessionsRow{}
+	for rows.Next() {
+		var i ListUserSessionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Label,
+			&i.UserAgent,
+			&i.Ip,
+			&i.CreatedAt,
+			&i.LastUsedAt,
+			&i.ExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const touchSession = `-- name: TouchSession :exec

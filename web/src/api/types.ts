@@ -20,6 +20,124 @@ export interface User {
   date_format: string;
   theme: Theme;
   default_book_id: number | null;
+  email_verified: boolean;
+  /** False until the first-login wizard is done; most of the API answers 403 onboarding_required. */
+  initialized: boolean;
+  password_must_change: boolean;
+  /** An address a code was sent to and not yet confirmed (GET /api/me only). */
+  pending_email?: string;
+}
+
+export type Registration = 'closed' | 'request' | 'open';
+export type MfaMethod = 'email' | 'totp' | 'passkey';
+
+export interface AuthConfig {
+  registration: Registration;
+}
+
+/** What the wizard and the invitation page collect. */
+export interface Profile {
+  username: string;
+  display_name: string;
+  language: Language;
+  display_currency: string;
+  timezone: string;
+  date_format: string;
+  theme: Theme;
+}
+
+export interface Invitation extends Profile {
+  email: string;
+}
+
+export interface SessionInfo {
+  id: number;
+  kind: 'web' | 'api';
+  user_agent: string;
+  ip: string;
+  created_at: string;
+  last_used_at: string;
+  expires_at: string;
+  current: boolean;
+}
+
+export interface AuthEvent {
+  id: number;
+  username: string;
+  user_id: number | null;
+  event: string;
+  failure: boolean;
+  ip: string;
+  user_agent: string;
+  detail: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface SystemSettingsInput {
+  registration: Registration;
+  mfa_required: boolean;
+  mfa_methods: MfaMethod[];
+  default_language: Language;
+  default_display_currency: string;
+  default_timezone: string;
+  default_date_format: string;
+  default_theme: Theme;
+  /** null: SESSION_TTL from the environment. */
+  session_ttl_seconds: number | null;
+  invite_ttl_seconds: number;
+  login_max_failures: number;
+  login_ip_max_failures: number;
+  login_user_max_failures: number;
+  login_window_seconds: number;
+}
+
+export type MailDriver = 'smtp' | 'log' | 'off';
+export type SmtpSecurity = 'starttls' | 'tls' | 'none';
+
+export interface MailSettingsInput {
+  mail_driver: MailDriver;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_security: SmtpSecurity;
+  smtp_user: string;
+  /** Empty or absent keeps the stored password. */
+  smtp_password?: string;
+  clear_smtp_password?: boolean;
+  mail_from: string;
+  mail_from_name: string;
+}
+
+export interface SystemSettings extends SystemSettingsInput, Omit<MailSettingsInput, 'smtp_password' | 'clear_smtp_password'> {
+  mail_configured: boolean;
+  smtp_password_set: boolean;
+  updated_at: string;
+}
+
+export interface AdminUser {
+  id: number;
+  username: string;
+  email: string;
+  display_name: string;
+  is_admin: boolean;
+  is_active: boolean;
+  email_verified: boolean;
+  initialized: boolean;
+  invite_pending: boolean;
+  /** Has not accepted the invitation yet. */
+  invited: boolean;
+  last_login_at: string | null;
+  created_at: string;
+}
+
+export interface AccessRequest {
+  id: number;
+  username: string;
+  email: string;
+  message: string;
+  ip: string;
+  status: 'pending' | 'approved' | 'rejected';
+  decided_at: string | null;
+  created_at: string;
 }
 
 export interface Currency {

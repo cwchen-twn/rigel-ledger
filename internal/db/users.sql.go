@@ -7,12 +7,90 @@ package db
 
 import (
 	"context"
+	"time"
 )
+
+const countAdmins = `-- name: CountAdmins :one
+SELECT count(*) FROM users WHERE is_admin AND is_active
+`
+
+func (q *Queries) CountAdmins(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countAdmins)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const createInitialUser = `-- name: CreateInitialUser :one
+INSERT INTO users (username, email, password_hash, display_name, language, display_currency,
+                   timezone, date_format, theme, is_admin, password_must_change, invited_by)
+VALUES ($1, $2, $3, $4, $5, $6,
+        $7, $8, $9, $10, $11, $12)
+RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by
+`
+
+type CreateInitialUserParams struct {
+	Username           string
+	Email              string
+	PasswordHash       string
+	DisplayName        string
+	Language           string
+	DisplayCurrency    string
+	Timezone           string
+	DateFormat         string
+	Theme              string
+	IsAdmin            bool
+	PasswordMustChange bool
+	InvitedBy          *int64
+}
+
+// An invited or bootstrapped user: no password or no address yet, and the
+// first-login wizard still ahead.
+func (q *Queries) CreateInitialUser(ctx context.Context, arg CreateInitialUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, createInitialUser,
+		arg.Username,
+		arg.Email,
+		arg.PasswordHash,
+		arg.DisplayName,
+		arg.Language,
+		arg.DisplayCurrency,
+		arg.Timezone,
+		arg.DateFormat,
+		arg.Theme,
+		arg.IsAdmin,
+		arg.PasswordMustChange,
+		arg.InvitedBy,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.PasswordHash,
+		&i.DisplayName,
+		&i.IsAdmin,
+		&i.IsActive,
+		&i.Language,
+		&i.DisplayCurrency,
+		&i.Timezone,
+		&i.DateFormat,
+		&i.Theme,
+		&i.DefaultBookID,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.EmailVerifiedAt,
+		&i.InitializedAt,
+		&i.PasswordMustChange,
+		&i.InvitedBy,
+	)
+	return i, err
+}
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, email, password_hash, display_name, language, display_currency, timezone, is_admin)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at
+RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by
 `
 
 type CreateUserParams struct {
@@ -55,12 +133,73 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EmailVerifiedAt,
+		&i.InitializedAt,
+		&i.PasswordMustChange,
+		&i.InvitedBy,
+	)
+	return i, err
+}
+
+const deleteUser = `-- name: DeleteUser :exec
+DELETE FROM users WHERE id = $1
+`
+
+func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteUser, id)
+	return err
+}
+
+const emailTaken = `-- name: EmailTaken :one
+SELECT EXISTS (SELECT 1 FROM users WHERE email <> '' AND lower(email) = lower($1) AND id <> $2)
+`
+
+type EmailTakenParams struct {
+	Email    string
+	ExceptID int64
+}
+
+func (q *Queries) EmailTaken(ctx context.Context, arg EmailTakenParams) (bool, error) {
+	row := q.db.QueryRow(ctx, emailTaken, arg.Email, arg.ExceptID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const getUserByEmail = `-- name: GetUserByEmail :one
+SELECT id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by FROM users WHERE email <> '' AND lower(email) = lower($1)
+`
+
+func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByEmail, email)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.PasswordHash,
+		&i.DisplayName,
+		&i.IsAdmin,
+		&i.IsActive,
+		&i.Language,
+		&i.DisplayCurrency,
+		&i.Timezone,
+		&i.DateFormat,
+		&i.Theme,
+		&i.DefaultBookID,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.EmailVerifiedAt,
+		&i.InitializedAt,
+		&i.PasswordMustChange,
+		&i.InvitedBy,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at FROM users WHERE id = $1
+SELECT id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -83,12 +222,16 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EmailVerifiedAt,
+		&i.InitializedAt,
+		&i.PasswordMustChange,
+		&i.InvitedBy,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at FROM users WHERE username = $1
+SELECT id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by FROM users WHERE username = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -111,6 +254,100 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EmailVerifiedAt,
+		&i.InitializedAt,
+		&i.PasswordMustChange,
+		&i.InvitedBy,
+	)
+	return i, err
+}
+
+const listUsers = `-- name: ListUsers :many
+SELECT u.id, u.username, u.email, u.password_hash, u.display_name, u.is_admin, u.is_active, u.language, u.display_currency, u.timezone, u.date_format, u.theme, u.default_book_id, u.last_login_at, u.created_at, u.updated_at, u.email_verified_at, u.initialized_at, u.password_must_change, u.invited_by,
+       EXISTS (SELECT 1 FROM email_tokens t
+               WHERE t.user_id = u.id AND t.kind = 'invite' AND t.used_at IS NULL
+                 AND t.expires_at > now())::BOOLEAN AS invite_pending
+FROM users u
+ORDER BY u.id
+`
+
+type ListUsersRow struct {
+	User          User
+	InvitePending bool
+}
+
+// The admin's list, with whether an invitation is still open.
+func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
+	rows, err := q.db.Query(ctx, listUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUsersRow{}
+	for rows.Next() {
+		var i ListUsersRow
+		if err := rows.Scan(
+			&i.User.ID,
+			&i.User.Username,
+			&i.User.Email,
+			&i.User.PasswordHash,
+			&i.User.DisplayName,
+			&i.User.IsAdmin,
+			&i.User.IsActive,
+			&i.User.Language,
+			&i.User.DisplayCurrency,
+			&i.User.Timezone,
+			&i.User.DateFormat,
+			&i.User.Theme,
+			&i.User.DefaultBookID,
+			&i.User.LastLoginAt,
+			&i.User.CreatedAt,
+			&i.User.UpdatedAt,
+			&i.User.EmailVerifiedAt,
+			&i.User.InitializedAt,
+			&i.User.PasswordMustChange,
+			&i.User.InvitedBy,
+			&i.InvitePending,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markUserInitialized = `-- name: MarkUserInitialized :one
+UPDATE users SET initialized_at = now() WHERE id = $1 AND initialized_at IS NULL
+RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by
+`
+
+func (q *Queries) MarkUserInitialized(ctx context.Context, id int64) (User, error) {
+	row := q.db.QueryRow(ctx, markUserInitialized, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.PasswordHash,
+		&i.DisplayName,
+		&i.IsAdmin,
+		&i.IsActive,
+		&i.Language,
+		&i.DisplayCurrency,
+		&i.Timezone,
+		&i.DateFormat,
+		&i.Theme,
+		&i.DefaultBookID,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.EmailVerifiedAt,
+		&i.InitializedAt,
+		&i.PasswordMustChange,
+		&i.InvitedBy,
 	)
 	return i, err
 }
@@ -129,6 +366,20 @@ func (q *Queries) SetDefaultBookIfUnset(ctx context.Context, arg SetDefaultBookI
 	return err
 }
 
+const setUserActive = `-- name: SetUserActive :exec
+UPDATE users SET is_active = $1 WHERE id = $2
+`
+
+type SetUserActiveParams struct {
+	IsActive bool
+	ID       int64
+}
+
+func (q *Queries) SetUserActive(ctx context.Context, arg SetUserActiveParams) error {
+	_, err := q.db.Exec(ctx, setUserActive, arg.IsActive, arg.ID)
+	return err
+}
+
 const setUserAdmin = `-- name: SetUserAdmin :exec
 UPDATE users SET is_admin = $2 WHERE id = $1
 `
@@ -143,6 +394,97 @@ func (q *Queries) SetUserAdmin(ctx context.Context, arg SetUserAdminParams) erro
 	return err
 }
 
+const setUserEmail = `-- name: SetUserEmail :one
+UPDATE users SET email = $1, email_verified_at = $2 WHERE id = $3
+RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by
+`
+
+type SetUserEmailParams struct {
+	Email      string
+	VerifiedAt *time.Time
+	ID         int64
+}
+
+func (q *Queries) SetUserEmail(ctx context.Context, arg SetUserEmailParams) (User, error) {
+	row := q.db.QueryRow(ctx, setUserEmail, arg.Email, arg.VerifiedAt, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.PasswordHash,
+		&i.DisplayName,
+		&i.IsAdmin,
+		&i.IsActive,
+		&i.Language,
+		&i.DisplayCurrency,
+		&i.Timezone,
+		&i.DateFormat,
+		&i.Theme,
+		&i.DefaultBookID,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.EmailVerifiedAt,
+		&i.InitializedAt,
+		&i.PasswordMustChange,
+		&i.InvitedBy,
+	)
+	return i, err
+}
+
+const setUserPassword = `-- name: SetUserPassword :exec
+UPDATE users SET password_hash = $1, password_must_change = false WHERE id = $2
+`
+
+type SetUserPasswordParams struct {
+	PasswordHash string
+	ID           int64
+}
+
+func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams) error {
+	_, err := q.db.Exec(ctx, setUserPassword, arg.PasswordHash, arg.ID)
+	return err
+}
+
+const setUserUsername = `-- name: SetUserUsername :one
+UPDATE users SET username = $1 WHERE id = $2
+RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by
+`
+
+type SetUserUsernameParams struct {
+	Username string
+	ID       int64
+}
+
+func (q *Queries) SetUserUsername(ctx context.Context, arg SetUserUsernameParams) (User, error) {
+	row := q.db.QueryRow(ctx, setUserUsername, arg.Username, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.PasswordHash,
+		&i.DisplayName,
+		&i.IsAdmin,
+		&i.IsActive,
+		&i.Language,
+		&i.DisplayCurrency,
+		&i.Timezone,
+		&i.DateFormat,
+		&i.Theme,
+		&i.DefaultBookID,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.EmailVerifiedAt,
+		&i.InitializedAt,
+		&i.PasswordMustChange,
+		&i.InvitedBy,
+	)
+	return i, err
+}
+
 const touchUserLogin = `-- name: TouchUserLogin :exec
 UPDATE users SET last_login_at = now() WHERE id = $1
 `
@@ -154,7 +496,7 @@ func (q *Queries) TouchUserLogin(ctx context.Context, id int64) error {
 
 const updateUserIdentity = `-- name: UpdateUserIdentity :one
 UPDATE users SET username = $1, email = $2 WHERE id = $3
-RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at
+RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by
 `
 
 type UpdateUserIdentityParams struct {
@@ -183,6 +525,10 @@ func (q *Queries) UpdateUserIdentity(ctx context.Context, arg UpdateUserIdentity
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EmailVerifiedAt,
+		&i.InitializedAt,
+		&i.PasswordMustChange,
+		&i.InvitedBy,
 	)
 	return i, err
 }
@@ -211,7 +557,7 @@ UPDATE users SET
     theme            = $6,
     default_book_id  = $7
 WHERE id = $8
-RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at
+RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by
 `
 
 type UpdateUserSettingsParams struct {
@@ -254,6 +600,26 @@ func (q *Queries) UpdateUserSettings(ctx context.Context, arg UpdateUserSettings
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EmailVerifiedAt,
+		&i.InitializedAt,
+		&i.PasswordMustChange,
+		&i.InvitedBy,
 	)
 	return i, err
+}
+
+const usernameTaken = `-- name: UsernameTaken :one
+SELECT EXISTS (SELECT 1 FROM users WHERE username = $1 AND id <> $2)
+`
+
+type UsernameTakenParams struct {
+	Username string
+	ExceptID int64
+}
+
+func (q *Queries) UsernameTaken(ctx context.Context, arg UsernameTakenParams) (bool, error) {
+	row := q.db.QueryRow(ctx, usernameTaken, arg.Username, arg.ExceptID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
