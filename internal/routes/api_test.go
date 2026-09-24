@@ -78,7 +78,7 @@ func newAPI(t *testing.T) *apiFixture {
 		Service:     svc,
 		Identity:    ids,
 		Auth:        mgr,
-		Templates:   response.NewTemplateEngine("test", web.TemplateFiles, true),
+		Templates:   response.NewTemplateEngine("test", web.TemplateFiles, web.StaticFiles, true),
 		StaticFiles: web.StaticFiles,
 		Logger:      logger,
 	})
@@ -416,7 +416,7 @@ func TestProbes(t *testing.T) {
 	// Readiness follows the database; liveness does not.
 	h := New(Deps{
 		Service: f.svc, Auth: auth.NewManager(nil, time.Hour, false),
-		Templates: response.NewTemplateEngine("test", web.TemplateFiles, true),
+		Templates: response.NewTemplateEngine("test", web.TemplateFiles, web.StaticFiles, true),
 		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Ready:     func(context.Context) error { return fmt.Errorf("down") },
 	})

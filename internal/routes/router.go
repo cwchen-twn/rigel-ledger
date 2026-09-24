@@ -34,10 +34,6 @@ type Deps struct {
 	LogLevel       slog.Level
 	AppURL         string
 	AppPort        int
-	// DevAssets serves /static with no-cache: in development the asset URLs
-	// carry ?version=dev, which never changes between builds, so a long
-	// max-age kept the browser on a stale main.js.
-	DevAssets bool
 	// Ready reports whether the app can serve (the database answers). Nil
 	// means always ready -- tests that do not care.
 	Ready func(ctx context.Context) error
@@ -98,13 +94,16 @@ func New(d Deps) http.Handler {
 	if d.StaticFiles != nil {
 		static := http.FileServer(http.FS(d.StaticFiles))
 		r.Handle("/static/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if d.DevAssets {
+			if r.URL.Path == "/"+response.ManifestPath {
+				// The one unhashed file in dist: it names the others.
 				w.Header().Set("Cache-Control", "no-cache")
+			} else if strings.HasPrefix(r.URL.Path, "/static/dist/") {
+				// Content-hashed names (see response.Assets): a changed file
+				// is a new URL, so a cached one never goes stale.
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			} else {
-				// Release builds version the URLs (?version=vX.Y.Z), so a new
-				// release is a new URL and a long lifetime is safe.
-				w.Header().Set("Cache-Control", "public, max-age=7884000")
-				w.Header().Set("Expires", time.Now().AddDate(0, 3, 0).Format(http.TimeFormat))
+				// favicon, robots: unhashed, so a day at most.
+				w.Header().Set("Cache-Control", "public, max-age=86400")
 			}
 			static.ServeHTTP(w, r)
 		}))
@@ -120,6 +119,18 @@ func New(d Deps) http.Handler {
 	}
 
 	r.Route("/api", func(r chi.Router) {
+		// Tell the SPA which frontend build is current, so a tab still running
+		// an older bundle can offer a reload instead of misreading new answers.
+		if d.Templates != nil {
+			r.Use(func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if a, err := d.Templates.Assets(); err == nil && a.JS != "" {
+						w.Header().Set("X-App-Build", a.BuildID())
+					}
+					next.ServeHTTP(w, r)
+				})
+			})
+		}
 		r.Post("/auth/login", h.login)
 		r.Get("/auth/config", h.authConfig)
 		r.Post("/auth/register", h.register)

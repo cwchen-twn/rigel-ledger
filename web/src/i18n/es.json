@@ -1,7 +1,10 @@
 {
   "app": {
     "name": "RigelLedger",
-    "tagline": "Contabilidad familiar"
+    "tagline": "Contabilidad familiar",
+    "new_version": "Hay una nueva versión de RigelLedger.",
+    "reload": "Recargar",
+    "later": "Más tarde"
   },
   "nav": {
     "overview": "Resumen",
@@ -35,7 +38,8 @@
     "deleted": "Eliminado",
     "search": "Buscar",
     "no_results": "Sin resultados",
-    "show_options": "Mostrar opciones"
+    "show_options": "Mostrar opciones",
+    "retry": "Reintentar"
   },
   "auth": {
     "username": "Usuario",
@@ -304,7 +308,8 @@
     "not_invited": "Este usuario ya aceptó",
     "already_decided": "Esta solicitud ya se resolvió",
     "last_admin": "No se puede quitar al último administrador",
-    "self": "No puedes cambiar tu propia cuenta aquí"
+    "self": "No puedes cambiar tu propia cuenta aquí",
+    "load_failed": "No se pudo cargar esta página"
   },
   "profile": {
     "username_hint": "Para iniciar sesión: a-z, 0-9, punto, guion, guion bajo"

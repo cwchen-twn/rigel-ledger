@@ -112,14 +112,13 @@ func NewApp(cfg *Config, logger *slog.Logger) (*App, error) {
 		Identity:       ids,
 		Auth:           authMgr,
 		TrustedProxies: trusted,
-		Templates:      response.NewTemplateEngine(cfg.AppVersion, web.TemplateFiles, cfg.IsDevelopment()),
+		Templates:      response.NewTemplateEngine(cfg.AppVersion, web.TemplateFiles, web.StaticFiles, cfg.IsDevelopment()),
 		StaticFiles:    web.StaticFiles,
 		Logger:         logger,
 		AccessLogger:   accessLogger,
 		LogLevel:       cfg.GetLogLevel(),
 		AppURL:         cfg.AppURL,
 		AppPort:        cfg.AppPort,
-		DevAssets:      cfg.IsDevelopment() || cfg.AppVersion == "" || cfg.AppVersion == "dev",
 		Ready:          store.Pool.Ping,
 	})
 

@@ -1,8 +1,10 @@
 import { Navigate, Route, Router, useLocation, useParams, type RouteSectionProps } from '@solidjs/router';
-import { Match, Show, Switch, type JSX, type ParentComponent } from 'solid-js';
+import { createSignal, Match, Show, Switch, type JSX, type ParentComponent } from 'solid-js';
 import { AppShell } from '~/components/AppShell';
+import { setNewBuildHandler } from '~/api/client';
+import { ErrorState } from '~/components/ui/misc';
 import { Toaster } from '~/components/ui/toast';
-import { I18nProvider } from '~/i18n';
+import { I18nProvider, useI18n } from '~/i18n';
 import Accounts from '~/pages/Accounts';
 import BookSettings from '~/pages/BookSettings';
 import Admin from '~/pages/admin/Admin';
@@ -26,8 +28,47 @@ function Root(props: RouteSectionProps) {
   return (
     <SessionProvider>
       {props.children}
+      <NewVersionBanner />
       <Toaster />
     </SessionProvider>
+  );
+}
+
+/**
+ * A tab left open across a deploy keeps running the old bundle, whatever the
+ * cache does. The API names the current build; when it differs, offer a
+ * reload instead of letting old code misread new answers (a blank page once).
+ */
+function NewVersionBanner() {
+  const { t } = useI18n();
+  const [show, setShow] = createSignal(false);
+  setNewBuildHandler(() => setShow(true));
+  return (
+    <Show when={show()}>
+      <div role="status" class="fixed inset-x-0 bottom-4 z-50 flex justify-center px-4">
+        <div class="flex items-center gap-3 rounded-lg border bg-popover px-4 py-2 text-sm text-popover-foreground shadow-md">
+          <span>{t('app.new_version')}</span>
+          <button type="button" class="rounded-md bg-primary px-3 py-1 text-primary-foreground hover:bg-primary/90" onClick={() => location.reload()}>
+            {t('app.reload')}
+          </button>
+          <button type="button" class="text-muted-foreground hover:text-foreground" onClick={() => setShow(false)}>
+            {t('app.later')}
+          </button>
+        </div>
+      </div>
+    </Show>
+  );
+}
+
+/** A load that failed shows why and offers a retry, never an empty page. */
+function LoadError(props: { error: unknown; onRetry: () => void }) {
+  const { t, te } = useI18n();
+  return (
+    <div class="flex min-h-screen items-center justify-center p-4">
+      <div class="w-full max-w-md">
+        <ErrorState title={t('error.load_failed')} message={te(props.error)} retryLabel={t('common.retry')} onRetry={props.onRetry} />
+      </div>
+    </div>
   );
 }
 
@@ -37,7 +78,7 @@ function Root(props: RouteSectionProps) {
  * everything else anyway).
  */
 const RequireUser: ParentComponent = (props) => {
-  const { user } = useSession();
+  const { user, refresh } = useSession();
   const location = useLocation();
   const pending = () => {
     const u = user();
@@ -45,6 +86,9 @@ const RequireUser: ParentComponent = (props) => {
   };
   return (
     <Switch>
+      <Match when={user.error}>
+        <LoadError error={user.error} onRetry={refresh} />
+      </Match>
       <Match when={user.loading && !user()}>{null}</Match>
       <Match when={user() === null}>
         <Navigate href={`/login`} />

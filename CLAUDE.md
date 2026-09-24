@@ -93,7 +93,7 @@ api/                # Generated Swagger output (do not edit manually)
 
 ### Frontend (web/src)
 
-A SolidJS SPA mounted into the Go shell's `<div id="app">`; Vite builds one `main.js` and one `main.css` into `web/static/dist` (embedded in the binary). Follow the `frontend-ui` skill (`.claude/skills/frontend-ui/SKILL.md`) for any UI change.
+A SolidJS SPA mounted into the Go shell's `<div id="app">`. Vite builds one content-hashed JS and CSS file (`main-<hash>.js`, `main-<hash>.css`) plus `manifest.json` into `web/static/dist` (embedded in the binary); `internal/response/assets.go` reads the manifest to link them, `/static/dist` is served `immutable`, the shell `no-cache`. API responses carry `X-App-Build` (the bundle's name), and a tab running an older bundle shows a reload banner. Never link a dist file by a fixed name. Follow the `frontend-ui` skill (`.claude/skills/frontend-ui/SKILL.md`) for any UI change.
 
 ```
 api/         client.ts (fetch + X-Rigel-Client + ApiError), types.ts (mirrors routes/dto.go)

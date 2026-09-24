@@ -20,10 +20,13 @@ type Shell struct {
 	Lang    string
 	// "light", "dark" or "system"; the inline script resolves "system".
 	Theme string
+	// Content-hashed bundle URLs from the Vite manifest.
+	Assets Assets
 }
 
 type TemplateEngine struct {
 	fsys     fs.FS
+	static   fs.FS // holds static/dist/manifest.json
 	version  string
 	reparse  bool // development: pick up template edits without a restart
 	isSecure bool
@@ -31,10 +34,26 @@ type TemplateEngine struct {
 	once sync.Once
 	tmpl *template.Template
 	err  error
+
+	assetsOnce sync.Once
+	assets     Assets
+	assetsErr  error
 }
 
-func NewTemplateEngine(version string, fsys fs.FS, development bool) *TemplateEngine {
-	return &TemplateEngine{fsys: fsys, version: version, reparse: development, isSecure: !development}
+// NewTemplateEngine renders the SPA shell from fsys (templates/) and links
+// the bundle named in static's Vite manifest. In development both are
+// re-read on every render, so `bun run build:watch` output is picked up.
+func NewTemplateEngine(version string, fsys, static fs.FS, development bool) *TemplateEngine {
+	return &TemplateEngine{fsys: fsys, static: static, version: version, reparse: development, isSecure: !development}
+}
+
+// Assets returns the bundle's hashed URLs.
+func (te *TemplateEngine) Assets() (Assets, error) {
+	if te.reparse {
+		return loadAssets(te.static)
+	}
+	te.assetsOnce.Do(func() { te.assets, te.assetsErr = loadAssets(te.static) })
+	return te.assets, te.assetsErr
 }
 
 func (te *TemplateEngine) parse() (*template.Template, error) {
@@ -86,9 +105,13 @@ func (te *TemplateEngine) RenderShell(w http.ResponseWriter, lang, theme string)
 	if theme == "" {
 		theme = "system"
 	}
+	assets, err := te.Assets()
+	if err != nil {
+		return err
+	}
 	nonce := newNonce()
 	var buf bytes.Buffer
-	if err := t.ExecuteTemplate(&buf, "app", Shell{Version: te.version, Nonce: nonce, Lang: lang, Theme: theme}); err != nil {
+	if err := t.ExecuteTemplate(&buf, "app", Shell{Version: te.version, Nonce: nonce, Lang: lang, Theme: theme, Assets: assets}); err != nil {
 		return err
 	}
 	te.setHeaders(w, nonce)

@@ -1,7 +1,10 @@
 {
   "app": {
     "name": "RigelLedger",
-    "tagline": "家庭記帳"
+    "tagline": "家庭記帳",
+    "new_version": "RigelLedger 有新版本。",
+    "reload": "重新載入",
+    "later": "稍後"
   },
   "nav": {
     "overview": "總覽",
@@ -35,7 +38,8 @@
     "deleted": "已刪除",
     "search": "搜尋",
     "no_results": "沒有符合的項目",
-    "show_options": "顯示選項"
+    "show_options": "顯示選項",
+    "retry": "重試"
   },
   "auth": {
     "username": "使用者名稱",
@@ -304,7 +308,8 @@
     "not_invited": "此使用者已接受邀請",
     "already_decided": "此申請已處理",
     "last_admin": "無法移除最後一位管理員",
-    "self": "無法在此修改自己的帳號"
+    "self": "無法在此修改自己的帳號",
+    "load_failed": "此頁面無法載入"
   },
   "profile": {
     "username_hint": "用於登入：a-z、0-9、點、連字號、底線"

@@ -12,6 +12,22 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The bundle this tab is running, from its own <script> URL (content-hashed,
+ * e.g. main-CWqCP0iw.js). The server names the current one in X-App-Build.
+ */
+const loadedBuild = (() => {
+  const src = document.querySelector<HTMLScriptElement>('script[src^="/static/dist/"]')?.getAttribute('src') ?? '';
+  return src.split('/').pop() ?? '';
+})();
+
+let onNewBuild: () => void = () => {};
+/** Called once when the server reports a newer frontend than this tab runs. */
+export function setNewBuildHandler(fn: () => void): void {
+  onNewBuild = fn;
+}
+let newBuildSeen = false;
+
 /** Called on any 401 so the app can send the user to /login. */
 let onUnauthenticated: () => void = () => {};
 export function setUnauthenticatedHandler(fn: () => void): void {
@@ -31,6 +47,11 @@ async function request<R>(method: string, path: string, body?: unknown): Promise
     credentials: 'same-origin',
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+  const build = res.headers.get('X-App-Build');
+  if (build && loadedBuild && build !== loadedBuild && !newBuildSeen) {
+    newBuildSeen = true;
+    onNewBuild();
+  }
   if (res.status === 204) return undefined as R;
   const data = await res.json().catch(() => null);
   if (!res.ok) {

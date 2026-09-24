@@ -53,3 +53,20 @@ export function EmptyState(props: { icon?: JSX.Element; title: string; children?
     </div>
   );
 }
+
+/** A failed load, with a way to try again: never a blank page. */
+export function ErrorState(props: { title: string; message?: string; retryLabel: string; onRetry: () => void }) {
+  return (
+    <div role="alert" class="flex flex-col items-center justify-center gap-3 rounded-xl border border-destructive/40 p-10 text-center">
+      <p class="font-medium">{props.title}</p>
+      {props.message && <p class="text-sm text-muted-foreground">{props.message}</p>}
+      <button
+        type="button"
+        onClick={() => props.onRetry()}
+        class="rounded-md border px-3 py-1.5 text-sm shadow-xs hover:bg-accent hover:text-accent-foreground"
+      >
+        {props.retryLabel}
+      </button>
+    </div>
+  );
+}

@@ -1,7 +1,10 @@
 {
   "app": {
     "name": "RigelLedger",
-    "tagline": "Family bookkeeping"
+    "tagline": "Family bookkeeping",
+    "new_version": "A new version of RigelLedger is available.",
+    "reload": "Reload",
+    "later": "Later"
   },
   "nav": {
     "overview": "Overview",
@@ -35,7 +38,8 @@
     "deleted": "Deleted",
     "search": "Search",
     "no_results": "No matches",
-    "show_options": "Show options"
+    "show_options": "Show options",
+    "retry": "Try again"
   },
   "auth": {
     "username": "Username",
@@ -304,7 +308,8 @@
     "not_invited": "This user has already accepted",
     "already_decided": "This request was already decided",
     "last_admin": "The last administrator cannot be removed",
-    "self": "You cannot change your own account here"
+    "self": "You cannot change your own account here",
+    "load_failed": "This page could not load"
   },
   "profile": {
     "username_hint": "Used to sign in: a-z, 0-9, dot, dash, underscore"

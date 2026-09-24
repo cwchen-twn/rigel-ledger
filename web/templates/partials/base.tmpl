@@ -16,8 +16,9 @@
 })();
 window.__APP_CONFIG__ = { version: "{{.Version}}" };
         </script>
-        <link rel="stylesheet" href="/static/dist/main.css?version={{.Version}}">
-        <script src="/static/dist/main.js?version={{.Version}}" defer nonce="{{.Nonce}}"></script>
+        {{- /* Hashed names from the Vite manifest: a new build is a new URL. */}}
+        {{range .Assets.CSS}}<link rel="stylesheet" href="{{.}}">
+        {{end}}{{with .Assets.JS}}<script src="{{.}}" defer nonce="{{$.Nonce}}"></script>{{end}}
         {{block "head" .}}{{end}}
     </head>
     <body>
