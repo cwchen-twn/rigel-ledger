@@ -7,6 +7,8 @@ import { MoneyInput } from '~/components/Money';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Field, Input, Select } from '~/components/ui/input';
+import { SearchSelect } from '~/components/ui/search-select';
+import { commodityOptions } from '~/lib/options';
 import { Badge, Table, tdClass, thClass, trClass } from '~/components/ui/misc';
 import { toast } from '~/components/ui/toast';
 import { useI18n } from '~/i18n';
@@ -102,8 +104,6 @@ export default function BookSettings() {
       toast.error(te(err));
     }
   };
-
-  const currencyOptions = () => <For each={currencies() ?? []}>{(c) => <option value={c.code}>{c.code}</option>}</For>;
 
   return (
     <>
@@ -208,7 +208,7 @@ export default function BookSettings() {
                 </Field>
                 <Show when={cKind() === 'security'}>
                   <Field label={t('book.quote_currency')} error={cErrors().quote_currency}>
-                    <Select value={cQuote()} onChange={(e) => setCQuote(e.currentTarget.value)}>{currencyOptions()}</Select>
+                    <SearchSelect options={commodityOptions(currencies())} value={cQuote()} onChange={setCQuote} />
                   </Field>
                   <Field label={t('book.contract_size')} hint={t('book.contract_size_hint')} error={cErrors().contract_size} class="sm:col-span-2">
                     <MoneyInput placeholder={t('common.optional')} value={cSize()} onInput={(e) => setCSize(e.currentTarget.value)} />
@@ -246,8 +246,8 @@ export default function BookSettings() {
           <CardContent class="grid gap-4">
             <Show when={book.canEdit()}>
               <form class="grid grid-cols-2 items-end gap-2 sm:grid-cols-[6rem_6rem_10rem_1fr_auto]" onSubmit={addRate}>
-                <Select aria-label="from" value={rc()} onChange={(e) => setRc(e.currentTarget.value)}>{currencyOptions()}</Select>
-                <Select aria-label="to" value={rq()} onChange={(e) => setRq(e.currentTarget.value)}>{currencyOptions()}</Select>
+                <SearchSelect aria-label={t('book.rate_from')} options={commodityOptions(currencies())} value={rc()} onChange={setRc} />
+                <SearchSelect aria-label={t('book.rate_to')} options={commodityOptions(currencies())} value={rq()} onChange={setRq} />
                 <Input type="date" value={rd()} onChange={(e) => setRd(e.currentTarget.value)} />
                 <MoneyInput placeholder={t('book.rate')} value={rv()} onInput={(e) => setRv(e.currentTarget.value)} />
                 <Button type="submit">{t('book.add_rate')}</Button>

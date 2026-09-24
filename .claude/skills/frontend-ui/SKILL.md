@@ -28,9 +28,10 @@ repo (`web/src/components/ui/`), not in node_modules, and we change them freely.
 |---|---|
 | Dialog, side panel | `Dialog` / `Sheet` in `components/ui/dialog.tsx` (Kobalte) |
 | Searchable pick-one (accounts) | `AccountCombobox` (Kobalte Combobox) |
+| Long list (currencies, commodities, time zones): more than ~15 options | `SearchSelect` in `components/ui/search-select.tsx`, options from `~/lib/options` (`commodityOptions`, `timeZoneOptions`) |
 | Row action menu | `DropdownMenu` (Kobalte) |
 | Notifications | `toast.success/error` (Kobalte Toast) |
-| Plain select, checkbox, date | **native** `Select`, `Checkbox`, `<Input type="date">` -- accessible, mobile keyboards, no JS |
+| Plain select (short list), checkbox, date | **native** `Select`, `Checkbox`, `<Input type="date">` -- accessible, mobile keyboards, no JS |
 
 ## Traps already hit -- do not reintroduce
 
@@ -47,7 +48,16 @@ repo (`web/src/components/ui/`), not in node_modules, and we change them freely.
    later made the browser show the first one (a USD line showed "AED"). The
    shared `Select` re-applies `value` when its children change -- use it, not a
    bare `<select>`.
-4. **`-0`.** js-big-decimal negates `"0"` to `"-0"`, which prints "-NT$0.00".
+4. **Dark native controls need `color-scheme`.** Without it the browser draws a
+   `<select>`'s option list (and date pickers, scrollbars) in its light default:
+   white lists on a dark page. `globals.css` sets `color-scheme` on `:root`/`.dark`
+   and paints `option` with the popover tokens -- keep both.
+5. **Flex/grid children must be allowed to shrink.** A Kobalte root or a `Card`
+   in a grid defaults to `min-width: auto`, so an input's intrinsic width or a
+   long table cell pushed the page to 816px at 390px wide. `Card` and
+   `SearchSelect` carry `min-w-0`; do the same for new wrappers, and check
+   `document.documentElement.scrollWidth` at 390px.
+6. **`-0`.** js-big-decimal negates `"0"` to `"-0"`, which prints "-NT$0.00".
    Use `neg()` from `~/lib/money`, which returns `"0"`.
 
 ## Money and dates

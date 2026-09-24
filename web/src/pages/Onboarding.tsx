@@ -1,9 +1,11 @@
 import { useNavigate } from '@solidjs/router';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { api } from '~/api/client';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
-import { Field, Input, Select } from '~/components/ui/input';
+import { Field, Input } from '~/components/ui/input';
+import { SearchSelect } from '~/components/ui/search-select';
+import { commodityOptions } from '~/lib/options';
 import { useI18n } from '~/i18n';
 import { useSession } from '~/stores/session';
 
@@ -47,9 +49,7 @@ export default function Onboarding() {
               <Input required placeholder={t('onboarding.book_name_placeholder')} value={name()} onInput={(e) => setName(e.currentTarget.value)} />
             </Field>
             <Field label={t('onboarding.base_currency')} hint={t('onboarding.base_currency_hint')} error={errors().base_currency}>
-              <Select value={currency()} onChange={(e) => setCurrency(e.currentTarget.value)}>
-                <For each={currencies() ?? []}>{(c) => <option value={c.code}>{c.code} · {c.name}</option>}</For>
-              </Select>
+              <SearchSelect options={commodityOptions(currencies())} value={currency()} onChange={setCurrency} />
             </Field>
             <Show when={error() && Object.keys(errors()).length === 0}>
               <p role="alert" class="text-sm text-destructive">{error()}</p>

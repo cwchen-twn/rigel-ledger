@@ -34,7 +34,8 @@
     "saved": "Guardado",
     "deleted": "Eliminado",
     "search": "Buscar",
-    "no_results": "Sin resultados"
+    "no_results": "Sin resultados",
+    "show_options": "Mostrar opciones"
   },
   "auth": {
     "username": "Usuario",
@@ -202,7 +203,9 @@
     "contract_size": "Tamaño del contrato",
     "contract_size_hint": "Solo futuros: unidades por contrato (TX = 200). Se muestra como exposición, nunca como valor del activo.",
     "add_commodity": "Añadir",
-    "no_commodities": "Ninguno todavía."
+    "no_commodities": "Ninguno todavía.",
+    "rate_from": "Moneda de origen",
+    "rate_to": "Moneda de destino"
   },
   "settings": {
     "title": "Ajustes",

@@ -34,7 +34,8 @@
     "saved": "Saved",
     "deleted": "Deleted",
     "search": "Search",
-    "no_results": "No matches"
+    "no_results": "No matches",
+    "show_options": "Show options"
   },
   "auth": {
     "username": "Username",
@@ -202,7 +203,9 @@
     "contract_size": "Contract size",
     "contract_size_hint": "Futures only: units per contract (TX = 200). Shown as exposure, never as asset value.",
     "add_commodity": "Add",
-    "no_commodities": "None yet."
+    "no_commodities": "None yet.",
+    "rate_from": "From currency",
+    "rate_to": "To currency"
   },
   "settings": {
     "title": "Settings",

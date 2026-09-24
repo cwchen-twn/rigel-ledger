@@ -2,6 +2,8 @@ import { For } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import type { Language, Profile, Theme } from '~/api/types';
 import { Field, Input, Select } from '~/components/ui/input';
+import { SearchSelect } from '~/components/ui/search-select';
+import { commodityOptions, timeZoneOptions } from '~/lib/options';
 import { useI18n } from '~/i18n';
 import { formatDate, today } from '~/lib/dates';
 import { useSession } from '~/stores/session';
@@ -69,16 +71,12 @@ export function ProfileFields(props: {
       )}
       {show('display_currency') && (
         <Field label={t('settings.display_currency')} hint={t('settings.display_currency_hint')} error={props.errors.display_currency}>
-          <Select value={props.profile.display_currency} onChange={(e) => props.set('display_currency', e.currentTarget.value)}>
-            <For each={currencies() ?? []}>{(c) => <option value={c.code}>{c.code} · {c.name}</option>}</For>
-          </Select>
+          <SearchSelect options={commodityOptions(currencies())} value={props.profile.display_currency} onChange={(v) => props.set('display_currency', v)} />
         </Field>
       )}
       {show('timezone') && (
         <Field label={t('settings.timezone')} error={props.errors.timezone}>
-          <Select value={props.profile.timezone} onChange={(e) => props.set('timezone', e.currentTarget.value)}>
-            <For each={timeZones()}>{(z) => <option value={z}>{z}</option>}</For>
-          </Select>
+          <SearchSelect options={timeZoneOptions(timeZones())} value={props.profile.timezone} onChange={(v) => props.set('timezone', v)} />
         </Field>
       )}
       {show('date_format') && (

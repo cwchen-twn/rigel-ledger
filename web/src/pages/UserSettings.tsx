@@ -9,6 +9,8 @@ import { DATE_FORMATS, LANGUAGES, THEMES, timeZones } from '~/components/Profile
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Field, Input, Select } from '~/components/ui/input';
+import { SearchSelect } from '~/components/ui/search-select';
+import { commodityOptions, timeZoneOptions } from '~/lib/options';
 import { Badge, Table, tdClass, thClass, trClass } from '~/components/ui/misc';
 import { toast } from '~/components/ui/toast';
 import { useI18n } from '~/i18n';
@@ -133,14 +135,10 @@ export default function UserSettings() {
                 </Select>
               </Field>
               <Field label={t('settings.display_currency')} hint={t('settings.display_currency_hint')} error={errors().display_currency}>
-                <Select value={displayCurrency()} onChange={(e) => setDisplayCurrency(e.currentTarget.value)}>
-                  <For each={currencies() ?? []}>{(c) => <option value={c.code}>{c.code} · {c.name}</option>}</For>
-                </Select>
+                <SearchSelect options={commodityOptions(currencies())} value={displayCurrency()} onChange={setDisplayCurrency} />
               </Field>
               <Field label={t('settings.timezone')} error={errors().timezone}>
-                <Select value={timezone()} onChange={(e) => setTimezone(e.currentTarget.value)}>
-                  <For each={timeZones()}>{(z) => <option value={z}>{z}</option>}</For>
-                </Select>
+                <SearchSelect options={timeZoneOptions(timeZones())} value={timezone()} onChange={setTimezone} />
               </Field>
               <Field label={t('settings.date_format')}>
                 <Select value={dateFormat()} onChange={(e) => setDateFormat(e.currentTarget.value)}>

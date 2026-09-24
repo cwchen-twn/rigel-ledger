@@ -34,7 +34,8 @@
     "saved": "已儲存",
     "deleted": "已刪除",
     "search": "搜尋",
-    "no_results": "沒有符合的項目"
+    "no_results": "沒有符合的項目",
+    "show_options": "顯示選項"
   },
   "auth": {
     "username": "使用者名稱",
@@ -202,7 +203,9 @@
     "contract_size": "契約乘數",
     "contract_size_hint": "僅期貨：每口單位數（台指期 = 200）。僅作為曝險顯示，不計入資產價值。",
     "add_commodity": "新增",
-    "no_commodities": "尚未新增。"
+    "no_commodities": "尚未新增。",
+    "rate_from": "來源幣別",
+    "rate_to": "目標幣別"
   },
   "settings": {
     "title": "個人設定",

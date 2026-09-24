@@ -7,7 +7,9 @@ import { AccountCombobox } from '~/components/AccountCombobox';
 import { Money, MoneyInput } from '~/components/Money';
 import { Button } from '~/components/ui/button';
 import { Sheet } from '~/components/ui/dialog';
-import { Checkbox, Field, Input, Select } from '~/components/ui/input';
+import { Checkbox, Field, Input } from '~/components/ui/input';
+import { SearchSelect } from '~/components/ui/search-select';
+import { commodityOptions } from '~/lib/options';
 import { toast } from '~/components/ui/toast';
 import { useI18n } from '~/i18n';
 import { cn } from '~/lib/cn';
@@ -394,9 +396,7 @@ export function TransactionSheet(props: {
                 <div class="flex items-center gap-2">
                   <MoneyInput value={origAmount()} onInput={(e) => setOrigAmount(e.currentTarget.value)} />
                   <Show when={!toAcct()?.commodity} fallback={<span class="w-24 text-sm text-muted-foreground">{toCurrency()}</span>}>
-                    <Select class="w-24" value={origCurrency()} onChange={(e) => setOrigCurrency(e.currentTarget.value)}>
-                      <For each={currencies() ?? []}>{(c) => <option value={c.code}>{c.code}</option>}</For>
-                    </Select>
+                    <SearchSelect class="w-28 shrink-0" aria-label={t('transactions.currency')} options={commodityOptions(currencies())} value={origCurrency()} onChange={setOrigCurrency} />
                   </Show>
                 </div>
               </Field>
@@ -434,9 +434,7 @@ export function TransactionSheet(props: {
                         onInput={(e) => { set('credit', e.currentTarget.value); if (e.currentTarget.value) set('debit', ''); }}
                         invalid={!!err(`lines[${i()}].amount`)} />
                       <Show when={!acct(line.accountId)?.commodity} fallback={<span class="flex items-center text-sm text-muted-foreground">{c()}</span>}>
-                        <Select value={line.commodity} onChange={(e) => set('commodity', e.currentTarget.value)}>
-                          <For each={commodities() ?? []}>{(cur) => <option value={cur.code}>{cur.code}</option>}</For>
-                        </Select>
+                        <SearchSelect aria-label={t('transactions.currency')} options={commodityOptions(commodities())} value={line.commodity} onChange={(v) => set('commodity', v)} />
                       </Show>
                     </div>
                     <div class="flex flex-wrap items-center gap-x-4 gap-y-2 px-1 text-xs text-muted-foreground">

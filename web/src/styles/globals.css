@@ -82,6 +82,22 @@
 }
 
 @layer base {
+  /* Tell the browser which scheme the page is in, so the parts it draws
+     itself -- a native <select>'s option list, date pickers, scrollbars --
+     follow the theme instead of staying white in dark mode. */
+  :root {
+    color-scheme: light;
+  }
+  .dark {
+    color-scheme: dark;
+  }
+  /* Where the option list is styleable (Chrome, Edge, Firefox on desktop),
+     paint it like our popovers; phones keep their native picker. */
+  select option,
+  select optgroup {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
   * {
     @apply border-border outline-ring/50;
   }

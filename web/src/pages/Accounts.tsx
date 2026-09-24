@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Dialog } from '~/components/ui/dialog';
 import { DropdownMenu } from '~/components/ui/dropdown-menu';
 import { Checkbox, Field, Input, Select } from '~/components/ui/input';
+import { SearchSelect } from '~/components/ui/search-select';
+import { commodityOptions } from '~/lib/options';
 import { Badge, Skeleton } from '~/components/ui/misc';
 import { toast } from '~/components/ui/toast';
 import { useI18n } from '~/i18n';
@@ -149,9 +151,7 @@ function AccountDialog(props: {
         <div class="grid gap-4 sm:grid-cols-2">
           <Show when={holdsCommodity(cls())}>
             <Field label={t('accounts.commodity')} hint={t('accounts.commodity_hint')} error={errors().commodity}>
-              <Select value={commodity()} disabled={editing()} onChange={(e) => setCommodity(e.currentTarget.value)}>
-                <For each={commodities() ?? []}>{(c) => <option value={c.code}>{c.code} · {c.name}</option>}</For>
-              </Select>
+              <SearchSelect options={commodityOptions(commodities())} value={commodity()} disabled={editing()} onChange={setCommodity} />
             </Field>
           </Show>
           <Field label={t('accounts.code')}>
