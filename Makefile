@@ -25,20 +25,24 @@ init:
 	@command -v bun >/dev/null 2>&1 || curl -fsSL https://bun.sh/install | bash
 	@cd web && bun install
 
-##updatedep: Update dependencies, including go modules and uv packages
+##updatedep: Update dependencies -- go modules, web packages (bun) and the pre-commit hooks
 .PHONY: updatedep
 updatedep:
 	go get -u ./...
 	go mod tidy
+	# Every web dependency to its latest release, majors included (bun's
+	# built-in npm-check-updates; a bare `ncu` may be NVIDIA Nsight Compute).
+	cd web && bun update --latest
+	cd web && bun run build:prod
 	uv sync --upgrade-package pre-commit
 	.venv/bin/pre-commit autoupdate
 	.venv/bin/pre-commit install
 
-##updatego: Update go version (e.g. $ make updatego version=1.24.6), remember to have $(go env GOPATH) in your PATH
-.PHONY: updatego
-updatego:
+##upgrade/go: Upgrade the Go toolchain, e.g. `make upgrade/go version=1.26.9` (go.mod + Dockerfile); keep $(go env GOPATH)/bin in PATH
+.PHONY: upgrade/go
+upgrade/go:
 	@if [ -z "$(version)" ]; then \
-		echo "Error: Please specify a version. Usage: make updatego version=1.24.6"; \
+		echo "Error: Please specify a version. Usage: make upgrade/go version=1.26.9"; \
 		exit 1; \
 	fi
 	go install golang.org/dl/go$(version)@latest
@@ -50,20 +54,27 @@ updatego:
 	go$(version) mod tidy
 	go$(version) mod verify
 	go$(version) mod download
+	# The image builds with the same toolchain (CLAUDE.md "Toolchain pins").
+	sed -i -E 's|^FROM golang:[0-9.]+-bookworm|FROM golang:$(version)-bookworm|' Dockerfile
+	@grep -n '^FROM golang:' Dockerfile
 
-##installvsext: Install vscode extensions
-.PHONY: installvsext
-installvsext:
-	@if [ -f .vscode/extensions.json ]; then \
-		jq -r '.recommendations[]' .vscode/extensions.json | while read ext; do \
-			if [ -n "$$ext" ]; then \
-				echo "Installing extension: $$ext"; \
-				code --install-extension "$$ext"; \
-			fi; \
-		done; \
-	else \
-		echo "No .vscode/extensions.json file found"; \
+##upgrade/bun: Upgrade Bun, e.g. `make upgrade/bun version=1.3.15` (local binary, package.json packageManager, Dockerfile, bun.lock)
+.PHONY: upgrade/bun
+upgrade/bun:
+	@if [ -z "$(version)" ]; then \
+		echo "Error: Please specify a version. Usage: make upgrade/bun version=1.3.15"; \
+		exit 1; \
 	fi
+	# The official installer takes an exact tag; it replaces ~/.bun/bin/bun.
+	curl -fsSL https://bun.sh/install | bash -s "bun-v$(version)"
+	@test "$$(bun --version)" = "$(version)" || { echo "bun on PATH is $$(bun --version), not $(version): is ~/.bun/bin first in PATH?"; exit 1; }
+	# CI reads the version from packageManager (setup-bun bun-version-file);
+	# the image from the Dockerfile. Renovate moves both together too.
+	sed -i -E 's|"packageManager": "bun@[0-9.]+"|"packageManager": "bun@$(version)"|' web/package.json
+	sed -i -E 's|^FROM oven/bun:[0-9.]+|FROM oven/bun:$(version)|' Dockerfile
+	cd web && bun install
+	cd web && bun run build:prod
+	@grep -n '"packageManager"' web/package.json; grep -n '^FROM oven/bun:' Dockerfile
 
 ##upgradeable: Check for upgradeable dependencies
 .PHONY: upgradeable
