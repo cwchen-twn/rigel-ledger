@@ -213,18 +213,32 @@ Family and account setup:
 
 ## Exchange rates
 
-- A Go `RateProvider` interface, run by a daily in-process scheduler, plus an admin
-  "refresh now" endpoint. The binary is always running, so no CronJob is needed.
-- **Default provider:** `https://open.er-api.com/v6/latest/{base}`. It is free and needs
-  no key, updates daily, and covers 160+ currencies including TWD and PYG. It requires
-  an attribution link in the UI.
-- **Fallback provider:** `fawazahmed0/exchange-api` via cdn.jsdelivr.net. It is free and
-  keyless, covers 200+ currencies, and keeps dated snapshots, which lets the job backfill
-  a missed day or an old transaction date.
+Implemented in P3a (`internal/rates`).
+
+- **What is stored:** once a day, USD against every ISO currency in `commodities` (about
+  150 rows), in `prices` with the provider as `source`. `ledger.RateOn` crosses any
+  pair through USD, so there is no per-book or per-user currency list to keep in step:
+  every book's currencies and every display currency are covered by construction.
+- **Default provider:** `https://open.er-api.com/v6/latest/USD` (free, keyless, daily,
+  160+ currencies including TWD and PYG). Its terms ask for an attribution link wherever
+  rates are shown; the book settings and admin pages carry "Rates By Exchange Rate API".
+- **Fallback and history:** `fawazahmed0/exchange-api` (jsDelivr, then its pages.dev
+  mirror) when er-api fails, and for dated snapshots.
+- **Schedule:** an in-process job, no CronJob.
+  - It starts 30 s after boot, then runs hourly.
+  - It fetches the latest rates when no fetch has succeeded in 12 h.
+  - It backfills any of the last 14 days still missing, giving up on a day after 3
+    failures in a day.
+  - Every attempt is a `rate_fetches` row (migration `000004`), shown on
+    Administration -> Exchange rates, with "Fetch the latest now" and "Fetch that day".
+  - `RATES_ENABLED=false` turns it off.
+- **Precedence:** a `manual` row wins on its own date (`LatestPrice` orders it first);
+  otherwise the newest date on or before the lookup wins.
+- **Locked periods:** a snapshot for a date a book has locked is refused by the
+  `prices_lock` trigger, and the job skips that one rate (`skipped` in the record)
+  rather than failing the day.
 - **Frankfurter/ECB was rejected** as the default because it has no TWD or PYG.
-- The job fetches only the currencies enabled across books and stores them in `prices`
-  with a `source`. A `manual` row always wins over a scraped one.
-- Stock prices later use the same table and scheduler with another provider.
+- Stock prices later use the same table with another provider (P5).
 
 ## User settings
 
@@ -805,7 +819,7 @@ builds images.
 | P1 | ~~Schema reset, sessions, sqlc; books, accounts, multi-currency transactions API and UI; the "All accounts" balances page; the user Settings page~~ (done) |
 | P2 | ~~Dockerfile, Gitea/GitHub CI and release; probes and the hcloud chart (tailnet-only ipAllowList, own Postgres role, nightly backup); release `v0.1.0` and deploy~~ (done, 2026-09-24) |
 | P2.5 | **Accounts and sign-in security.** a: first-login wizard, verified email, invitations, registration modes, bootstrap admin, the Administration page (users, requests, sign-in rules, defaults, SMTP), throttling and the sign-in audit, sessions (migration `000002`). b: ~~two-factor sign-in -- email codes, TOTP, passkeys, recovery codes, enforcement (`000003`)~~ (done). Both before any public exposure |
-| P3 | Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency), book rebase, the three statements bound to closing rates with `rates_used`, display-currency translation, tag (trip) report |
+| P3 | ~~Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency)~~ (P3a, done); book rebase, the three statements bound to closing rates with `rates_used`, display-currency translation, tag (trip) report |
 | P4 | **Sync and review**: import API with `import_rows` kinds, `source_accounts`, review queue, rules, matching (pending/posted, transfers, invoices, order emails), assertions, challenges; receipt attachments (upload, camera, optional local OCR); the tw-sync runner (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
 | P5 | Securities and futures: py-sync (Shioaji daily, Firstrade), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, 永豐 deposits, Banco Continental (if its export is not enough). Recurring list and subscription templates. (Points, average cost and the security commodity itself are done.) |
 | P6 | PWA polish, then Flutter if a native feature is needed |

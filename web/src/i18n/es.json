@@ -209,7 +209,10 @@
     "add_commodity": "Añadir",
     "no_commodities": "Ninguno todavía.",
     "rate_from": "Moneda de origen",
-    "rate_to": "Moneda de destino"
+    "rate_to": "Moneda de destino",
+    "rates_today": "Hoy, en {base}",
+    "rates_auto": "Se actualizan cada día automáticamente; un tipo manual abajo gana en su día.",
+    "manual_rates": "Tipos manuales"
   },
   "settings": {
     "title": "Ajustes",
@@ -317,7 +320,9 @@
     "method_disabled": "El administrador desactivó este método",
     "already_enrolled": "Ya está configurado; quítalo primero",
     "no_enrolment": "Vuelve a empezar la configuración",
-    "passkey_rejected": "La llave de acceso no fue aceptada"
+    "passkey_rejected": "La llave de acceso no fue aceptada",
+    "rates_disabled": "La obtención de tipos no está activa",
+    "rates_unavailable": "Ningún proveedor respondió; inténtalo más tarde"
   },
   "profile": {
     "username_hint": "Para iniciar sesión: a-z, 0-9, punto, guion, guion bajo"
@@ -425,7 +430,8 @@
     "passkey_ok": "Acceso con llave de acceso",
     "passkey_bad": "Llave de acceso rechazada",
     "signin_code_sent": "Código de acceso enviado",
-    "recovery_regenerated": "Nuevos códigos de recuperación"
+    "recovery_regenerated": "Nuevos códigos de recuperación",
+    "admin_rates_refreshed": "Tipos obtenidos por un administrador"
   },
   "admin": {
     "title": "Administración",
@@ -520,7 +526,22 @@
     "test_hint_log": "Aún no se envía correo: hasta guardar SMTP, los mensajes van al registro del servidor.",
     "reset_mfa": "Restablecer el inicio en dos pasos",
     "reset_mfa_confirm": "¿Quitar todos los segundos factores de este usuario y cerrar su sesión? Los configurará al volver a entrar.",
-    "mfa_was_reset": "Inicio en dos pasos restablecido"
+    "mfa_was_reset": "Inicio en dos pasos restablecido",
+    "tab_rates": "Tipos de cambio",
+    "rates_title": "Tipos de cambio automáticos",
+    "rates_hint": "Cada día el servidor guarda el USD frente a todas las monedas (open.er-api, con fawazahmed0 de respaldo y para días faltantes); cualquier par se cruza por el USD. Los tipos de un período cerrado nunca cambian.",
+    "rates_off": "El programador está apagado (RATES_ENABLED=false): solo tipos manuales.",
+    "rates_refresh": "Obtener los últimos ahora",
+    "rates_backfill": "O un día pasado",
+    "rates_fetch_day": "Obtener ese día",
+    "rates_recent": "Obtenciones recientes",
+    "rates_none": "Aún no se obtuvo nada.",
+    "rates_day": "Tipos del",
+    "rates_count": "Tipos",
+    "rates_latest": "último",
+    "rates_locked": "cerrados",
+    "rates_ok": "Guardado",
+    "rates_stored": "{n} tipos del {date} de {source}"
   },
   "mfa": {
     "title": "Inicio de sesión en dos pasos",

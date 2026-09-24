@@ -91,9 +91,9 @@ func Migrate(dsn string) error {
 	return nil
 }
 
-// MigrateDown reverts the newest n migrations. Only tests use it; production
-// rolls back with a restore, never by running a down file.
-func MigrateDown(dsn string, n int) error {
+// MigrateTo moves the schema to version (down or up). Only tests use it;
+// production rolls back with a restore, never by running a down file.
+func MigrateTo(dsn string, version uint) error {
 	src, err := iofs.New(migrations.MigrationsFiles, ".")
 	if err != nil {
 		return err
@@ -103,7 +103,7 @@ func MigrateDown(dsn string, n int) error {
 		return err
 	}
 	defer m.Close()
-	return m.Steps(-n)
+	return m.Migrate(version)
 }
 
 func toMigrateURL(dsn string) string {

@@ -209,7 +209,10 @@
     "add_commodity": "新增",
     "no_commodities": "尚未新增。",
     "rate_from": "來源幣別",
-    "rate_to": "目標幣別"
+    "rate_to": "目標幣別",
+    "rates_today": "今日匯率（以 {base} 計）",
+    "rates_auto": "每日自動更新；下方手動匯率在其日期優先。",
+    "manual_rates": "手動匯率"
   },
   "settings": {
     "title": "個人設定",
@@ -317,7 +320,9 @@
     "method_disabled": "管理員已停用此方式",
     "already_enrolled": "已設定，請先移除",
     "no_enrolment": "請重新開始設定",
-    "passkey_rejected": "通行金鑰驗證失敗"
+    "passkey_rejected": "通行金鑰驗證失敗",
+    "rates_disabled": "匯率取得功能未啟用",
+    "rates_unavailable": "沒有匯率來源回應，請稍後再試"
   },
   "profile": {
     "username_hint": "用於登入：a-z、0-9、點、連字號、底線"
@@ -425,7 +430,8 @@
     "passkey_ok": "使用通行金鑰登入",
     "passkey_bad": "通行金鑰驗證失敗",
     "signin_code_sent": "已寄送登入驗證碼",
-    "recovery_regenerated": "重新產生救援碼"
+    "recovery_regenerated": "重新產生救援碼",
+    "admin_rates_refreshed": "管理員手動取得匯率"
   },
   "admin": {
     "title": "系統管理",
@@ -520,7 +526,22 @@
     "test_hint_log": "目前尚未真正寄信：在儲存 SMTP 設定前，郵件只會寫入伺服器日誌。",
     "reset_mfa": "重設雙重驗證",
     "reset_mfa_confirm": "移除此使用者所有雙重驗證方式並登出？下次登入時需重新設定。",
-    "mfa_was_reset": "已重設雙重驗證"
+    "mfa_was_reset": "已重設雙重驗證",
+    "tab_rates": "匯率",
+    "rates_title": "自動匯率",
+    "rates_hint": "伺服器每天儲存美元對所有幣別的匯率（open.er-api，fawazahmed0 為備援並補齊缺漏的日期），任意幣別組合經由美元換算。已鎖帳期間的匯率不會被變更。",
+    "rates_off": "排程已關閉（RATES_ENABLED=false）：僅使用手動匯率。",
+    "rates_refresh": "立即取得最新匯率",
+    "rates_backfill": "或指定過去日期",
+    "rates_fetch_day": "取得該日匯率",
+    "rates_recent": "最近的取得紀錄",
+    "rates_none": "尚未取得任何匯率。",
+    "rates_day": "匯率日期",
+    "rates_count": "筆數",
+    "rates_latest": "最新",
+    "rates_locked": "已鎖帳",
+    "rates_ok": "已儲存",
+    "rates_stored": "已儲存 {source} 的 {date} 匯率 {n} 筆"
   },
   "mfa": {
     "title": "雙重驗證登入",

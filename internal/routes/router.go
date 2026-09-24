@@ -18,12 +18,14 @@ import (
 	"github.com/cwchen-twn/rigel-ledger/internal/auth"
 	"github.com/cwchen-twn/rigel-ledger/internal/identity"
 	"github.com/cwchen-twn/rigel-ledger/internal/ledger"
+	"github.com/cwchen-twn/rigel-ledger/internal/rates"
 	"github.com/cwchen-twn/rigel-ledger/internal/response"
 )
 
 type Deps struct {
 	Service  *ledger.Service
 	Identity *identity.Service
+	Rates    *rates.Service // nil: no scheduler (tests)
 	Auth     *auth.Manager
 	// TrustedProxies are the hops whose X-Forwarded-For is believed.
 	TrustedProxies []netip.Prefix
@@ -42,6 +44,7 @@ type Deps struct {
 type handlers struct {
 	svc       *ledger.Service
 	identity  *identity.Service
+	rates     *rates.Service
 	auth      *auth.Manager
 	templates *response.TemplateEngine
 	logger    *slog.Logger
@@ -53,7 +56,7 @@ type handlers struct {
 //	@version	1.0
 //	@description	Session cookie (browser) or Bearer token (scripts, mobile). Cookie-authenticated POST/PUT/PATCH/DELETE must send X-Rigel-Client.
 func New(d Deps) http.Handler {
-	h := &handlers{svc: d.Service, identity: d.Identity, auth: d.Auth, templates: d.Templates, logger: d.Logger}
+	h := &handlers{svc: d.Service, identity: d.Identity, rates: d.Rates, auth: d.Auth, templates: d.Templates, logger: d.Logger}
 	r := chi.NewRouter()
 
 	r.Use(middleware.Compress(6, "text/*", "application/*"))
@@ -197,6 +200,8 @@ func New(d Deps) http.Handler {
 						r.Post("/access-requests/{requestID}/reject", h.rejectRequest)
 						r.Get("/events", h.adminEvents)
 						r.Post("/users/{userID}/reset-mfa", h.resetMFA)
+						r.Get("/rates", h.rateFetches)
+						r.Post("/rates/refresh", h.refreshRates)
 					})
 
 					r.Get("/books", h.listBooks)
@@ -232,6 +237,7 @@ func New(d Deps) http.Handler {
 						r.Post("/prices", h.addPrice)
 						r.Delete("/prices/{priceID}", h.deletePrice)
 						r.Get("/rate", h.rate)
+						r.Get("/rates/current", h.currentRates)
 					})
 				})
 			})

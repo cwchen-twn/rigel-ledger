@@ -7,6 +7,7 @@ RETURNING *;
 -- name: ListPrices :many
 SELECT * FROM prices
 WHERE (sqlc.narg(commodity)::text IS NULL OR commodity = sqlc.narg(commodity)::text OR quote = sqlc.narg(commodity)::text)
+  AND (sqlc.narg(source)::text IS NULL OR source = sqlc.narg(source)::text)
 ORDER BY date DESC, commodity, quote
 LIMIT @lim;
 

@@ -57,17 +57,19 @@ func (q *Queries) LatestPrice(ctx context.Context, arg LatestPriceParams) (Price
 const listPrices = `-- name: ListPrices :many
 SELECT id, commodity, quote, date, rate, source, created_by, created_at FROM prices
 WHERE ($1::text IS NULL OR commodity = $1::text OR quote = $1::text)
+  AND ($2::text IS NULL OR source = $2::text)
 ORDER BY date DESC, commodity, quote
-LIMIT $2
+LIMIT $3
 `
 
 type ListPricesParams struct {
 	Commodity *string
+	Source    *string
 	Lim       int32
 }
 
 func (q *Queries) ListPrices(ctx context.Context, arg ListPricesParams) ([]Price, error) {
-	rows, err := q.db.Query(ctx, listPrices, arg.Commodity, arg.Lim)
+	rows, err := q.db.Query(ctx, listPrices, arg.Commodity, arg.Source, arg.Lim)
 	if err != nil {
 		return nil, err
 	}

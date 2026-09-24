@@ -436,6 +436,17 @@ type Price struct {
 	CreatedAt time.Time
 }
 
+type RateFetch struct {
+	ID        int64
+	Source    string
+	RateDate  *time.Time
+	Requested *time.Time
+	Rates     int32
+	Skipped   int32
+	Error     string
+	FetchedAt time.Time
+}
+
 type Session struct {
 	ID         int64
 	UserID     int64

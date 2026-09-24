@@ -260,6 +260,63 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/admin/rates": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Recent exchange-rate fetches (admin)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.RateStatusDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/rates/refresh": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Fetch the latest exchange rates now, or one past day's (admin)",
+                "parameters": [
+                    {
+                        "description": "optional day",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/routes.refreshRatesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.RateFetchDTO"
+                        }
+                    },
+                    "502": {
+                        "description": "every provider failed",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/api/admin/settings": {
             "get": {
                 "produces": [
@@ -1547,6 +1604,37 @@ const docTemplate = `{
                         "description": "rate is null when unknown",
                         "schema": {
                             "$ref": "#/definitions/routes.RateDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/rates/current": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "prices"
+                ],
+                "summary": "Today's rate of each currency the book uses, in its base",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/routes.CurrentRateDTO"
+                            }
                         }
                     }
                 }
@@ -2902,6 +2990,18 @@ const docTemplate = `{
                 }
             }
         },
+        "routes.CurrentRateDTO": {
+            "type": "object",
+            "properties": {
+                "currency": {
+                    "type": "string"
+                },
+                "rate": {
+                    "description": "1 unit of currency in the book's base; null when no rate is known.",
+                    "type": "string"
+                }
+            }
+        },
         "routes.EnrolledDTO": {
             "type": "object",
             "properties": {
@@ -3137,6 +3237,50 @@ const docTemplate = `{
                 },
                 "to": {
                     "type": "string"
+                }
+            }
+        },
+        "routes.RateFetchDTO": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "fetched_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "rate_date": {
+                    "type": "string"
+                },
+                "rates": {
+                    "type": "integer"
+                },
+                "requested": {
+                    "type": "string"
+                },
+                "skipped": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.RateStatusDTO": {
+            "type": "object",
+            "properties": {
+                "recent": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.RateFetchDTO"
+                    }
+                },
+                "scheduler": {
+                    "description": "False when RATES_ENABLED=false or the scheduler is not wired (tests).",
+                    "type": "boolean"
                 }
             }
         },
@@ -3757,6 +3901,16 @@ const docTemplate = `{
                 },
                 "rate": {
                     "type": "string"
+                }
+            }
+        },
+        "routes.refreshRatesRequest": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "description": "A past day to backfill; empty for the latest rates.",
+                    "type": "string",
+                    "format": "date"
                 }
             }
         },

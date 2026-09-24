@@ -353,3 +353,19 @@ export interface Settings {
   theme: Theme;
   default_book_id: number | null;
 }
+
+export interface RateFetch {
+  id: number;
+  source: string;
+  rate_date: string | null;
+  requested: string | null;
+  rates: number;
+  skipped: number;
+  error: string;
+  fetched_at: string;
+}
+
+export interface RateStatus {
+  scheduler: boolean;
+  recent: RateFetch[];
+}

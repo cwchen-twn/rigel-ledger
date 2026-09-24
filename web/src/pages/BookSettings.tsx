@@ -63,6 +63,7 @@ export default function BookSettings() {
 
   // ---- rates ----
   const [prices, { refetch: refetchPrices }] = createResource(book.id, (id) => api.prices(id));
+  const [current, { refetch: refetchCurrent }] = createResource(book.id, (id) => api.currentRates(id));
   const [rc, setRc] = createSignal('USD');
   const [rq, setRq] = createSignal('');
   const [rd, setRd] = createSignal(today());
@@ -76,6 +77,7 @@ export default function BookSettings() {
       await api.addPrice(book.id(), { commodity: rc(), quote: rq(), date: rd(), rate });
       setRv('');
       refetchPrices();
+      refetchCurrent();
     } catch (err) {
       toast.error(te(err));
     }
@@ -244,6 +246,27 @@ export default function BookSettings() {
             <CardDescription>{t('book.rates_hint')}</CardDescription>
           </CardHeader>
           <CardContent class="grid gap-4">
+            <Show when={(current() ?? []).length}>
+              <div class="grid gap-2">
+                <p class="text-sm font-medium">{t('book.rates_today', { base: book.book()?.base_currency ?? '' })}</p>
+                <div class="flex flex-wrap gap-2">
+                  <For each={current() ?? []}>
+                    {(c) => (
+                      <span class="rounded-md border px-2 py-1 text-sm tabular-nums">
+                        1 {c.currency} = {c.rate ?? '—'} {book.book()?.base_currency}
+                      </span>
+                    )}
+                  </For>
+                </div>
+                <p class="text-xs text-muted-foreground">
+                  {t('book.rates_auto')}{' '}
+                  <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener noreferrer" class="underline underline-offset-4">
+                    Rates By Exchange Rate API
+                  </a>
+                </p>
+              </div>
+            </Show>
+            <p class="text-sm font-medium">{t('book.manual_rates')}</p>
             <Show when={book.canEdit()}>
               <form class="grid grid-cols-2 items-end gap-2 sm:grid-cols-[6rem_6rem_10rem_1fr_auto]" onSubmit={addRate}>
                 <SearchSelect aria-label={t('book.rate_from')} options={commodityOptions(currencies())} value={rc()} onChange={setRc} />
@@ -276,7 +299,7 @@ export default function BookSettings() {
                           <Show when={p.source === 'manual' && book.canEdit()}>
                             <Button variant="ghost" size="icon" aria-label={t('common.delete')}
                               onClick={async () => {
-                                try { await api.deletePrice(book.id(), p.id); refetchPrices(); } catch (err) { toast.error(te(err)); }
+                                try { await api.deletePrice(book.id(), p.id); refetchPrices(); refetchCurrent(); } catch (err) { toast.error(te(err)); }
                               }}>
                               <Trash2 />
                             </Button>

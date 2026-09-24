@@ -197,7 +197,9 @@ func (s *Service) SetAdmin(ctx context.Context, username string, admin bool) err
 
 // --- prices (manual exchange rates in P1; the scraper arrives in P3) ---
 
-func (s *Service) ListPrices(ctx context.Context, commodity string, limit int) ([]db.Price, error) {
+// ListPrices lists stored rates, newest first; source "manual" keeps out
+// the daily snapshots the scheduler stores (about 155 rows a day).
+func (s *Service) ListPrices(ctx context.Context, commodity, source string, limit int) ([]db.Price, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
@@ -205,7 +207,38 @@ func (s *Service) ListPrices(ctx context.Context, commodity string, limit int) (
 	if c := strings.ToUpper(strings.TrimSpace(commodity)); c != "" {
 		p.Commodity = &c
 	}
+	if source != "" {
+		p.Source = &source
+	}
 	return s.store.ListPrices(ctx, p)
+}
+
+// CurrentRate is one of a book's currencies against its base, today.
+type CurrentRate struct {
+	Currency string
+	Rate     decimal.Decimal
+	Known    bool
+}
+
+// CurrentRates answers "what is each currency this book uses worth in its
+// base today", for the book settings page.
+func (s *Service) CurrentRates(ctx context.Context, a Access, on time.Time) ([]CurrentRate, error) {
+	codes, err := s.store.BookCurrencies(ctx, a.Book.ID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]CurrentRate, 0, len(codes))
+	for _, c := range codes {
+		if c == a.Book.BaseCurrency {
+			continue
+		}
+		r, ok, err := RateOn(ctx, s.store.Queries, c, a.Book.BaseCurrency, on)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, CurrentRate{Currency: c, Rate: r, Known: ok})
+	}
+	return out, nil
 }
 
 type PriceInput struct {

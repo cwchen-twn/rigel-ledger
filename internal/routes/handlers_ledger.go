@@ -419,7 +419,7 @@ func (h *handlers) balances(w http.ResponseWriter, r *http.Request) {
 //	@Router		/api/books/{bookID}/prices [get]
 func (h *handlers) listPrices(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	ps, err := h.svc.ListPrices(r.Context(), r.URL.Query().Get("commodity"), limit)
+	ps, err := h.svc.ListPrices(r.Context(), r.URL.Query().Get("commodity"), r.URL.Query().Get("source"), limit)
 	if err != nil {
 		h.fail(w, r, err)
 		return

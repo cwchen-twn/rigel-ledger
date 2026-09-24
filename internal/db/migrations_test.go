@@ -8,7 +8,7 @@ import (
 	"github.com/cwchen-twn/rigel-ledger/internal/dbtest"
 )
 
-// 000002 and 000003 must go down and up again over real data: the first migration
+// Every migration after 000001 must go down and up again over real data: the first migration
 // written after the first deployment, applied to a database with users.
 func TestAccountsAdminMigrationRoundTrip(t *testing.T) {
 	store, dsn := dbtest.NewWithDSN(t)
@@ -28,7 +28,7 @@ func TestAccountsAdminMigrationRoundTrip(t *testing.T) {
 	}
 
 	store.Close()
-	if err := db.MigrateDown(dsn, 2); err != nil { // 000003, then 000002
+	if err := db.MigrateTo(dsn, 1); err != nil { // every down file back to 000001
 		t.Fatalf("down: %v", err)
 	}
 	if err := db.Migrate(dsn); err != nil {

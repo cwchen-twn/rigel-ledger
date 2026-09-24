@@ -59,6 +59,7 @@ internal/
                     #   registration, email verification, the first-login wizard, admin users
   auth/             # Opaque session tokens, CSRF header, client IP, sign-in throttle + auth_events
   mail/             # SMTP/log senders and the embedded mail templates (en, zh, es)
+  rates/            # Exchange-rate providers and the hourly scheduler (USD snapshots into prices)
   secretbox/        # AES-256-GCM sealing of secrets the DB holds (APP_ENCRYPTION_KEY)
   routes/           # chi router, handlers, JSON DTOs
   response/         # JSON helpers and the SPA shell template
@@ -85,6 +86,7 @@ api/                # Generated Swagger output (do not edit manually)
 
 - Postings are signed (debit > 0). `amount` is in the posting's commodity; `base_amount` is in the book's base currency. A foreign line takes the client's `base_amount` or is converted via `RateOn` (direct, inverse, or crossed through USD, newest price on or before the date).
 - A residue of at most one base minor unit is booked to the `fx_gain_loss` account; anything larger is `unbalanced`.
+- Exchange rates: `internal/rates` stores one USD->X snapshot per day for every ISO currency (source `er-api` or `fawaz`); `RateOn` crosses through USD. A `manual` rate wins on its date. Never persist a rate as float: providers are decoded with `json.Number`.
 - Commodities are `currency` (ISO seed), `security` (`XNAS:AAPL`, quoted in `quote_currency`, futures carry `contract_size`) or `points` (`MILES:EVA`, never priced). For the last two, `amount` is units and `base_amount` is cost: a buy with `unit_cost` is priced via the quote rate; units leaving an asset account go at weighted-average cost (`costBasis`, excluding the transaction being edited); anything else must state its cost (`cost_required`).
 - `validCurrency` means ISO money only (book base, display currency, rate quote); `validCommodity` is anything an account can hold. The commodity cache is dropped on `CreateCommodity`.
 - `prices` obeys the lock date too: a rate on or before the lock date of any book using either side is frozen (trigger `prices_lock`).
@@ -124,6 +126,7 @@ Copy `.env.example` to `.env`. Real environment variables always win over `.env`
 | `APP_ORIGIN` | Public base URL that mail links point at (`https://ledger.chenantunez.com`); development defaults to `http://localhost:<port>` |
 | `APP_ENCRYPTION_KEY` | 32 bytes base64 (`openssl rand -base64 32`); seals the SMTP password (and TOTP seeds). Required in production; development uses a public dev key |
 | `TRUSTED_PROXIES` | CIDRs whose `X-Forwarded-For` is believed (default pod network + loopback) |
+| `RATES_ENABLED` | Daily exchange-rate fetch (default `true`): USD vs every currency from open.er-api, fawazahmed0 as fallback and backfill; `false` = manual rates only |
 | `ADMIN_USERNAME` / `ADMIN_INITIAL_PASSWORD` / `ADMIN_EMAIL` | Bootstrap admin, created only while no admin exists; must change the password in the wizard |
 | `MAIL_DRIVER`, `SMTP_HOST/PORT/SECURITY/USER/PASS`, `MAIL_FROM(_NAME)` | Seed the mail settings on the first start only; afterwards the Administration page owns them. `MAIL_DRIVER=log` prints mails (links, codes) to the log |
 

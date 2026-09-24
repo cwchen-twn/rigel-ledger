@@ -145,6 +145,8 @@ export const api = {
     reject: (id: number) => post<void>(`/api/admin/access-requests/${id}/reject`),
     events: (limit = 100) => get<T.AuthEvent[]>(`/api/admin/events${qs({ limit })}`),
     resetMFA: (id: number) => post<void>(`/api/admin/users/${id}/reset-mfa`),
+    rates: () => get<T.RateStatus>('/api/admin/rates'),
+    refreshRates: (date?: string) => post<T.RateFetch>('/api/admin/rates/refresh', date ? { date } : {}),
   },
   currencies: () => get<T.Currency[]>('/api/currencies'),
   commodities: () => get<T.Commodity[]>('/api/commodities'),
@@ -184,7 +186,9 @@ export const api = {
 
   balances: (id: number, asOf: string) => get<T.Balances>(`${book(id)}/balances${qs({ as_of: asOf })}`),
 
-  prices: (id: number) => get<T.Price[]>(`${book(id)}/prices`),
+  /** Manual rates only: the daily snapshots would bury them. */
+  prices: (id: number) => get<T.Price[]>(`${book(id)}/prices${qs({ source: 'manual' })}`),
+  currentRates: (id: number) => get<{ currency: string; rate: string | null }[]>(`${book(id)}/rates/current`),
   addPrice: (id: number, p: { commodity: string; quote: string; date: string; rate: string }) =>
     post<T.Price>(`${book(id)}/prices`, p),
   deletePrice: (id: number, priceId: number) => del(`${book(id)}/prices/${priceId}`),

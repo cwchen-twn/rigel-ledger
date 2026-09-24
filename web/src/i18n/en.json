@@ -209,7 +209,10 @@
     "add_commodity": "Add",
     "no_commodities": "None yet.",
     "rate_from": "From currency",
-    "rate_to": "To currency"
+    "rate_to": "To currency",
+    "rates_today": "Today, in {base}",
+    "rates_auto": "Updated daily and automatically; a manual rate below wins on its day.",
+    "manual_rates": "Manual rates"
   },
   "settings": {
     "title": "Settings",
@@ -317,7 +320,9 @@
     "method_disabled": "The administrator has turned this method off",
     "already_enrolled": "Already set up; remove it first",
     "no_enrolment": "Start the setup again",
-    "passkey_rejected": "The passkey was not accepted"
+    "passkey_rejected": "The passkey was not accepted",
+    "rates_disabled": "The exchange-rate fetch is not running",
+    "rates_unavailable": "No provider answered; try again later"
   },
   "profile": {
     "username_hint": "Used to sign in: a-z, 0-9, dot, dash, underscore"
@@ -425,7 +430,8 @@
     "passkey_ok": "Signed in with a passkey",
     "passkey_bad": "Passkey not accepted",
     "signin_code_sent": "Sign-in code sent",
-    "recovery_regenerated": "New recovery codes"
+    "recovery_regenerated": "New recovery codes",
+    "admin_rates_refreshed": "Exchange rates fetched by an admin"
   },
   "admin": {
     "title": "Administration",
@@ -520,7 +526,22 @@
     "test_hint_log": "Mail is not being sent yet: delivery is the server log until SMTP is saved.",
     "reset_mfa": "Reset two-factor sign-in",
     "reset_mfa_confirm": "Remove every second factor of this user and sign them out? They set it up again at the next sign-in.",
-    "mfa_was_reset": "Two-factor sign-in reset"
+    "mfa_was_reset": "Two-factor sign-in reset",
+    "tab_rates": "Exchange rates",
+    "rates_title": "Automatic exchange rates",
+    "rates_hint": "Every day the server stores USD against every currency (open.er-api, with fawazahmed0 as fallback and for missed days); any pair is crossed through USD. Rates for a locked period are never changed.",
+    "rates_off": "The scheduler is off (RATES_ENABLED=false): rates are manual only.",
+    "rates_refresh": "Fetch the latest now",
+    "rates_backfill": "Or a past day",
+    "rates_fetch_day": "Fetch that day",
+    "rates_recent": "Recent fetches",
+    "rates_none": "Nothing fetched yet.",
+    "rates_day": "Rates for",
+    "rates_count": "Rates",
+    "rates_latest": "latest",
+    "rates_locked": "locked",
+    "rates_ok": "Stored",
+    "rates_stored": "{n} rates for {date} from {source}"
   },
   "mfa": {
     "title": "Two-factor sign-in",

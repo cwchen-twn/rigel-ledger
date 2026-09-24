@@ -318,6 +318,14 @@ definitions:
       name:
         type: string
     type: object
+  routes.CurrentRateDTO:
+    properties:
+      currency:
+        type: string
+      rate:
+        description: 1 unit of currency in the book's base; null when no rate is known.
+        type: string
+    type: object
   routes.EnrolledDTO:
     properties:
       recovery_codes:
@@ -476,6 +484,36 @@ definitions:
         type: string
       to:
         type: string
+    type: object
+  routes.RateFetchDTO:
+    properties:
+      error:
+        type: string
+      fetched_at:
+        type: string
+      id:
+        type: integer
+      rate_date:
+        type: string
+      rates:
+        type: integer
+      requested:
+        type: string
+      skipped:
+        type: integer
+      source:
+        type: string
+    type: object
+  routes.RateStatusDTO:
+    properties:
+      recent:
+        items:
+          $ref: '#/definitions/routes.RateFetchDTO'
+        type: array
+      scheduler:
+        description: False when RATES_ENABLED=false or the scheduler is not wired
+          (tests).
+        type: boolean
     type: object
   routes.SessionDTO:
     properties:
@@ -893,6 +931,13 @@ definitions:
       rate:
         type: string
     type: object
+  routes.refreshRatesRequest:
+    properties:
+      date:
+        description: A past day to backfill; empty for the latest rates.
+        format: date
+        type: string
+    type: object
   routes.registerRequest:
     properties:
       email:
@@ -1137,6 +1182,42 @@ paths:
           schema:
             $ref: '#/definitions/response.ErrorBody'
       summary: Send a test email to yourself with the saved mail settings (admin)
+      tags:
+      - admin
+  /api/admin/rates:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.RateStatusDTO'
+      summary: Recent exchange-rate fetches (admin)
+      tags:
+      - admin
+  /api/admin/rates/refresh:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: optional day
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/routes.refreshRatesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.RateFetchDTO'
+        "502":
+          description: every provider failed
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Fetch the latest exchange rates now, or one past day's (admin)
       tags:
       - admin
   /api/admin/settings:
@@ -1978,6 +2059,26 @@ paths:
           schema:
             $ref: '#/definitions/routes.RateDTO'
       summary: The rate the entry form should pre-fill
+      tags:
+      - prices
+  /api/books/{bookID}/rates/current:
+    get:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/routes.CurrentRateDTO'
+            type: array
+      summary: Today's rate of each currency the book uses, in its base
       tags:
       - prices
   /api/books/{bookID}/tags:

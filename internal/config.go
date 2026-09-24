@@ -46,6 +46,10 @@ type Config struct {
 	// fronts the app.
 	TrustedProxies string `env:"TRUSTED_PROXIES" envDefault:"10.42.0.0/16,127.0.0.1/32,::1/128"`
 
+	// RatesEnabled runs the daily exchange-rate fetch (open.er-api, then
+	// fawazahmed0 as fallback and for backfill). Off: rates are manual only.
+	RatesEnabled bool `env:"RATES_ENABLED" envDefault:"true"`
+
 	// The first administrator, created at startup only while none exists.
 	AdminUsername        string `env:"ADMIN_USERNAME"`
 	AdminInitialPassword string `env:"ADMIN_INITIAL_PASSWORD"`

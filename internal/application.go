@@ -19,6 +19,7 @@ import (
 	"github.com/cwchen-twn/rigel-ledger/internal/identity"
 	"github.com/cwchen-twn/rigel-ledger/internal/ledger"
 	"github.com/cwchen-twn/rigel-ledger/internal/mail"
+	"github.com/cwchen-twn/rigel-ledger/internal/rates"
 	"github.com/cwchen-twn/rigel-ledger/internal/response"
 	"github.com/cwchen-twn/rigel-ledger/internal/routes"
 	"github.com/cwchen-twn/rigel-ledger/internal/secretbox"
@@ -29,6 +30,7 @@ type App struct {
 	cfg     *Config
 	handler http.Handler
 	store   *db.Store
+	rates   *rates.Service
 	logger  *slog.Logger
 	wg      sync.WaitGroup
 }
@@ -107,7 +109,10 @@ func NewApp(cfg *Config, logger *slog.Logger) (*App, error) {
 		return nil, fmt.Errorf("bootstrap admin: %w", err)
 	}
 
+	rateSvc := rates.New(store, rates.DefaultProviders(&http.Client{Timeout: 30 * time.Second}), logger)
+
 	handler := routes.New(routes.Deps{
+		Rates:          rateSvc,
 		Service:        svc,
 		Identity:       ids,
 		Auth:           authMgr,
@@ -122,7 +127,7 @@ func NewApp(cfg *Config, logger *slog.Logger) (*App, error) {
 		Ready:          store.Pool.Ping,
 	})
 
-	return &App{cfg: cfg, handler: handler, store: store, logger: logger}, nil
+	return &App{cfg: cfg, handler: handler, store: store, rates: rateSvc, logger: logger}, nil
 }
 
 // sweepSessions deletes expired sessions, old email tokens and sign-in
@@ -167,6 +172,15 @@ func (app *App) Serve() error {
 	bgCtx, stopBackground := context.WithCancel(context.Background())
 	app.wg.Add(1)
 	go app.sweepSessions(bgCtx)
+	if app.cfg.RatesEnabled {
+		app.wg.Add(1)
+		go func() {
+			defer app.wg.Done()
+			app.rates.Run(bgCtx)
+		}()
+	} else {
+		app.logger.Info("RATES_ENABLED=false: exchange rates are manual only")
+	}
 
 	shutdownErr := make(chan error, 1)
 	go func() {
