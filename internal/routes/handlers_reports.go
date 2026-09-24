@@ -233,3 +233,133 @@ func (h *handlers) cashFlow(w http.ResponseWriter, r *http.Request) {
 		Financing: cf.Financing, FXEffect: cf.FXEffect, Closing: cf.Closing, RatesUsed: ratesDTO(cf.RatesUsed), Missing: cf.Missing,
 	})
 }
+
+type TagSummaryDTO struct {
+	Name         string          `json:"name"`
+	Transactions int64           `json:"transactions"`
+	First        string          `json:"first"`
+	Last         string          `json:"last"`
+	Expenses     decimal.Decimal `json:"expenses" swaggertype:"string"`
+}
+
+type TagReportDTO struct {
+	BaseCurrency string          `json:"base_currency"`
+	Currency     string          `json:"currency"`
+	Tags         []TagSummaryDTO `json:"tags"`
+	RatesUsed    []RateUsedDTO   `json:"rates_used"`
+	Missing      []string        `json:"missing"`
+}
+
+// tagReport
+//
+//	@Summary	Every tag (trip, person, project) and what it spent
+//	@Tags		reports
+//	@Produce	json
+//	@Param		bookID		path		int		true	"book id"
+//	@Param		currency	query		string	false	"report currency"
+//	@Success	200			{object}	TagReportDTO
+//	@Router		/api/books/{bookID}/reports/tags [get]
+func (h *handlers) tagReport(w http.ResponseWriter, r *http.Request) {
+	rep, err := h.svc.Tags(r.Context(), access(r), reportCurrency(r), todayUTC())
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	out := TagReportDTO{BaseCurrency: rep.BaseCurrency, Currency: rep.Currency, Tags: make([]TagSummaryDTO, len(rep.Tags)),
+		RatesUsed: ratesDTO(rep.RatesUsed), Missing: rep.Missing}
+	for i, t := range rep.Tags {
+		out.Tags[i] = TagSummaryDTO{Name: t.Name, Transactions: t.Transactions, First: t.First.Format(time.DateOnly),
+			Last: t.Last.Format(time.DateOnly), Expenses: t.Expenses}
+	}
+	response.JSON(w, http.StatusOK, out)
+}
+
+type TagDetailDTO struct {
+	Name         string          `json:"name"`
+	BaseCurrency string          `json:"base_currency"`
+	Currency     string          `json:"currency"`
+	Lines        []ReportLineDTO `json:"lines"`
+	Expenses     decimal.Decimal `json:"expenses" swaggertype:"string"`
+	RatesUsed    []RateUsedDTO   `json:"rates_used"`
+	Missing      []string        `json:"missing"`
+}
+
+// tagDetail
+//
+//	@Summary	One tag's spending by expense account
+//	@Tags		reports
+//	@Produce	json
+//	@Param		bookID		path		int		true	"book id"
+//	@Param		name		query		string	true	"tag name"
+//	@Param		currency	query		string	false	"report currency"
+//	@Success	200			{object}	TagDetailDTO
+//	@Router		/api/books/{bookID}/reports/tag [get]
+func (h *handlers) tagDetail(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		badParam(w, "name", "required")
+		return
+	}
+	d, err := h.svc.Tag(r.Context(), access(r), name, reportCurrency(r), todayUTC())
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, TagDetailDTO{Name: d.Name, BaseCurrency: d.BaseCurrency, Currency: d.Currency,
+		Lines: linesDTO(d.Lines, false), Expenses: d.Expenses, RatesUsed: ratesDTO(d.RatesUsed), Missing: d.Missing})
+}
+
+type rebaseRequest struct {
+	BaseCurrency string `json:"base_currency"`
+	// true: report what would change, change nothing.
+	DryRun bool `json:"dry_run"`
+}
+
+type RebaseGapDTO struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+	Date string `json:"date"`
+}
+
+type RebasePlanDTO struct {
+	From         string          `json:"from"`
+	To           string          `json:"to"`
+	Transactions int             `json:"transactions"`
+	Postings     int             `json:"postings"`
+	Adjusted     int             `json:"adjusted"`
+	Residue      decimal.Decimal `json:"residue" swaggertype:"string"`
+	Gaps         []RebaseGapDTO  `json:"gaps"`
+	Done         bool            `json:"done"`
+}
+
+// rebaseBook
+//
+//	@Summary	Change the book's base currency, re-translating every posting (owner)
+//	@Description	Each posting's base amount is recomputed at its transaction date's rate; differences go to FX gain/loss. Refused while a rate is missing (listed) or the book has a lock date. dry_run reports without changing anything.
+//	@Tags		books
+//	@Accept		json
+//	@Produce	json
+//	@Param		bookID	path		int				true	"book id"
+//	@Param		body	body		rebaseRequest	true	"new base"
+//	@Success	200		{object}	RebasePlanDTO
+//	@Failure	422		{object}	response.ErrorBody	"rebase_rates_missing"
+//	@Failure	409		{object}	response.ErrorBody	"book_locked"
+//	@Router		/api/books/{bookID}/rebase [post]
+func (h *handlers) rebaseBook(w http.ResponseWriter, r *http.Request) {
+	var req rebaseRequest
+	if err := response.Decode(w, r, &req); err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	plan, err := h.svc.Rebase(r.Context(), access(r), req.BaseCurrency, req.DryRun)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	out := RebasePlanDTO{From: plan.From, To: plan.To, Transactions: plan.Transactions, Postings: plan.Postings,
+		Adjusted: plan.Adjusted, Residue: plan.Residue, Gaps: make([]RebaseGapDTO, len(plan.Gaps)), Done: !req.DryRun}
+	for i, g := range plan.Gaps {
+		out.Gaps[i] = RebaseGapDTO{From: g.From, To: g.To, Date: g.Date.Format(time.DateOnly)}
+	}
+	response.JSON(w, http.StatusOK, out)
+}

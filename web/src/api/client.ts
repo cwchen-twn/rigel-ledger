@@ -198,6 +198,10 @@ export const api = {
     get<T.IncomeStatement>(`${book(id)}/reports/income-statement${qs({ from, to, currency })}`),
   cashFlow: (id: number, from: string, to: string, currency: string) =>
     get<T.CashFlow>(`${book(id)}/reports/cash-flow${qs({ from, to, currency })}`),
+  tagReport: (id: number, currency: string) => get<T.TagReport>(`${book(id)}/reports/tags${qs({ currency })}`),
+  tagDetail: (id: number, name: string, currency: string) => get<T.TagDetail>(`${book(id)}/reports/tag${qs({ name, currency })}`),
+  rebase: (id: number, base_currency: string, dry_run: boolean) =>
+    post<T.RebasePlan>(`${book(id)}/rebase`, { base_currency, dry_run }),
   rate: (id: number, from: string, to: string, date: string) =>
     get<T.Rate>(`${book(id)}/rate${qs({ from, to, date })}`),
 };

@@ -1640,6 +1640,59 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/books/{bookID}/rebase": {
+            "post": {
+                "description": "Each posting's base amount is recomputed at its transaction date's rate; differences go to FX gain/loss. Refused while a rate is missing (listed) or the book has a lock date. dry_run reports without changing anything.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "books"
+                ],
+                "summary": "Change the book's base currency, re-translating every posting (owner)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "new base",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.rebaseRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.RebasePlanDTO"
+                        }
+                    },
+                    "409": {
+                        "description": "book_locked",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "422": {
+                        "description": "rebase_rates_missing",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/api/books/{bookID}/reports/balance-sheet": {
             "get": {
                 "produces": [
@@ -1767,6 +1820,81 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/routes.IncomeStatementDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/reports/tag": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reports"
+                ],
+                "summary": "One tag's spending by expense account",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "tag name",
+                        "name": "name",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "report currency",
+                        "name": "currency",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.TagDetailDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/reports/tags": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reports"
+                ],
+                "summary": "Every tag (trip, person, project) and what it spent",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "report currency",
+                        "name": "currency",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.TagReportDTO"
                         }
                     }
                 }
@@ -3612,6 +3740,52 @@ const docTemplate = `{
                 }
             }
         },
+        "routes.RebaseGapDTO": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string"
+                },
+                "from": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.RebasePlanDTO": {
+            "type": "object",
+            "properties": {
+                "adjusted": {
+                    "type": "integer"
+                },
+                "done": {
+                    "type": "boolean"
+                },
+                "from": {
+                    "type": "string"
+                },
+                "gaps": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.RebaseGapDTO"
+                    }
+                },
+                "postings": {
+                    "type": "integer"
+                },
+                "residue": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "string"
+                },
+                "transactions": {
+                    "type": "integer"
+                }
+            }
+        },
         "routes.ReportLineDTO": {
             "type": "object",
             "properties": {
@@ -3680,6 +3854,90 @@ const docTemplate = `{
                 },
                 "uri": {
                     "type": "string"
+                }
+            }
+        },
+        "routes.TagDetailDTO": {
+            "type": "object",
+            "properties": {
+                "base_currency": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "expenses": {
+                    "type": "string"
+                },
+                "lines": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.ReportLineDTO"
+                    }
+                },
+                "missing": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "rates_used": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.RateUsedDTO"
+                    }
+                }
+            }
+        },
+        "routes.TagReportDTO": {
+            "type": "object",
+            "properties": {
+                "base_currency": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "missing": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "rates_used": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.RateUsedDTO"
+                    }
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.TagSummaryDTO"
+                    }
+                }
+            }
+        },
+        "routes.TagSummaryDTO": {
+            "type": "object",
+            "properties": {
+                "expenses": {
+                    "type": "string"
+                },
+                "first": {
+                    "type": "string"
+                },
+                "last": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "transactions": {
+                    "type": "integer"
                 }
             }
         },
@@ -4256,6 +4514,18 @@ const docTemplate = `{
                 },
                 "rate": {
                     "type": "string"
+                }
+            }
+        },
+        "routes.rebaseRequest": {
+            "type": "object",
+            "properties": {
+                "base_currency": {
+                    "type": "string"
+                },
+                "dry_run": {
+                    "description": "true: report what would change, change nothing.",
+                    "type": "boolean"
                 }
             }
         },

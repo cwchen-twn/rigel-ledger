@@ -213,7 +213,17 @@
     "rate_to": "Moneda de destino",
     "rates_today": "Hoy, en {base}",
     "rates_auto": "Se actualizan cada día automáticamente; un tipo manual abajo gana en su día.",
-    "manual_rates": "Tipos manuales"
+    "manual_rates": "Tipos manuales",
+    "rebase_title": "Moneda base",
+    "rebase_hint": "El libro guarda cada importe también en {base}. Cambiarla vuelve a convertir cada apunte al tipo de su fecha; las diferencias van a ganancias/pérdidas cambiarias.",
+    "rebase_to": "Nueva moneda base",
+    "rebase_check": "Comprobar",
+    "rebase_plan": "Se volverían a convertir {transactions} transacciones y {postings} apuntes de {from} a {to}.",
+    "rebase_residue": "{n} transacciones difieren tras la conversión; {amount} {to} en total van a ganancias/pérdidas cambiarias.",
+    "rebase_gaps": "Faltan {n} tipos. Añádelos (o espera a la obtención diaria) y vuelve a comprobar:",
+    "rebase_apply": "Cambiar la base a {to}",
+    "rebase_confirm": "¿Volver a convertir todos los apuntes de este libro de {from} a {to}? Queda en el registro de auditoría.",
+    "rebased": "El libro ahora se lleva en {to}"
   },
   "settings": {
     "title": "Ajustes",
@@ -323,7 +333,8 @@
     "no_enrolment": "Vuelve a empezar la configuración",
     "passkey_rejected": "La llave de acceso no fue aceptada",
     "rates_disabled": "La obtención de tipos no está activa",
-    "rates_unavailable": "Ningún proveedor respondió; inténtalo más tarde"
+    "rates_unavailable": "Ningún proveedor respondió; inténtalo más tarde",
+    "rebase_rates_missing": "Faltan algunos tipos: vuelve a comprobar para verlos"
   },
   "profile": {
     "username_hint": "Para iniciar sesión: a-z, 0-9, punto, guion, guion bajo"
@@ -624,7 +635,12 @@
     "rates_used": "Tipos usados",
     "via_usd": "cruzado por USD",
     "translated": "Las cifras se llevan en {base} y se convierten a {currency} al tipo de la fecha.",
-    "missing": "Sin tipo ni precio para {list}: se muestra al coste."
+    "missing": "Sin tipo ni precio para {list}: se muestra al coste.",
+    "tab_tags": "Viajes y etiquetas",
+    "tags_title": "Lo que gastó cada etiqueta",
+    "no_tags": "Aún no hay transacciones etiquetadas. Añade una etiqueta como \"Japón 2026\".",
+    "tag_count": "{n} transacciones",
+    "tag_total": "Total gastado"
   },
   "account": {
     "template": {

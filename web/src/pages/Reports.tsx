@@ -15,7 +15,7 @@ import { commodityOptions } from '~/lib/options';
 import { useBook } from '~/stores/book';
 import { useSession } from '~/stores/session';
 
-const TABS = ['balance-sheet', 'income-statement', 'cash-flow'] as const;
+const TABS = ['balance-sheet', 'income-statement', 'cash-flow', 'tags'] as const;
 type Tab = (typeof TABS)[number];
 
 /** A row: label left, amount right; `strong` for subtotals. */
@@ -103,7 +103,13 @@ export default function Reports() {
   const [bs] = createResource(() => tab() === 'balance-sheet' && [book.id(), to(), currency()] as const, ([id, d, c]) => api.balanceSheet(id, d, c));
   const [is] = createResource(() => tab() === 'income-statement' && [book.id(), from(), to(), currency()] as const, ([id, f, d, c]) => api.incomeStatement(id, f, d, c));
   const [cf] = createResource(() => tab() === 'cash-flow' && [book.id(), from(), to(), currency()] as const, ([id, f, d, c]) => api.cashFlow(id, f, d, c));
-  const current = () => (tab() === 'balance-sheet' ? bs : tab() === 'income-statement' ? is : cf);
+  const [tags] = createResource(() => tab() === 'tags' && [book.id(), currency()] as const, ([id, c]) => api.tagReport(id, c));
+  const tagName = () => str(search.tag);
+  const [tag] = createResource(
+    () => (tab() === 'tags' && tagName() ? { id: book.id(), name: tagName(), currency: currency() } : false),
+    (q) => api.tagDetail(q.id, q.name, q.currency),
+  );
+  const current = () => (tab() === 'balance-sheet' ? bs : tab() === 'income-statement' ? is : tab() === 'cash-flow' ? cf : tags);
 
   const cfClasses: CfClass[] = ['operating', 'investing', 'financing'];
 
@@ -123,14 +129,16 @@ export default function Reports() {
       </nav>
 
       <div class="mb-6 grid gap-3 sm:grid-cols-[repeat(3,minmax(0,12rem))]">
-        <Show when={tab() !== 'balance-sheet'}>
+        <Show when={tab() !== 'balance-sheet' && tab() !== 'tags'}>
           <Field label={t('reports.from')}>
             <Input type="date" value={from()} onChange={(e) => setSearch({ from: e.currentTarget.value })} />
           </Field>
         </Show>
-        <Field label={tab() === 'balance-sheet' ? t('reports.as_of') : t('reports.to')}>
-          <Input type="date" value={to()} onChange={(e) => setSearch({ to: e.currentTarget.value })} />
-        </Field>
+        <Show when={tab() !== 'tags'}>
+          <Field label={tab() === 'balance-sheet' ? t('reports.as_of') : t('reports.to')}>
+            <Input type="date" value={to()} onChange={(e) => setSearch({ to: e.currentTarget.value })} />
+          </Field>
+        </Show>
         <Field label={t('reports.currency')}>
           <SearchSelect options={commodityOptions(currencies())} value={currency()} onChange={(c) => setSearch({ currency: c })} />
         </Field>
@@ -223,6 +231,55 @@ export default function Reports() {
                 </CardContent>
               </Card>
               <RatesFootnote rates={r().rates_used} missing={r().missing} currency={r().currency} base={r().base_currency} />
+            </div>
+          )}
+        </Match>
+        <Match when={tab() === 'tags' && tags()}>
+          {(r) => (
+            <div class="grid gap-6 lg:grid-cols-2">
+              <Card>
+                <CardHeader><CardTitle>{t('reports.tags_title')}</CardTitle></CardHeader>
+                <CardContent>
+                  <Show when={r().tags.length} fallback={<p class="text-sm text-muted-foreground">{t('reports.no_tags')}</p>}>
+                    <ul class="grid gap-1">
+                      <For each={r().tags}>
+                        {(g) => (
+                          <li>
+                            <button
+                              type="button"
+                              onClick={() => setSearch({ tag: g.name })}
+                              class={cn('flex w-full items-baseline justify-between gap-4 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent',
+                                tagName().toLowerCase() === g.name.toLowerCase() && 'bg-accent')}
+                            >
+                              <span class="grid">
+                                <span class="font-medium">{g.name}</span>
+                                <span class="text-xs text-muted-foreground">
+                                  {formatDate(g.first, user()?.date_format ?? 'YYYY-MM-DD')} – {formatDate(g.last, user()?.date_format ?? 'YYYY-MM-DD')} · {t('reports.tag_count', { n: g.transactions })}
+                                </span>
+                              </span>
+                              <Money amount={g.expenses} currency={r().currency} />
+                            </button>
+                          </li>
+                        )}
+                      </For>
+                    </ul>
+                  </Show>
+                </CardContent>
+              </Card>
+              <Show when={tag()}>
+                {(d) => (
+                  <Card>
+                    <CardHeader><CardTitle>{d().name}</CardTitle></CardHeader>
+                    <CardContent>
+                      <Tree lines={d().lines} cls="expense" currency={d().currency} />
+                      <Row strong label={t('reports.tag_total')} amount={d().expenses} currency={d().currency} />
+                    </CardContent>
+                  </Card>
+                )}
+              </Show>
+              <div class="lg:col-span-2">
+                <RatesFootnote rates={r().rates_used} missing={r().missing} currency={r().currency} base={r().base_currency} />
+              </div>
             </div>
           )}
         </Match>

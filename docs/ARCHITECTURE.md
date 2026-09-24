@@ -257,6 +257,14 @@ Implemented in P3a (`internal/rates`).
 
     This mirrors IAS 21's change of functional currency.
 
+    **Implemented (P3c, `ledger.Rebase`, Book settings -> Base currency):**
+    - Money in another currency is re-translated from its own amount at its date's
+      rate.
+    - Old-base amounts, securities and points have their cost converted.
+    - Each transaction's difference is posted to FX gain/loss.
+    - It refuses while the book has a lock date.
+    - A dry run ("Check") lists every missing (currency, date) pair.
+
 ## IFRS, applied where it fits a household
 
 The three statements are implemented (P3b, `internal/ledger/reports.go`, page
@@ -394,7 +402,10 @@ moves across unchanged.
 - Tags also cover "who spent it" and projects.
 - Tags attach to the whole transaction. Per-posting tags are the known extension, if one
   statement import ever needs splitting.
-- The report itself is P3; filtering the transaction list by tag works today.
+- **Implemented (P3c):** Reports -> "Trips and tags" lists every tag with its span,
+  count and spend, and one tag's spend by expense account. Stored base amounts are
+  historical, so a trip's cost does not move with later rates; the view is translated
+  to the chosen currency at today's rate.
 
 ### Insurance: the money here, the paperwork elsewhere
 
@@ -841,7 +852,7 @@ builds images.
 | P1 | ~~Schema reset, sessions, sqlc; books, accounts, multi-currency transactions API and UI; the "All accounts" balances page; the user Settings page~~ (done) |
 | P2 | ~~Dockerfile, Gitea/GitHub CI and release; probes and the hcloud chart (tailnet-only ipAllowList, own Postgres role, nightly backup); release `v0.1.0` and deploy~~ (done, 2026-09-24) |
 | P2.5 | **Accounts and sign-in security.** a: first-login wizard, verified email, invitations, registration modes, bootstrap admin, the Administration page (users, requests, sign-in rules, defaults, SMTP), throttling and the sign-in audit, sessions (migration `000002`). b: ~~two-factor sign-in -- email codes, TOTP, passkeys, recovery codes, enforcement (`000003`)~~ (done). Both before any public exposure |
-| P3 | ~~Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency)~~ (P3a, done); ~~the three statements bound to closing rates with `rates_used`, display-currency translation~~ (P3b, done); book rebase, tag (trip) report |
+| P3 | ~~Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency)~~ (P3a, done); ~~the three statements bound to closing rates with `rates_used`, display-currency translation~~ (P3b, done); ~~book rebase, tag (trip) report~~ (P3c, done) |
 | P4 | **Sync and review**: import API with `import_rows` kinds, `source_accounts`, review queue, rules, matching (pending/posted, transfers, invoices, order emails), assertions, challenges; receipt attachments (upload, camera, optional local OCR); the tw-sync runner (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
 | P5 | Securities and futures: py-sync (Shioaji daily, Firstrade), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, 永豐 deposits, Banco Continental (if its export is not enough). Recurring list and subscription templates. (Points, average cost and the security commodity itself are done.) |
 | P6 | PWA polish, then Flutter if a native feature is needed |

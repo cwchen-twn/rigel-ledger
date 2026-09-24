@@ -213,7 +213,17 @@
     "rate_to": "目標幣別",
     "rates_today": "今日匯率（以 {base} 計）",
     "rates_auto": "每日自動更新；下方手動匯率在其日期優先。",
-    "manual_rates": "手動匯率"
+    "manual_rates": "手動匯率",
+    "rebase_title": "本位幣",
+    "rebase_hint": "帳本所有金額也以 {base} 記錄。變更時，每筆分錄會以其交易日匯率重新換算，差額計入匯兌損益。",
+    "rebase_to": "新本位幣",
+    "rebase_check": "檢查",
+    "rebase_plan": "將有 {transactions} 筆交易、{postings} 筆分錄由 {from} 重新換算為 {to}。",
+    "rebase_residue": "{n} 筆交易重新換算後有差額，合計 {amount} {to} 計入匯兌損益。",
+    "rebase_gaps": "缺少 {n} 筆匯率。請先補上（或等待每日自動取得）後再檢查：",
+    "rebase_apply": "將本位幣改為 {to}",
+    "rebase_confirm": "確定將此帳本所有分錄由 {from} 重新換算為 {to}？此操作會記錄於稽核紀錄。",
+    "rebased": "帳本已改以 {to} 記帳"
   },
   "settings": {
     "title": "個人設定",
@@ -323,7 +333,8 @@
     "no_enrolment": "請重新開始設定",
     "passkey_rejected": "通行金鑰驗證失敗",
     "rates_disabled": "匯率取得功能未啟用",
-    "rates_unavailable": "沒有匯率來源回應，請稍後再試"
+    "rates_unavailable": "沒有匯率來源回應，請稍後再試",
+    "rebase_rates_missing": "缺少部分匯率，請重新檢查以查看明細"
   },
   "profile": {
     "username_hint": "用於登入：a-z、0-9、點、連字號、底線"
@@ -624,7 +635,12 @@
     "rates_used": "使用的匯率",
     "via_usd": "經由美元換算",
     "translated": "帳本以 {base} 記帳，報表以報表日匯率換算為 {currency}。",
-    "missing": "{list} 沒有匯率或價格，以成本列示。"
+    "missing": "{list} 沒有匯率或價格，以成本列示。",
+    "tab_tags": "旅程與標籤",
+    "tags_title": "各標籤的花費",
+    "no_tags": "尚無標籤交易。可為交易加上「日本 2026」等標籤。",
+    "tag_count": "{n} 筆交易",
+    "tag_total": "花費總計"
   },
   "account": {
     "template": {

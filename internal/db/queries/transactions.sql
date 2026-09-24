@@ -68,3 +68,43 @@ FROM transaction_tags tt
 JOIN tags t ON t.id = tt.tag_id
 WHERE tt.transaction_id = ANY(@transaction_ids::bigint[])
 ORDER BY lower(t.name);
+
+-- name: TagSummaries :many
+-- Every tag of a book with its span and what its transactions spent
+-- (expense postings at their stored base amounts: miles at cost).
+SELECT tg.name,
+       count(DISTINCT t.id)::BIGINT                                          AS transactions,
+       min(t.date)::DATE                                                     AS first_date,
+       max(t.date)::DATE                                                     AS last_date,
+       coalesce(sum(p.base_amount) FILTER (WHERE a.class = 'expense'), 0)::numeric AS expenses
+FROM tags tg
+JOIN transaction_tags tt ON tt.tag_id = tg.id
+JOIN transactions t ON t.id = tt.transaction_id
+JOIN postings p ON p.transaction_id = t.id
+JOIN accounts a ON a.id = p.account_id
+WHERE tg.book_id = @book_id
+GROUP BY tg.name
+ORDER BY max(t.date) DESC, tg.name;
+
+-- name: TagExpenses :many
+-- One tag's expense postings, per account.
+SELECT p.account_id, coalesce(sum(p.base_amount), 0)::numeric AS base_amount
+FROM tags tg
+JOIN transaction_tags tt ON tt.tag_id = tg.id
+JOIN postings p ON p.transaction_id = tt.transaction_id
+JOIN accounts a ON a.id = p.account_id
+WHERE tg.book_id = @book_id AND lower(tg.name) = lower(@name) AND a.class = 'expense'
+GROUP BY p.account_id;
+
+-- name: RebasePostings :many
+-- Every posting of a book with its transaction date, for a change of base.
+SELECT p.id, p.transaction_id, p.account_id, p.commodity, p.amount, p.base_amount, t.date
+FROM postings p JOIN transactions t ON t.id = p.transaction_id
+WHERE t.book_id = @book_id
+ORDER BY t.id, p.position;
+
+-- name: SetPostingBase :exec
+UPDATE postings SET base_amount = @base_amount WHERE id = @id;
+
+-- name: MaxPostingPosition :one
+SELECT coalesce(max(position), 0)::INT FROM postings WHERE transaction_id = @transaction_id;

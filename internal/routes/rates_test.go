@@ -82,3 +82,35 @@ func TestReportEndpoints(t *testing.T) {
 		t.Fatalf("non-member = %d", res.StatusCode)
 	}
 }
+
+func TestTagAndRebaseEndpoints(t *testing.T) {
+	f := newAPI(t)
+	alice := f.browser("alice")
+	var book BookDTO
+	alice.json("POST", "/api/books", map[string]string{"name": "B", "base_currency": "TWD"}, 201, &book)
+	var tags TagReportDTO
+	alice.json("GET", fmt.Sprintf("/api/books/%d/reports/tags?currency=TWD", book.ID), nil, 200, &tags)
+	if len(tags.Tags) != 0 {
+		t.Fatalf("tags = %+v", tags)
+	}
+	if res, _ := alice.do("GET", fmt.Sprintf("/api/books/%d/reports/tag", book.ID), nil); res.StatusCode != 400 {
+		t.Fatalf("tag without name = %d", res.StatusCode)
+	}
+	// An empty book rebases at once: nothing to re-translate.
+	var plan RebasePlanDTO
+	alice.json("POST", fmt.Sprintf("/api/books/%d/rebase", book.ID), map[string]any{"base_currency": "USD", "dry_run": true}, 200, &plan)
+	if plan.Done || plan.From != "TWD" || plan.To != "USD" {
+		t.Fatalf("dry run = %+v", plan)
+	}
+	alice.json("POST", fmt.Sprintf("/api/books/%d/rebase", book.ID), map[string]any{"base_currency": "USD"}, 200, &plan)
+	var got BookDTO
+	alice.json("GET", fmt.Sprintf("/api/books/%d", book.ID), nil, 200, &got)
+	if !plan.Done || got.BaseCurrency != "USD" {
+		t.Fatalf("after rebase: %+v %+v", plan, got)
+	}
+	// Owners only: bob as an editor is refused.
+	alice.json("POST", fmt.Sprintf("/api/books/%d/members", book.ID), map[string]string{"username": "bob", "role": "editor"}, 204, nil)
+	if res, _ := f.browser("bob").do("POST", fmt.Sprintf("/api/books/%d/rebase", book.ID), map[string]any{"base_currency": "TWD"}); res.StatusCode != 403 {
+		t.Fatalf("editor rebase = %d", res.StatusCode)
+	}
+}

@@ -42,3 +42,6 @@ FROM book_members m
 JOIN users u ON u.id = m.user_id
 WHERE m.book_id = $1
 ORDER BY m.created_at, u.username;
+
+-- name: SetBookBaseCurrency :one
+UPDATE books SET base_currency = @base_currency WHERE id = @id RETURNING *;

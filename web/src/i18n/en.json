@@ -213,7 +213,17 @@
     "rate_to": "To currency",
     "rates_today": "Today, in {base}",
     "rates_auto": "Updated daily and automatically; a manual rate below wins on its day.",
-    "manual_rates": "Manual rates"
+    "manual_rates": "Manual rates",
+    "rebase_title": "Base currency",
+    "rebase_hint": "The book keeps every amount in {base} too. Changing it re-translates every posting at its own date's rate; differences go to FX gain/loss.",
+    "rebase_to": "New base currency",
+    "rebase_check": "Check",
+    "rebase_plan": "{transactions} transactions and {postings} postings would be re-translated from {from} to {to}.",
+    "rebase_residue": "{n} transactions differ after re-translation; {amount} {to} in total goes to FX gain/loss.",
+    "rebase_gaps": "{n} rates are missing. Add them (or let the daily fetch fill them), then check again:",
+    "rebase_apply": "Change the base to {to}",
+    "rebase_confirm": "Re-translate every posting of this book from {from} to {to}? This is recorded in the audit log.",
+    "rebased": "The book is now kept in {to}"
   },
   "settings": {
     "title": "Settings",
@@ -323,7 +333,8 @@
     "no_enrolment": "Start the setup again",
     "passkey_rejected": "The passkey was not accepted",
     "rates_disabled": "The exchange-rate fetch is not running",
-    "rates_unavailable": "No provider answered; try again later"
+    "rates_unavailable": "No provider answered; try again later",
+    "rebase_rates_missing": "Some rates are missing: check again to see which"
   },
   "profile": {
     "username_hint": "Used to sign in: a-z, 0-9, dot, dash, underscore"
@@ -624,7 +635,12 @@
     "rates_used": "Rates used",
     "via_usd": "crossed through USD",
     "translated": "Figures are kept in {base} and translated to {currency} at the report date's rate.",
-    "missing": "No rate or price for {list}: shown at cost."
+    "missing": "No rate or price for {list}: shown at cost.",
+    "tab_tags": "Trips and tags",
+    "tags_title": "What each tag spent",
+    "no_tags": "No tagged transactions yet. Add a tag such as \"Japan 2026\" to transactions.",
+    "tag_count": "{n} transactions",
+    "tag_total": "Total spent"
   },
   "account": {
     "template": {

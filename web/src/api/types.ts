@@ -430,3 +430,40 @@ export interface CashFlow extends ReportBase {
   fx_effect: string;
   closing: string;
 }
+
+export interface RebasePlan {
+  from: string;
+  to: string;
+  transactions: number;
+  postings: number;
+  adjusted: number;
+  residue: string;
+  gaps: { from: string; to: string; date: string }[];
+  done: boolean;
+}
+
+export interface TagSummary {
+  name: string;
+  transactions: number;
+  first: string;
+  last: string;
+  expenses: string;
+}
+
+export interface TagReport {
+  base_currency: string;
+  currency: string;
+  tags: TagSummary[];
+  rates_used: RateUsed[];
+  missing: string[];
+}
+
+export interface TagDetail {
+  name: string;
+  base_currency: string;
+  currency: string;
+  lines: ReportLine[];
+  expenses: string;
+  rates_used: RateUsed[];
+  missing: string[];
+}

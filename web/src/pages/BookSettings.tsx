@@ -3,6 +3,7 @@ import { createEffect, createResource, createSignal, For, on, Show } from 'solid
 import { api } from '~/api/client';
 import type { CfClass, CommodityKind, Role } from '~/api/types';
 import { PageHeader } from '~/components/AppShell';
+import { RebaseCard } from '~/components/RebaseCard';
 import { MoneyInput } from '~/components/Money';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
@@ -136,6 +137,10 @@ export default function BookSettings() {
             </form>
           </CardContent>
         </Card>
+
+        <Show when={book.isOwner()}>
+          <RebaseCard />
+        </Show>
 
         <Card>
           <CardHeader><CardTitle>{t('book.members')}</CardTitle></CardHeader>

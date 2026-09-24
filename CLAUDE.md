@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 RigelLedger is a personal and family finance web application built with Go (backend) and SolidJS (frontend): double-entry bookkeeping, multi-currency, IFRS-flavoured reports, statement imports and stock investments. It is deployed (ledger.chenantunez.com, tailnet-only), so **applied migrations are frozen**: schema changes are new migration pairs.
 
-**Read `docs/ARCHITECTURE.md` before designing anything.** It is the accepted target design and the roadmap P1-P7; P1, P2 and P2.5 (accounts, administration, throttling, two-factor sign-in) are done; P3 is next.
+**Read `docs/ARCHITECTURE.md` before designing anything.** It is the accepted target design and the roadmap P1-P7; P1, P2, P2.5 (accounts, administration, throttling, two-factor sign-in) and P3 (rates, statements, tags, rebase) are done; P4 (sync and review) is next.
 
 ## Common Commands
 
@@ -92,7 +92,7 @@ api/                # Generated Swagger output (do not edit manually)
 - `prices` obeys the lock date too: a rate on or before the lock date of any book using either side is frozen (trigger `prices_lock`).
 - Go validates first for friendly field errors; the triggers in `000001_init.up.sql` enforce the same rules for any writer. A trigger's `CONSTRAINT` name becomes the API error code (see `ledger.translate`).
 - No stored balances: `Balances` sums postings and rolls up the account tree in Go.
-- Statements (`internal/ledger/reports.go`): `BalanceSheet`, `IncomeStatement`, `CashFlow`, computed per request, never persisted; values in the base, then translated at the report date (`reportCtx.out`). Revaluation uses `RateDetail` (the rate plus its date and path) so every report lists `rates_used`. Keep assets - liabilities - equity at zero by deriving the unrealised line, not by summing it.
+- Statements (`internal/ledger/reports.go`): `BalanceSheet`, `IncomeStatement`, `CashFlow`, computed per request, never persisted; values in the base, then translated at the report date (`reportCtx.out`). Revaluation uses `RateDetail` (the rate plus its date and path) so every report lists `rates_used`. Keep assets - liabilities - equity at zero by deriving the unrealised line, not by summing it. `Tags`/`Tag` (tagreport.go) sum expense postings of tagged transactions; `Rebase` (rebase.go) changes a book's base, re-translating every posting (dry run first; refuses on gaps or a lock date).
 - New books are seeded from `personalTemplate` in `template.go`; account names are i18n keys (`account.template.<key>`) until renamed.
 
 ### Frontend (web/src)

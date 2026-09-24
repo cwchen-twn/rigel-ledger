@@ -644,6 +644,36 @@ definitions:
       to:
         type: string
     type: object
+  routes.RebaseGapDTO:
+    properties:
+      date:
+        type: string
+      from:
+        type: string
+      to:
+        type: string
+    type: object
+  routes.RebasePlanDTO:
+    properties:
+      adjusted:
+        type: integer
+      done:
+        type: boolean
+      from:
+        type: string
+      gaps:
+        items:
+          $ref: '#/definitions/routes.RebaseGapDTO'
+        type: array
+      postings:
+        type: integer
+      residue:
+        type: string
+      to:
+        type: string
+      transactions:
+        type: integer
+    type: object
   routes.ReportLineDTO:
     properties:
       account_id:
@@ -690,6 +720,61 @@ definitions:
         type: string
       uri:
         type: string
+    type: object
+  routes.TagDetailDTO:
+    properties:
+      base_currency:
+        type: string
+      currency:
+        type: string
+      expenses:
+        type: string
+      lines:
+        items:
+          $ref: '#/definitions/routes.ReportLineDTO'
+        type: array
+      missing:
+        items:
+          type: string
+        type: array
+      name:
+        type: string
+      rates_used:
+        items:
+          $ref: '#/definitions/routes.RateUsedDTO'
+        type: array
+    type: object
+  routes.TagReportDTO:
+    properties:
+      base_currency:
+        type: string
+      currency:
+        type: string
+      missing:
+        items:
+          type: string
+        type: array
+      rates_used:
+        items:
+          $ref: '#/definitions/routes.RateUsedDTO'
+        type: array
+      tags:
+        items:
+          $ref: '#/definitions/routes.TagSummaryDTO'
+        type: array
+    type: object
+  routes.TagSummaryDTO:
+    properties:
+      expenses:
+        type: string
+      first:
+        type: string
+      last:
+        type: string
+      name:
+        type: string
+      transactions:
+        type: integer
     type: object
   routes.TransactionDTO:
     properties:
@@ -1077,6 +1162,14 @@ definitions:
         type: string
       rate:
         type: string
+    type: object
+  routes.rebaseRequest:
+    properties:
+      base_currency:
+        type: string
+      dry_run:
+        description: 'true: report what would change, change nothing.'
+        type: boolean
     type: object
   routes.refreshRatesRequest:
     properties:
@@ -2228,6 +2321,43 @@ paths:
       summary: Today's rate of each currency the book uses, in its base
       tags:
       - prices
+  /api/books/{bookID}/rebase:
+    post:
+      consumes:
+      - application/json
+      description: Each posting's base amount is recomputed at its transaction date's
+        rate; differences go to FX gain/loss. Refused while a rate is missing (listed)
+        or the book has a lock date. dry_run reports without changing anything.
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: new base
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.rebaseRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.RebasePlanDTO'
+        "409":
+          description: book_locked
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "422":
+          description: rebase_rates_missing
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Change the book's base currency, re-translating every posting (owner)
+      tags:
+      - books
   /api/books/{bookID}/reports/balance-sheet:
     get:
       parameters:
@@ -2312,6 +2442,55 @@ paths:
           schema:
             $ref: '#/definitions/routes.IncomeStatementDTO'
       summary: Income statement for a period, with the change in unrealised gains
+      tags:
+      - reports
+  /api/books/{bookID}/reports/tag:
+    get:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: tag name
+        in: query
+        name: name
+        required: true
+        type: string
+      - description: report currency
+        in: query
+        name: currency
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.TagDetailDTO'
+      summary: One tag's spending by expense account
+      tags:
+      - reports
+  /api/books/{bookID}/reports/tags:
+    get:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: report currency
+        in: query
+        name: currency
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.TagReportDTO'
+      summary: Every tag (trip, person, project) and what it spent
       tags:
       - reports
   /api/books/{bookID}/tags:

@@ -202,6 +202,31 @@ func (q *Queries) RemoveMember(ctx context.Context, arg RemoveMemberParams) (int
 	return result.RowsAffected(), nil
 }
 
+const setBookBaseCurrency = `-- name: SetBookBaseCurrency :one
+UPDATE books SET base_currency = $1 WHERE id = $2 RETURNING id, name, base_currency, lock_date, interest_dividend_cf_class, created_by, created_at, updated_at
+`
+
+type SetBookBaseCurrencyParams struct {
+	BaseCurrency string
+	ID           int64
+}
+
+func (q *Queries) SetBookBaseCurrency(ctx context.Context, arg SetBookBaseCurrencyParams) (Book, error) {
+	row := q.db.QueryRow(ctx, setBookBaseCurrency, arg.BaseCurrency, arg.ID)
+	var i Book
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.BaseCurrency,
+		&i.LockDate,
+		&i.InterestDividendCfClass,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateBook = `-- name: UpdateBook :one
 UPDATE books SET
     name                       = $1,

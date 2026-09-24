@@ -352,6 +352,170 @@ func (q *Queries) ListTransactions(ctx context.Context, arg ListTransactionsPara
 	return items, nil
 }
 
+const maxPostingPosition = `-- name: MaxPostingPosition :one
+SELECT coalesce(max(position), 0)::INT FROM postings WHERE transaction_id = $1
+`
+
+func (q *Queries) MaxPostingPosition(ctx context.Context, transactionID int64) (int32, error) {
+	row := q.db.QueryRow(ctx, maxPostingPosition, transactionID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const rebasePostings = `-- name: RebasePostings :many
+SELECT p.id, p.transaction_id, p.account_id, p.commodity, p.amount, p.base_amount, t.date
+FROM postings p JOIN transactions t ON t.id = p.transaction_id
+WHERE t.book_id = $1
+ORDER BY t.id, p.position
+`
+
+type RebasePostingsRow struct {
+	ID            int64
+	TransactionID int64
+	AccountID     int64
+	Commodity     string
+	Amount        decimal.Decimal
+	BaseAmount    decimal.Decimal
+	Date          time.Time
+}
+
+// Every posting of a book with its transaction date, for a change of base.
+func (q *Queries) RebasePostings(ctx context.Context, bookID int64) ([]RebasePostingsRow, error) {
+	rows, err := q.db.Query(ctx, rebasePostings, bookID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RebasePostingsRow{}
+	for rows.Next() {
+		var i RebasePostingsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TransactionID,
+			&i.AccountID,
+			&i.Commodity,
+			&i.Amount,
+			&i.BaseAmount,
+			&i.Date,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setPostingBase = `-- name: SetPostingBase :exec
+UPDATE postings SET base_amount = $1 WHERE id = $2
+`
+
+type SetPostingBaseParams struct {
+	BaseAmount decimal.Decimal
+	ID         int64
+}
+
+func (q *Queries) SetPostingBase(ctx context.Context, arg SetPostingBaseParams) error {
+	_, err := q.db.Exec(ctx, setPostingBase, arg.BaseAmount, arg.ID)
+	return err
+}
+
+const tagExpenses = `-- name: TagExpenses :many
+SELECT p.account_id, coalesce(sum(p.base_amount), 0)::numeric AS base_amount
+FROM tags tg
+JOIN transaction_tags tt ON tt.tag_id = tg.id
+JOIN postings p ON p.transaction_id = tt.transaction_id
+JOIN accounts a ON a.id = p.account_id
+WHERE tg.book_id = $1 AND lower(tg.name) = lower($2) AND a.class = 'expense'
+GROUP BY p.account_id
+`
+
+type TagExpensesParams struct {
+	BookID int64
+	Name   string
+}
+
+type TagExpensesRow struct {
+	AccountID  int64
+	BaseAmount decimal.Decimal
+}
+
+// One tag's expense postings, per account.
+func (q *Queries) TagExpenses(ctx context.Context, arg TagExpensesParams) ([]TagExpensesRow, error) {
+	rows, err := q.db.Query(ctx, tagExpenses, arg.BookID, arg.Name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TagExpensesRow{}
+	for rows.Next() {
+		var i TagExpensesRow
+		if err := rows.Scan(&i.AccountID, &i.BaseAmount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const tagSummaries = `-- name: TagSummaries :many
+SELECT tg.name,
+       count(DISTINCT t.id)::BIGINT                                          AS transactions,
+       min(t.date)::DATE                                                     AS first_date,
+       max(t.date)::DATE                                                     AS last_date,
+       coalesce(sum(p.base_amount) FILTER (WHERE a.class = 'expense'), 0)::numeric AS expenses
+FROM tags tg
+JOIN transaction_tags tt ON tt.tag_id = tg.id
+JOIN transactions t ON t.id = tt.transaction_id
+JOIN postings p ON p.transaction_id = t.id
+JOIN accounts a ON a.id = p.account_id
+WHERE tg.book_id = $1
+GROUP BY tg.name
+ORDER BY max(t.date) DESC, tg.name
+`
+
+type TagSummariesRow struct {
+	Name         string
+	Transactions int64
+	FirstDate    time.Time
+	LastDate     time.Time
+	Expenses     decimal.Decimal
+}
+
+// Every tag of a book with its span and what its transactions spent
+// (expense postings at their stored base amounts: miles at cost).
+func (q *Queries) TagSummaries(ctx context.Context, bookID int64) ([]TagSummariesRow, error) {
+	rows, err := q.db.Query(ctx, tagSummaries, bookID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TagSummariesRow{}
+	for rows.Next() {
+		var i TagSummariesRow
+		if err := rows.Scan(
+			&i.Name,
+			&i.Transactions,
+			&i.FirstDate,
+			&i.LastDate,
+			&i.Expenses,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateTransaction = `-- name: UpdateTransaction :one
 UPDATE transactions SET date = $1, payee = $2, memo = $3, updated_by = $4
 WHERE book_id = $5 AND id = $6
