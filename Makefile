@@ -58,6 +58,17 @@ upgrade/go:
 	sed -i -E 's|^FROM golang:[0-9.]+-bookworm|FROM golang:$(version)-bookworm|' Dockerfile
 	@grep -n '^FROM golang:' Dockerfile
 
+##upgrade/go/list: Show the pinned Go (go.mod, Dockerfile) and the newest stable releases
+.PHONY: upgrade/go/list
+upgrade/go/list:
+	@command -v jq >/dev/null || { echo "needs jq (apt install jq)"; exit 1; }
+	@echo "pinned:  go.mod $$(sed -n 's/^go //p' go.mod)   Dockerfile $$(sed -nE 's/^FROM golang:([0-9.]+)-.*/\1/p' Dockerfile)   local $$(go env GOVERSION)"
+	@echo "stable releases (newest first; * = pinned in go.mod):"
+	@curl -fsSL 'https://go.dev/dl/?mode=json&include=all' \
+		| jq -r --arg cur "go$$(sed -n 's/^go //p' go.mod)" \
+			'[.[] | select(.stable) | .version] | .[:12][] | if . == $$cur then "  * \(.)" else "    \(.)" end'
+	@echo "upgrade with: make upgrade/go version=<x.y.z>"
+
 ##upgrade/bun: Upgrade Bun, e.g. `make upgrade/bun version=1.3.15` (local binary, package.json packageManager, Dockerfile, bun.lock)
 .PHONY: upgrade/bun
 upgrade/bun:
@@ -75,6 +86,17 @@ upgrade/bun:
 	cd web && bun install
 	cd web && bun run build:prod
 	@grep -n '"packageManager"' web/package.json; grep -n '^FROM oven/bun:' Dockerfile
+
+##upgrade/bun/list: Show the pinned Bun (package.json, Dockerfile) and the newest releases
+.PHONY: upgrade/bun/list
+upgrade/bun/list:
+	@command -v jq >/dev/null || { echo "needs jq (apt install jq)"; exit 1; }
+	@echo "pinned:  package.json $$(sed -nE 's/.*"packageManager": "bun@([0-9.]+)".*/\1/p' web/package.json)   Dockerfile $$(sed -nE 's|^FROM oven/bun:([0-9.]+).*|\1|p' Dockerfile)   local $$(bun --version 2>/dev/null || echo none)"
+	@echo "releases (newest first; * = pinned in package.json):"
+	@curl -fsSL 'https://api.github.com/repos/oven-sh/bun/releases?per_page=12' \
+		| jq -r --arg cur "bun-v$$(sed -nE 's/.*"packageManager": "bun@([0-9.]+)".*/\1/p' web/package.json)" \
+			'.[] | select(.prerelease | not) | .tag_name | if . == $$cur then "  * \(ltrimstr("bun-v"))" else "    \(ltrimstr("bun-v"))" end'
+	@echo "upgrade with: make upgrade/bun version=<x.y.z>"
 
 ##upgradeable: Check for upgradeable dependencies
 .PHONY: upgradeable
