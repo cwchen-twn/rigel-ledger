@@ -203,19 +203,29 @@ func (h *handlers) updateAdminMail(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, adminSettingsDTO(s))
 }
 
+// MailTestDTO says where the test went. Driver "log" means it was written
+// to the server log and did not leave the server.
+type MailTestDTO struct {
+	Driver string `json:"driver"`
+	To     string `json:"to"`
+}
+
 // testMail
 //
-//	@Summary	Send a test email to yourself (admin)
+//	@Summary	Send a test email to yourself with the saved mail settings (admin)
 //	@Tags		admin
-//	@Success	204
+//	@Produce	json
+//	@Success	200	{object}	MailTestDTO
 //	@Failure	409	{object}	response.ErrorBody	"mail_failed or mail_disabled"
 //	@Router		/api/admin/mail/test [post]
 func (h *handlers) testMail(w http.ResponseWriter, r *http.Request) {
-	if err := h.identity.SendTest(r.Context(), admin(r)); err != nil {
+	a := admin(r)
+	driver, err := h.identity.SendTest(r.Context(), a)
+	if err != nil {
 		h.fail(w, r, err)
 		return
 	}
-	response.NoContent(w)
+	response.JSON(w, http.StatusOK, MailTestDTO{Driver: driver, To: a.Email})
 }
 
 func (h *handlers) auditAdmin(r *http.Request, name string) {

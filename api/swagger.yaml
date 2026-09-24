@@ -357,6 +357,13 @@ definitions:
       unit_cost:
         type: string
     type: object
+  routes.MailTestDTO:
+    properties:
+      driver:
+        type: string
+      to:
+        type: string
+    type: object
   routes.MemberDTO:
     properties:
       display_name:
@@ -991,14 +998,18 @@ paths:
       - admin
   /api/admin/mail/test:
     post:
+      produces:
+      - application/json
       responses:
-        "204":
-          description: No Content
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.MailTestDTO'
         "409":
           description: mail_failed or mail_disabled
           schema:
             $ref: '#/definitions/response.ErrorBody'
-      summary: Send a test email to yourself (admin)
+      summary: Send a test email to yourself with the saved mail settings (admin)
       tags:
       - admin
   /api/admin/settings:

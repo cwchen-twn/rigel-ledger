@@ -489,7 +489,12 @@
     "mail_from": "From address",
     "mail_from_name": "From name",
     "send_test": "Send me a test email",
-    "test_sent": "Test email sent"
+    "test_sent": "Test email sent",
+    "save_and_test": "Save and send a test email",
+    "test_sent_to": "Test email sent to {email}",
+    "test_logged": "Mail is set to the server log: the test was written there and NOT sent. Choose SMTP and save.",
+    "test_hint": "The test uses the saved settings and goes to your own address.",
+    "test_hint_log": "Mail is not being sent yet: delivery is the server log until SMTP is saved."
   },
   "account": {
     "template": {

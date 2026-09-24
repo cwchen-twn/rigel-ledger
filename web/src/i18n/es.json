@@ -489,7 +489,12 @@
     "mail_from": "Dirección del remitente",
     "mail_from_name": "Nombre del remitente",
     "send_test": "Enviarme un correo de prueba",
-    "test_sent": "Correo de prueba enviado"
+    "test_sent": "Correo de prueba enviado",
+    "save_and_test": "Guardar y enviar un correo de prueba",
+    "test_sent_to": "Correo de prueba enviado a {email}",
+    "test_logged": "El correo está configurado para el registro del servidor: la prueba se escribió allí y NO se envió. Elige SMTP y guarda.",
+    "test_hint": "La prueba usa los ajustes guardados y va a tu propia dirección.",
+    "test_hint_log": "Aún no se envía correo: hasta guardar SMTP, los mensajes van al registro del servidor."
   },
   "account": {
     "template": {

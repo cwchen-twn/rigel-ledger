@@ -417,6 +417,14 @@ func TestAdminUsersAndMailSettings(t *testing.T) {
 		t.Fatalf("deactivated user's session = %d", res.StatusCode)
 	}
 
+	// Until mail is saved the driver is the default "log": the test says so
+	// instead of claiming it was sent.
+	var sent MailTestDTO
+	alice.json("POST", "/api/admin/mail/test", nil, 200, &sent)
+	if sent.Driver != "log" || sent.To != "alice@example.com" {
+		t.Fatalf("test before saving = %+v", sent)
+	}
+
 	// The SMTP password goes in sealed and never comes back out.
 	mailBody := map[string]any{"mail_driver": "smtp", "smtp_host": "smtp.example.com", "smtp_port": 465,
 		"smtp_security": "tls", "smtp_user": "ledger@example.com", "smtp_password": "hunter2-hunter2",
@@ -424,6 +432,11 @@ func TestAdminUsersAndMailSettings(t *testing.T) {
 	res, b = alice.do("PATCH", "/api/admin/mail", mailBody)
 	if res.StatusCode != 200 || bytes.Contains(b, []byte("hunter2")) || !bytes.Contains(b, []byte(`"smtp_password_set":true`)) {
 		t.Fatalf("mail settings: %d %s", res.StatusCode, b)
+	}
+	// The test uses what was saved.
+	alice.json("POST", "/api/admin/mail/test", nil, 200, &sent)
+	if sent.Driver != "smtp" {
+		t.Fatalf("test after saving = %+v", sent)
 	}
 	var sealed []byte
 	if err := f.store.Pool.QueryRow(context.Background(), "SELECT smtp_pass_enc FROM system_settings").Scan(&sealed); err != nil {

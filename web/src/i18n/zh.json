@@ -489,7 +489,12 @@
     "mail_from": "寄件者信箱",
     "mail_from_name": "寄件者名稱",
     "send_test": "寄測試信給我",
-    "test_sent": "已寄出測試信"
+    "test_sent": "已寄出測試信",
+    "save_and_test": "儲存並寄測試信",
+    "test_sent_to": "已寄出測試信至 {email}",
+    "test_logged": "目前郵件設定為寫入伺服器日誌：測試信只寫入日誌，並未寄出。請選擇 SMTP 並儲存。",
+    "test_hint": "測試信使用已儲存的設定，寄到你自己的信箱。",
+    "test_hint_log": "目前尚未真正寄信：在儲存 SMTP 設定前，郵件只會寫入伺服器日誌。"
   },
   "account": {
     "template": {

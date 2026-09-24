@@ -326,12 +326,19 @@ func mailFailed(err error) error {
 	return &ledger.Error{Kind: ledger.KindConflict, Code: "mail_failed", Message: err.Error()}
 }
 
-// SendTest mails the admin who asked, in their language.
-func (s *Service) SendTest(ctx context.Context, admin db.User) error {
+// SendTest mails the admin who asked, in their language, with the SAVED
+// mail settings, and says which driver handled it. Under "log" nothing
+// leaves the server, and the page must say so: an earlier version reported
+// "sent" while the unsaved form still meant the default log driver.
+func (s *Service) SendTest(ctx context.Context, admin db.User) (driver string, err error) {
 	if admin.Email == "" {
-		return ledger.FieldError("email", "required", "your account has no email address")
+		return "", ledger.FieldError("email", "required", "your account has no email address")
 	}
-	return s.send(ctx, admin.Email, admin.Language, "test", mail.Data{Name: displayName(admin)})
+	st, err := s.Settings(ctx)
+	if err != nil {
+		return "", err
+	}
+	return st.MailDriver, s.send(ctx, admin.Email, admin.Language, "test", mail.Data{Name: displayName(admin)})
 }
 
 func displayName(u db.User) string {

@@ -237,13 +237,19 @@ const docTemplate = `{
         },
         "/api/admin/mail/test": {
             "post": {
+                "produces": [
+                    "application/json"
+                ],
                 "tags": [
                     "admin"
                 ],
-                "summary": "Send a test email to yourself (admin)",
+                "summary": "Send a test email to yourself with the saved mail settings (admin)",
                 "responses": {
-                    "204": {
-                        "description": "No Content"
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.MailTestDTO"
+                        }
                     },
                     "409": {
                         "description": "mail_failed or mail_disabled",
@@ -2546,6 +2552,17 @@ const docTemplate = `{
                     "$ref": "#/definitions/db.PostingStatus"
                 },
                 "unit_cost": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.MailTestDTO": {
+            "type": "object",
+            "properties": {
+                "driver": {
+                    "type": "string"
+                },
+                "to": {
                     "type": "string"
                 }
             }
