@@ -1,0 +1,11 @@
+{{define "subject"}}您的 {{.AppName}} 帳號有新的登入{{end}}
+{{define "action"}}檢查已登入的裝置{{end}}
+{{define "body"}}
+{{.Name}} 您好：
+
+您的帳號剛從一個近期未使用過的位址登入：
+
+{{.Message}}
+
+若是您本人，無需任何動作；若不是，請登出該裝置並變更密碼。
+{{end}}

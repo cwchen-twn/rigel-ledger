@@ -318,6 +318,13 @@ definitions:
       name:
         type: string
     type: object
+  routes.EnrolledDTO:
+    properties:
+      recovery_codes:
+        items:
+          type: string
+        type: array
+    type: object
   routes.InvitationDTO:
     properties:
       date_format:
@@ -357,6 +364,31 @@ definitions:
       unit_cost:
         type: string
     type: object
+  routes.MFAStatusDTO:
+    properties:
+      allowed:
+        description: What the administrator allows, and whether a second factor is
+          required.
+        items:
+          type: string
+        type: array
+      email:
+        type: boolean
+      passkeys:
+        items:
+          $ref: '#/definitions/routes.PasskeyDTO'
+        type: array
+      recovery_left:
+        type: integer
+      required:
+        type: boolean
+      session_aal:
+        type: integer
+      signin_alerts:
+        type: boolean
+      totp:
+        type: boolean
+    type: object
   routes.MailTestDTO:
     properties:
       driver:
@@ -374,6 +406,26 @@ definitions:
         type: integer
       username:
         type: string
+    type: object
+  routes.PasskeyDTO:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      last_used_at:
+        type: string
+      name:
+        type: string
+    type: object
+  routes.PasskeyOptionsDTO:
+    properties:
+      challenge:
+        description: Send back to the matching finish endpoint.
+        type: string
+      options:
+        description: PublicKeyCredentialCreationOptions / RequestOptions, as JSON
+          for the browser.
     type: object
   routes.PostingDTO:
     properties:
@@ -442,6 +494,16 @@ definitions:
       last_used_at:
         type: string
       user_agent:
+        type: string
+    type: object
+  routes.TOTPSetupDTO:
+    properties:
+      qr:
+        description: 'data: URL of a PNG'
+        type: string
+      secret:
+        type: string
+      uri:
         type: string
     type: object
   routes.TransactionDTO:
@@ -522,6 +584,11 @@ definitions:
         type: boolean
       language:
         type: string
+      mfa_enrolled:
+        type: boolean
+      mfa_required:
+        description: The system requires a second factor / this user has one enrolled.
+        type: boolean
       password_must_change:
         type: boolean
       pending_email:
@@ -529,6 +596,10 @@ definitions:
           An address a verification code was sent to and not yet confirmed
           (only on GET /api/me).
         type: string
+      session_aal:
+        description: 'Only on GET /api/me: 1 = password only, 2 = passed a second
+          factor.'
+        type: integer
       theme:
         type: string
       timezone:
@@ -633,10 +704,27 @@ definitions:
       is_admin:
         type: boolean
     type: object
+  routes.alertsRequest:
+    properties:
+      enabled:
+        type: boolean
+    type: object
   routes.archiveRequest:
     properties:
       archived:
         type: boolean
+    type: object
+  routes.challengeCodeRequest:
+    properties:
+      challenge:
+        type: string
+      code:
+        type: string
+    type: object
+  routes.challengeRequest:
+    properties:
+      challenge:
+        type: string
     type: object
   routes.codeRequest:
     properties:
@@ -717,10 +805,29 @@ definitions:
     type: object
   routes.loginResponse:
     properties:
+      challenge:
+        type: string
+      methods:
+        description: totp, email, passkey, recovery
+        items:
+          type: string
+        type: array
+      mfa_required:
+        type: boolean
       token:
         type: string
       user:
         $ref: '#/definitions/routes.UserDTO'
+    type: object
+  routes.mfaVerifyRequest:
+    properties:
+      challenge:
+        type: string
+      code:
+        type: string
+      method:
+        description: totp, email or recovery
+        type: string
     type: object
   routes.onboardingRequest:
     properties:
@@ -750,6 +857,21 @@ definitions:
         type: string
       date:
         format: date
+        type: string
+    type: object
+  routes.passkeyBeginRequest:
+    properties:
+      challenge:
+        description: |-
+          The password step's challenge, when the passkey is the second step;
+          empty for a passwordless sign-in.
+        type: string
+      client:
+        type: string
+    type: object
+  routes.passkeyRegisterRequest:
+    properties:
+      name:
         type: string
     type: object
   routes.passwordRequest:
@@ -814,6 +936,11 @@ definitions:
       current_password:
         type: string
       email:
+        type: string
+    type: object
+  routes.stepUpRequest:
+    properties:
+      current_password:
         type: string
     type: object
   routes.tokenRequest:
@@ -1092,6 +1219,20 @@ paths:
       summary: Activate, deactivate, promote or demote another user (admin)
       tags:
       - admin
+  /api/admin/users/{userID}/reset-mfa:
+    post:
+      parameters:
+      - description: user id
+        in: path
+        name: userID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      summary: Remove every second factor and session of a user (admin)
+      tags:
+      - admin
   /api/auth/config:
     get:
       produces:
@@ -1194,6 +1335,93 @@ paths:
         "204":
           description: No Content
       summary: Sign out this session
+      tags:
+      - auth
+  /api/auth/mfa:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: code
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.mfaVerifyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.loginResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: 'Second sign-in step: a TOTP, emailed or recovery code'
+      tags:
+      - auth
+  /api/auth/mfa/email:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: the password step's challenge
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.challengeRequest'
+      responses:
+        "204":
+          description: No Content
+      summary: Mail a code for the second sign-in step
+      tags:
+      - auth
+  /api/auth/passkey/begin:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: optional password-step challenge
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.passkeyBeginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.PasskeyOptionsDTO'
+      summary: Start a passkey sign-in (passwordless, or the second step)
+      tags:
+      - auth
+  /api/auth/passkey/finish:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: from begin
+        in: query
+        name: challenge
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.loginResponse'
+      summary: Finish a passkey sign-in; the body is the browser's credential JSON
       tags:
       - auth
   /api/auth/register:
@@ -2065,6 +2293,163 @@ paths:
       summary: Recent sign-in and security events of the signed-in user
       tags:
       - me
+  /api/me/mfa:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.MFAStatusDTO'
+      summary: The signed-in user's second factors
+      tags:
+      - mfa
+  /api/me/mfa/alerts:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: on or off
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.alertsRequest'
+      responses:
+        "204":
+          description: No Content
+      summary: Mail me when a sign-in comes from a new address
+      tags:
+      - mfa
+  /api/me/mfa/email:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.challengeRequest'
+      summary: 'Begin email-code setup: a code goes to the verified address'
+      tags:
+      - mfa
+  /api/me/mfa/email/confirm:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: code
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.challengeCodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.EnrolledDTO'
+      summary: Finish email-code setup
+      tags:
+      - mfa
+  /api/me/mfa/passkeys/begin:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: a name for it
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.passkeyRegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.PasskeyOptionsDTO'
+      summary: Begin adding a passkey
+      tags:
+      - mfa
+  /api/me/mfa/passkeys/finish:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: from begin
+        in: query
+        name: challenge
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.EnrolledDTO'
+      summary: Finish adding a passkey; the body is the browser's credential JSON
+      tags:
+      - mfa
+  /api/me/mfa/recovery-codes:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.stepUpRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.EnrolledDTO'
+      summary: Replace the recovery codes (needs the password and a two-factor session)
+      tags:
+      - mfa
+  /api/me/mfa/totp:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.TOTPSetupDTO'
+      summary: 'Begin authenticator-app setup: the secret and its QR code'
+      tags:
+      - mfa
+  /api/me/mfa/totp/confirm:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: code
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.codeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.EnrolledDTO'
+      summary: Finish authenticator-app setup with a first code
+      tags:
+      - mfa
   /api/me/onboarding:
     post:
       consumes:

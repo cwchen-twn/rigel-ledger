@@ -365,7 +365,7 @@ func TestLoginThrottle(t *testing.T) {
 	bob := f.browser("bob")
 	var events []AuthEventDTO
 	bob.json("GET", "/api/me/events", nil, 200, &events)
-	if len(events) == 0 || events[0].Event != "password_ok" || events[0].IP != "127.0.0.1" {
+	if len(events) < 2 || events[0].Event != "signed_in" || events[1].Event != "password_ok" || events[0].IP != "127.0.0.1" {
 		t.Fatalf("events = %+v", events)
 	}
 }
@@ -472,6 +472,7 @@ func TestAdminUsersAndMailSettings(t *testing.T) {
 		t.Fatalf("bad default: %d %s", res.StatusCode, b)
 	}
 	s["default_display_currency"] = "PYG"
+	s["mfa_required"] = true
 	s["mfa_methods"] = []string{}
 	res, b = alice.do("PATCH", "/api/admin/settings", s)
 	if res.StatusCode != 422 || !strings.Contains(string(b), `"mfa_methods":"required"`) {

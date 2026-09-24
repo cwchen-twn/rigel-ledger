@@ -13,14 +13,22 @@ import (
 
 const countFailures = `-- name: CountFailures :one
 SELECT
-    count(*) FILTER (WHERE username = $1 AND ip = $2::inet) AS user_ip,
-    count(*) FILTER (WHERE ip = $2::inet)                         AS ip,
-    count(*) FILTER (WHERE username = $1 AND $1::TEXT <> '')   AS username,
-    coalesce(min(created_at), now())::TIMESTAMPTZ                            AS oldest
-FROM auth_events
-WHERE failure
-  AND created_at > now() - make_interval(secs => $3::BIGINT)
-  AND (username = $1 OR ip = $2::inet)
+    count(*) FILTER (WHERE e.username = $1 AND e.ip = $2::inet) AS user_ip,
+    count(*) FILTER (WHERE e.ip = $2::inet)                           AS ip,
+    count(*) FILTER (WHERE e.username = $1 AND $1::TEXT <> '')     AS username,
+    coalesce(min(e.created_at), now())::TIMESTAMPTZ                              AS oldest,
+    -- This address opened a full session for this username lately: the
+    -- owner's own device, exempt from the username-wide limit so a stranger
+    -- guessing elsewhere cannot lock the owner out.
+    EXISTS (
+        SELECT 1 FROM auth_events s
+        WHERE s.username = $1 AND s.ip = $2::inet AND s.event = 'signed_in'
+          AND s.created_at > now() - INTERVAL '30 days'
+    )::BOOLEAN                                                                   AS trusted_ip
+FROM auth_events e
+WHERE e.failure
+  AND e.created_at > now() - make_interval(secs => $3::BIGINT)
+  AND (e.username = $1 OR e.ip = $2::inet)
 `
 
 type CountFailuresParams struct {
@@ -30,10 +38,11 @@ type CountFailuresParams struct {
 }
 
 type CountFailuresRow struct {
-	UserIp   int64
-	Ip       int64
-	Username int64
-	Oldest   time.Time
+	UserIp    int64
+	Ip        int64
+	Username  int64
+	Oldest    time.Time
+	TrustedIp bool
 }
 
 // Failures inside the window for the three throttle keys, and when the
@@ -46,6 +55,7 @@ func (q *Queries) CountFailures(ctx context.Context, arg CountFailuresParams) (C
 		&i.Ip,
 		&i.Username,
 		&i.Oldest,
+		&i.TrustedIp,
 	)
 	return i, err
 }

@@ -144,6 +144,9 @@ func (app *App) sweepSessions(ctx context.Context) {
 			if _, err := app.store.DeleteStaleEmailTokens(ctx); err != nil {
 				app.logger.Warn("Email token sweep failed", "error", err)
 			}
+			if _, err := app.store.DeleteExpiredChallenges(ctx); err != nil {
+				app.logger.Warn("Challenge sweep failed", "error", err)
+			}
 			if _, err := app.store.DeleteOldAuthEvents(ctx); err != nil {
 				app.logger.Warn("Auth event sweep failed", "error", err)
 			}

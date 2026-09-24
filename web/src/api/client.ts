@@ -81,7 +81,28 @@ function qs(params: Record<string, string | number | undefined | null>): string 
 const book = (id: number) => `/api/books/${id}`;
 
 export const api = {
-  login: (username: string, password: string) => post<{ user: T.User }>('/api/auth/login', { username, password }),
+  login: (username: string, password: string) => post<T.LoginResult>('/api/auth/login', { username, password }),
+  verifyMFA: (challenge: string, method: T.SignInMethod, code: string) => post<T.LoginResult>('/api/auth/mfa', { challenge, method, code }),
+  sendSignInCode: (challenge: string) => post<void>('/api/auth/mfa/email', { challenge }),
+  passkeyLoginBegin: (challenge = '') => post<{ options: Record<string, unknown>; challenge: string }>('/api/auth/passkey/begin', { challenge }),
+  passkeyLoginFinish: (challenge: string, credential: unknown) =>
+    post<T.LoginResult>(`/api/auth/passkey/finish${qs({ challenge })}`, credential),
+
+  mfa: {
+    status: () => get<T.MFAStatus>('/api/me/mfa'),
+    startTOTP: () => post<T.TOTPSetup>('/api/me/mfa/totp'),
+    confirmTOTP: (code: string) => post<T.Enrolled>('/api/me/mfa/totp/confirm', { code }),
+    removeTOTP: (current_password: string) => request<void>('DELETE', '/api/me/mfa/totp', { current_password }),
+    startEmail: () => post<{ challenge: string }>('/api/me/mfa/email'),
+    confirmEmail: (challenge: string, code: string) => post<T.Enrolled>('/api/me/mfa/email/confirm', { challenge, code }),
+    removeEmail: (current_password: string) => request<void>('DELETE', '/api/me/mfa/email', { current_password }),
+    passkeyBegin: (name: string) => post<{ options: Record<string, unknown>; challenge: string }>('/api/me/mfa/passkeys/begin', { name }),
+    passkeyFinish: (challenge: string, credential: unknown) =>
+      post<T.Enrolled>(`/api/me/mfa/passkeys/finish${qs({ challenge })}`, credential),
+    removePasskey: (id: number, current_password: string) => request<void>('DELETE', `/api/me/mfa/passkeys/${id}`, { current_password }),
+    regenerateRecovery: (current_password: string) => post<T.Enrolled>('/api/me/mfa/recovery-codes', { current_password }),
+    setAlerts: (enabled: boolean) => patch<void>('/api/me/mfa/alerts', { enabled }),
+  },
   logout: () => post<void>('/api/auth/logout'),
   me: () => get<T.User>('/api/me'),
   updateSettings: (s: T.Settings) => patch<T.User>('/api/me/settings', s),
@@ -123,6 +144,7 @@ export const api = {
     approve: (id: number) => post<void>(`/api/admin/access-requests/${id}/approve`),
     reject: (id: number) => post<void>(`/api/admin/access-requests/${id}/reject`),
     events: (limit = 100) => get<T.AuthEvent[]>(`/api/admin/events${qs({ limit })}`),
+    resetMFA: (id: number) => post<void>(`/api/admin/users/${id}/reset-mfa`),
   },
   currencies: () => get<T.Currency[]>('/api/currencies'),
   commodities: () => get<T.Commodity[]>('/api/commodities'),

@@ -27,6 +27,8 @@ var DefaultLimits = Limits{UserIP: 5, IP: 20, User: 20, Window: 15 * time.Minute
 type Policy interface {
 	Limits(ctx context.Context) Limits
 	SessionTTL(ctx context.Context) time.Duration
+	// MFARequired: every session needs a second factor (aal 2).
+	MFARequired(ctx context.Context) bool
 }
 
 // ThrottledError means too many recent failures; retry after RetryAfter.
@@ -63,7 +65,8 @@ func (m *Manager) Check(ctx context.Context, username string, ip *netip.Addr) er
 	}
 	over := (username != "" && ip != nil && row.UserIp >= int64(l.UserIP)) ||
 		(ip != nil && row.Ip >= int64(l.IP)) ||
-		(username != "" && row.Username >= int64(l.User))
+		// The owner's recent device is exempt from the username-wide limit.
+		(username != "" && !row.TrustedIp && row.Username >= int64(l.User))
 	if !over {
 		return nil
 	}

@@ -100,22 +100,22 @@ type Client struct {
 	UserAgent string
 }
 
-// Login checks the throttle, then the password, and opens a session of the
-// given kind ("web" or "api"). Every outcome is recorded in auth_events.
-func (m *Manager) Login(ctx context.Context, username, password, kind string, c Client) (db.User, string, error) {
+// VerifyPassword checks the throttle, then the password. Every outcome is
+// recorded in auth_events. It opens no session: the caller decides whether a
+// second factor is needed first.
+func (m *Manager) VerifyPassword(ctx context.Context, username, password string, c Client) (db.User, error) {
 	username = strings.ToLower(strings.TrimSpace(username))
 	if err := m.Check(ctx, username, c.IP); err != nil {
 		if _, ok := IsThrottled(err); ok {
 			_ = m.Record(ctx, Event{Username: username, IP: c.IP, UserAgent: c.UserAgent, Name: "throttled"})
 		}
-		return db.User{}, "", err
+		return db.User{}, err
 	}
-	fail := func(uid *int64) (db.User, string, error) {
+	fail := func(uid *int64) (db.User, error) {
 		_ = m.Record(ctx, Event{Username: username, UserID: uid, IP: c.IP, UserAgent: c.UserAgent,
 			Name: "password_bad", Failure: true})
-		return db.User{}, "", ErrInvalidCredentials
+		return db.User{}, ErrInvalidCredentials
 	}
-
 	u, err := m.store.GetUserByUsername(ctx, username)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && !u.IsActive) {
 		_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
@@ -125,39 +125,43 @@ func (m *Manager) Login(ctx context.Context, username, password, kind string, c 
 		return fail(nil)
 	}
 	if err != nil {
-		return db.User{}, "", err
+		return db.User{}, err
 	}
 	if !CheckPassword(u.PasswordHash, password) {
 		return fail(&u.ID)
 	}
-
-	token, err := m.OpenSession(ctx, u.ID, kind, c)
-	if err != nil {
-		return db.User{}, "", err
-	}
-	_ = m.store.TouchUserLogin(ctx, u.ID)
-	_ = m.Record(ctx, Event{Username: username, UserID: &u.ID, IP: c.IP, UserAgent: c.UserAgent,
-		Name: "password_ok", Detail: map[string]any{"kind": kind}})
-	return u, token, nil
+	_ = m.Record(ctx, Event{Username: username, UserID: &u.ID, IP: c.IP, UserAgent: c.UserAgent, Name: "password_ok"})
+	return u, nil
 }
 
-// OpenSession creates a session for a user who has already proved who they
-// are (a password, an invitation or a sign-up link) and returns its token.
-func (m *Manager) OpenSession(ctx context.Context, userID int64, kind string, c Client) (string, error) {
+// Session assurance levels.
+const (
+	AALPassword = 1 // a password or an emailed link
+	AALMFA      = 2 // plus a second factor, or a passkey with user verification
+)
+
+// OpenSession creates a session at assurance level aal for a user who has
+// already proved who they are, records "signed_in" (which also marks the
+// address as the owner's, see Check), and returns the token.
+func (m *Manager) OpenSession(ctx context.Context, u db.User, kind string, c Client, aal int16) (string, error) {
 	token, hash, err := NewToken()
 	if err != nil {
 		return "", err
 	}
-	if _, err := m.store.CreateSessionWithIP(ctx, db.CreateSessionWithIPParams{
-		UserID:    userID,
+	if _, err := m.store.CreateSessionAAL(ctx, db.CreateSessionAALParams{
+		UserID:    u.ID,
 		TokenHash: hash,
 		Kind:      kind,
 		UserAgent: c.UserAgent,
 		ExpiresAt: time.Now().Add(m.sessionTTL(ctx)),
 		Ip:        c.IP,
+		Aal:       aal,
 	}); err != nil {
 		return "", err
 	}
+	_ = m.store.TouchUserLogin(ctx, u.ID)
+	_ = m.Record(ctx, Event{Username: u.Username, UserID: &u.ID, IP: c.IP, UserAgent: c.UserAgent,
+		Name: "signed_in", Detail: map[string]any{"kind": kind, "aal": aal}})
 	return token, nil
 }
 
@@ -195,6 +199,7 @@ type Identity struct {
 	SessionID int64
 	Token     string
 	ViaCookie bool
+	AAL       int16
 }
 
 type ctxKey struct{}
@@ -251,6 +256,7 @@ func (m *Manager) Authenticate(next http.Handler) http.Handler {
 			SessionID: row.Session.ID,
 			Token:     token,
 			ViaCookie: viaCookie,
+			AAL:       row.Session.Aal,
 		})
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -313,4 +319,25 @@ func RequireAdmin(onError func(w http.ResponseWriter, status int, code string)) 
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// RequireMFA keeps a password-only session (aal 1) out while the system
+// requires two-factor sign-in: 403 mfa_enrollment_required until a factor is
+// enrolled (which raises the session) or the user signs in again with one.
+func (m *Manager) RequireMFA(onError func(w http.ResponseWriter, status int, code string)) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			id, _ := FromContext(r.Context())
+			if id.AAL < AALMFA && m.policy != nil && m.policy.MFARequired(r.Context()) {
+				onError(w, http.StatusForbidden, "mfa_enrollment_required")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// RaiseSession marks the current session as having passed a second factor.
+func (m *Manager) RaiseSession(ctx context.Context, sessionID int64) error {
+	return m.store.RaiseSessionAAL(ctx, sessionID)
 }

@@ -1,0 +1,11 @@
+{{define "subject"}}New sign-in to your {{.AppName}} account{{end}}
+{{define "action"}}Review your devices{{end}}
+{{define "body"}}
+Hi {{.Name}},
+
+Your account was just signed in to from an address it has not used lately:
+
+{{.Message}}
+
+If this was you, there is nothing to do. If not, sign out that device and change your password.
+{{end}}

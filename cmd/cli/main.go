@@ -5,6 +5,7 @@
 //	rigel-ledger-cli create-user -u alice -e alice@example.com --display-name Alice
 //	rigel-ledger-cli reset-password -u alice
 //	rigel-ledger-cli set-admin -u alice --admin=true
+//	rigel-ledger-cli reset-mfa -u alice       # lost every second factor
 //
 // A password not given with -p is read from stdin, so it stays out of the
 // shell history and the process list. A created user still walks the
@@ -22,6 +23,8 @@ import (
 	flag "github.com/spf13/pflag"
 
 	"github.com/cwchen-twn/rigel-ledger/internal"
+	"github.com/cwchen-twn/rigel-ledger/internal/auth"
+	"github.com/cwchen-twn/rigel-ledger/internal/identity"
 	"github.com/cwchen-twn/rigel-ledger/internal/ledger"
 )
 
@@ -35,6 +38,7 @@ Usage:
   rigel-ledger-cli create-user    -u USER -e EMAIL [-p PASS] [--display-name N] [--language en|zh|es] [--currency USD] [--timezone UTC] [--admin]
   rigel-ledger-cli reset-password -u USER [-p PASS]
   rigel-ledger-cli set-admin      -u USER --admin=true|false
+  rigel-ledger-cli reset-mfa      -u USER    remove every second factor and session (break-glass)
 
 Configuration comes from the same environment (or .env) as the server.
 `, version)
@@ -113,6 +117,18 @@ func main() {
 			die(err)
 		}
 		fmt.Printf("%s admin=%v\n", *username, *admin)
+
+	case "reset-mfa":
+		_ = fs.Parse(args)
+		u, err := store.GetUserByUsername(ctx, strings.ToLower(*username))
+		if err != nil {
+			die(fmt.Errorf("no user %q", *username))
+		}
+		ids := identity.New(identity.Options{Store: store, Ledger: svc, Auth: auth.NewManager(store, cfg.SessionTTL, true), Logger: logger})
+		if err := ids.ResetMFA(ctx, 0, "cli", u.ID); err != nil {
+			die(err)
+		}
+		fmt.Printf("%s: every second factor, recovery code and session removed; the next sign-in enrols again\n", u.Username)
 
 	default:
 		usage()

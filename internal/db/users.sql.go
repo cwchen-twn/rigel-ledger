@@ -26,7 +26,7 @@ INSERT INTO users (username, email, password_hash, display_name, language, displ
                    timezone, date_format, theme, is_admin, password_must_change, invited_by)
 VALUES ($1, $2, $3, $4, $5, $6,
         $7, $8, $9, $10, $11, $12)
-RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by
+RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by, webauthn_id, signin_alerts
 `
 
 type CreateInitialUserParams struct {
@@ -83,6 +83,8 @@ func (q *Queries) CreateInitialUser(ctx context.Context, arg CreateInitialUserPa
 		&i.InitializedAt,
 		&i.PasswordMustChange,
 		&i.InvitedBy,
+		&i.WebauthnID,
+		&i.SigninAlerts,
 	)
 	return i, err
 }
@@ -90,7 +92,7 @@ func (q *Queries) CreateInitialUser(ctx context.Context, arg CreateInitialUserPa
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, email, password_hash, display_name, language, display_currency, timezone, is_admin)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by
+RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by, webauthn_id, signin_alerts
 `
 
 type CreateUserParams struct {
@@ -137,6 +139,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.InitializedAt,
 		&i.PasswordMustChange,
 		&i.InvitedBy,
+		&i.WebauthnID,
+		&i.SigninAlerts,
 	)
 	return i, err
 }
@@ -167,7 +171,7 @@ func (q *Queries) EmailTaken(ctx context.Context, arg EmailTakenParams) (bool, e
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by FROM users WHERE email <> '' AND lower(email) = lower($1)
+SELECT id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by, webauthn_id, signin_alerts FROM users WHERE email <> '' AND lower(email) = lower($1)
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -194,12 +198,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.InitializedAt,
 		&i.PasswordMustChange,
 		&i.InvitedBy,
+		&i.WebauthnID,
+		&i.SigninAlerts,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by FROM users WHERE id = $1
+SELECT id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by, webauthn_id, signin_alerts FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -226,12 +232,14 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.InitializedAt,
 		&i.PasswordMustChange,
 		&i.InvitedBy,
+		&i.WebauthnID,
+		&i.SigninAlerts,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by FROM users WHERE username = $1
+SELECT id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by, webauthn_id, signin_alerts FROM users WHERE username = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -258,12 +266,14 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.InitializedAt,
 		&i.PasswordMustChange,
 		&i.InvitedBy,
+		&i.WebauthnID,
+		&i.SigninAlerts,
 	)
 	return i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT u.id, u.username, u.email, u.password_hash, u.display_name, u.is_admin, u.is_active, u.language, u.display_currency, u.timezone, u.date_format, u.theme, u.default_book_id, u.last_login_at, u.created_at, u.updated_at, u.email_verified_at, u.initialized_at, u.password_must_change, u.invited_by,
+SELECT u.id, u.username, u.email, u.password_hash, u.display_name, u.is_admin, u.is_active, u.language, u.display_currency, u.timezone, u.date_format, u.theme, u.default_book_id, u.last_login_at, u.created_at, u.updated_at, u.email_verified_at, u.initialized_at, u.password_must_change, u.invited_by, u.webauthn_id, u.signin_alerts,
        EXISTS (SELECT 1 FROM email_tokens t
                WHERE t.user_id = u.id AND t.kind = 'invite' AND t.used_at IS NULL
                  AND t.expires_at > now())::BOOLEAN AS invite_pending
@@ -307,6 +317,8 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 			&i.User.InitializedAt,
 			&i.User.PasswordMustChange,
 			&i.User.InvitedBy,
+			&i.User.WebauthnID,
+			&i.User.SigninAlerts,
 			&i.InvitePending,
 		); err != nil {
 			return nil, err
@@ -321,7 +333,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 
 const markUserInitialized = `-- name: MarkUserInitialized :one
 UPDATE users SET initialized_at = now() WHERE id = $1 AND initialized_at IS NULL
-RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by
+RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by, webauthn_id, signin_alerts
 `
 
 func (q *Queries) MarkUserInitialized(ctx context.Context, id int64) (User, error) {
@@ -348,6 +360,8 @@ func (q *Queries) MarkUserInitialized(ctx context.Context, id int64) (User, erro
 		&i.InitializedAt,
 		&i.PasswordMustChange,
 		&i.InvitedBy,
+		&i.WebauthnID,
+		&i.SigninAlerts,
 	)
 	return i, err
 }
@@ -396,7 +410,7 @@ func (q *Queries) SetUserAdmin(ctx context.Context, arg SetUserAdminParams) erro
 
 const setUserEmail = `-- name: SetUserEmail :one
 UPDATE users SET email = $1, email_verified_at = $2 WHERE id = $3
-RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by
+RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by, webauthn_id, signin_alerts
 `
 
 type SetUserEmailParams struct {
@@ -429,6 +443,8 @@ func (q *Queries) SetUserEmail(ctx context.Context, arg SetUserEmailParams) (Use
 		&i.InitializedAt,
 		&i.PasswordMustChange,
 		&i.InvitedBy,
+		&i.WebauthnID,
+		&i.SigninAlerts,
 	)
 	return i, err
 }
@@ -449,7 +465,7 @@ func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams
 
 const setUserUsername = `-- name: SetUserUsername :one
 UPDATE users SET username = $1 WHERE id = $2
-RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by
+RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by, webauthn_id, signin_alerts
 `
 
 type SetUserUsernameParams struct {
@@ -481,6 +497,8 @@ func (q *Queries) SetUserUsername(ctx context.Context, arg SetUserUsernameParams
 		&i.InitializedAt,
 		&i.PasswordMustChange,
 		&i.InvitedBy,
+		&i.WebauthnID,
+		&i.SigninAlerts,
 	)
 	return i, err
 }
@@ -496,7 +514,7 @@ func (q *Queries) TouchUserLogin(ctx context.Context, id int64) error {
 
 const updateUserIdentity = `-- name: UpdateUserIdentity :one
 UPDATE users SET username = $1, email = $2 WHERE id = $3
-RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by
+RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by, webauthn_id, signin_alerts
 `
 
 type UpdateUserIdentityParams struct {
@@ -529,6 +547,8 @@ func (q *Queries) UpdateUserIdentity(ctx context.Context, arg UpdateUserIdentity
 		&i.InitializedAt,
 		&i.PasswordMustChange,
 		&i.InvitedBy,
+		&i.WebauthnID,
+		&i.SigninAlerts,
 	)
 	return i, err
 }
@@ -557,7 +577,7 @@ UPDATE users SET
     theme            = $6,
     default_book_id  = $7
 WHERE id = $8
-RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by
+RETURNING id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by, webauthn_id, signin_alerts
 `
 
 type UpdateUserSettingsParams struct {
@@ -604,6 +624,8 @@ func (q *Queries) UpdateUserSettings(ctx context.Context, arg UpdateUserSettings
 		&i.InitializedAt,
 		&i.PasswordMustChange,
 		&i.InvitedBy,
+		&i.WebauthnID,
+		&i.SigninAlerts,
 	)
 	return i, err
 }

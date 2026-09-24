@@ -1,7 +1,7 @@
 import { useNavigate } from '@solidjs/router';
 import { createContext, createEffect, createResource, onCleanup, useContext, type ParentComponent, type Resource } from 'solid-js';
 import { api, ApiError, setUnauthenticatedHandler } from '~/api/client';
-import type { Commodity, CommodityKind, Settings, Theme, User } from '~/api/types';
+import type { Commodity, CommodityKind, LoginResult, Settings, Theme, User } from '~/api/types';
 import { useI18n } from '~/i18n';
 
 interface Session {
@@ -14,13 +14,16 @@ interface Session {
   commodity: (code: string) => Commodity | undefined;
   kind: (code: string) => CommodityKind;
   decimals: (code: string) => number;
-  login: (username: string, password: string) => Promise<User>;
+  /** Signs in, or returns the second step to take. */
+  login: (username: string, password: string) => Promise<LoginResult>;
+  /** After a finished sign-in (second step, passkey, link). */
+  signedIn: (u: User) => void;
   logout: () => Promise<void>;
   saveSettings: (s: Settings) => Promise<User>;
   /** Replace the signed-in user after an update elsewhere (identity change, sign-in by link). */
   setUser: (u: User) => void;
-  /** Reload /api/me (e.g. to pick up pending_email). */
-  refresh: () => void;
+  /** Reload /api/me (e.g. to pick up pending_email or a raised session). */
+  refresh: () => Promise<void>;
 }
 
 const Ctx = createContext<Session>();
@@ -85,9 +88,17 @@ export const SessionProvider: ParentComponent = (props) => {
     kind,
     decimals,
     async login(username, password) {
-      const { user: u } = await api.login(username, password);
+      const r = await api.login(username, password);
+      // Show the user at once; /api/me then adds the session's level.
+      if (r.user) {
+        mutate(r.user);
+        void refetch();
+      }
+      return r;
+    },
+    signedIn: (u) => {
       mutate(u);
-      return u;
+      void refetch();
     },
     async logout() {
       try {
@@ -103,7 +114,9 @@ export const SessionProvider: ParentComponent = (props) => {
       return u;
     },
     setUser: (u) => mutate(u),
-    refresh: () => void refetch(),
+    refresh: async () => {
+      await refetch();
+    },
   };
 
   return <Ctx.Provider value={session}>{props.children}</Ctx.Provider>;

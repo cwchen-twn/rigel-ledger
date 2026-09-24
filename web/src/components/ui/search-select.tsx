@@ -36,15 +36,17 @@ export function SearchSelect(props: {
   const mount = usePortalMount();
   const field = useFieldProps();
 
-  const items = createMemo<Item[]>(() =>
-    props.options.map((o) => ({ ...o, search: o.description ? `${o.label} ${o.description}` : o.label })),
-  );
-  // An empty list while options load must not look like "no value": keep a
-  // placeholder item for the current value so the field still shows it.
-  const selected = createMemo<Item | null>(() => {
-    if (!props.value) return null;
-    return items().find((o) => o.value === props.value) ?? { value: props.value, label: props.value, search: props.value };
+  // A stored value the list lacks (options still loading, or "UTC", which
+  // the browser's time-zone list leaves out) is kept as an option of its own:
+  // Kobalte shows only values that are in its options.
+  const items = createMemo<Item[]>(() => {
+    const list = props.options.map((o) => ({ ...o, search: o.description ? `${o.label} ${o.description}` : o.label }));
+    if (props.value && !list.some((o) => o.value === props.value)) {
+      list.unshift({ value: props.value, label: props.value, search: props.value });
+    }
+    return list;
   });
+  const selected = createMemo<Item | null>(() => items().find((o) => o.value === props.value) ?? null);
 
   return (
     <Combobox<Item>

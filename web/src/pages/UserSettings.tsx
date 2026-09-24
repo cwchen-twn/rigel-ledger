@@ -5,6 +5,7 @@ import type { Language, Theme } from '~/api/types';
 import { PageHeader } from '~/components/AppShell';
 import { EmailVerification } from '~/components/EmailVerification';
 import { EventList } from '~/components/EventList';
+import { MFASettings } from '~/components/MFASettings';
 import { DATE_FORMATS, LANGUAGES, THEMES, timeZones } from '~/components/ProfileFields';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
@@ -206,6 +207,8 @@ export default function UserSettings() {
             </form>
           </CardContent>
         </Card>
+
+        <MFASettings />
 
         <Card>
           <CardHeader>

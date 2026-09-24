@@ -77,6 +77,11 @@ type UserDTO struct {
 	// An address a verification code was sent to and not yet confirmed
 	// (only on GET /api/me).
 	PendingEmail string `json:"pending_email,omitempty"`
+	// Only on GET /api/me: 1 = password only, 2 = passed a second factor.
+	SessionAAL int16 `json:"session_aal,omitempty"`
+	// The system requires a second factor / this user has one enrolled.
+	MFARequired bool `json:"mfa_required,omitempty"`
+	MFAEnrolled bool `json:"mfa_enrolled,omitempty"`
 }
 
 func userDTO(u db.User) UserDTO {

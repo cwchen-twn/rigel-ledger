@@ -376,6 +376,28 @@
                 }
             }
         },
+        "/api/admin/users/{userID}/reset-mfa": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Remove every second factor and session of a user (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "user id",
+                        "name": "userID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
         "/api/auth/config": {
             "get": {
                 "produces": [
@@ -533,6 +555,142 @@
                 "responses": {
                     "204": {
                         "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/auth/mfa": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Second sign-in step: a TOTP, emailed or recovery code",
+                "parameters": [
+                    {
+                        "description": "code",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.mfaVerifyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.loginResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/mfa/email": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Mail a code for the second sign-in step",
+                "parameters": [
+                    {
+                        "description": "the password step's challenge",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.challengeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/auth/passkey/begin": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Start a passkey sign-in (passwordless, or the second step)",
+                "parameters": [
+                    {
+                        "description": "optional password-step challenge",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.passkeyBeginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.PasskeyOptionsDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/passkey/finish": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Finish a passkey sign-in; the body is the browser's credential JSON",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "from begin",
+                        "name": "challenge",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.loginResponse"
+                        }
                     }
                 }
             }
@@ -1861,6 +2019,253 @@
                 }
             }
         },
+        "/api/me/mfa": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mfa"
+                ],
+                "summary": "The signed-in user's second factors",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.MFAStatusDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/mfa/alerts": {
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mfa"
+                ],
+                "summary": "Mail me when a sign-in comes from a new address",
+                "parameters": [
+                    {
+                        "description": "on or off",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.alertsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/me/mfa/email": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mfa"
+                ],
+                "summary": "Begin email-code setup: a code goes to the verified address",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.challengeRequest"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/mfa/email/confirm": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mfa"
+                ],
+                "summary": "Finish email-code setup",
+                "parameters": [
+                    {
+                        "description": "code",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.challengeCodeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.EnrolledDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/mfa/passkeys/begin": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mfa"
+                ],
+                "summary": "Begin adding a passkey",
+                "parameters": [
+                    {
+                        "description": "a name for it",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.passkeyRegisterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.PasskeyOptionsDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/mfa/passkeys/finish": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mfa"
+                ],
+                "summary": "Finish adding a passkey; the body is the browser's credential JSON",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "from begin",
+                        "name": "challenge",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.EnrolledDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/mfa/recovery-codes": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mfa"
+                ],
+                "summary": "Replace the recovery codes (needs the password and a two-factor session)",
+                "parameters": [
+                    {
+                        "description": "password",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.stepUpRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.EnrolledDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/mfa/totp": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mfa"
+                ],
+                "summary": "Begin authenticator-app setup: the secret and its QR code",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.TOTPSetupDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/mfa/totp/confirm": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mfa"
+                ],
+                "summary": "Finish authenticator-app setup with a first code",
+                "parameters": [
+                    {
+                        "description": "code",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.codeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.EnrolledDTO"
+                        }
+                    }
+                }
+            }
+        },
         "/api/me/onboarding": {
             "post": {
                 "consumes": [
@@ -2489,6 +2894,17 @@
                 }
             }
         },
+        "routes.EnrolledDTO": {
+            "type": "object",
+            "properties": {
+                "recovery_codes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "routes.InvitationDTO": {
             "type": "object",
             "properties": {
@@ -2548,6 +2964,42 @@
                 }
             }
         },
+        "routes.MFAStatusDTO": {
+            "type": "object",
+            "properties": {
+                "allowed": {
+                    "description": "What the administrator allows, and whether a second factor is required.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "email": {
+                    "type": "boolean"
+                },
+                "passkeys": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.PasskeyDTO"
+                    }
+                },
+                "recovery_left": {
+                    "type": "integer"
+                },
+                "required": {
+                    "type": "boolean"
+                },
+                "session_aal": {
+                    "type": "integer"
+                },
+                "signin_alerts": {
+                    "type": "boolean"
+                },
+                "totp": {
+                    "type": "boolean"
+                }
+            }
+        },
         "routes.MailTestDTO": {
             "type": "object",
             "properties": {
@@ -2573,6 +3025,35 @@
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "routes.PasskeyDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "last_used_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.PasskeyOptionsDTO": {
+            "type": "object",
+            "properties": {
+                "challenge": {
+                    "description": "Send back to the matching finish endpoint.",
+                    "type": "string"
+                },
+                "options": {
+                    "description": "PublicKeyCredentialCreationOptions / RequestOptions, as JSON for the browser."
                 }
             }
         },
@@ -2676,6 +3157,21 @@
                     "type": "string"
                 },
                 "user_agent": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.TOTPSetupDTO": {
+            "type": "object",
+            "properties": {
+                "qr": {
+                    "description": "data: URL of a PNG",
+                    "type": "string"
+                },
+                "secret": {
+                    "type": "string"
+                },
+                "uri": {
                     "type": "string"
                 }
             }
@@ -2794,12 +3290,23 @@
                 "language": {
                     "type": "string"
                 },
+                "mfa_enrolled": {
+                    "type": "boolean"
+                },
+                "mfa_required": {
+                    "description": "The system requires a second factor / this user has one enrolled.",
+                    "type": "boolean"
+                },
                 "password_must_change": {
                     "type": "boolean"
                 },
                 "pending_email": {
                     "description": "An address a verification code was sent to and not yet confirmed\n(only on GET /api/me).",
                     "type": "string"
+                },
+                "session_aal": {
+                    "description": "Only on GET /api/me: 1 = password only, 2 = passed a second factor.",
+                    "type": "integer"
                 },
                 "theme": {
                     "type": "string"
@@ -2960,11 +3467,38 @@
                 }
             }
         },
+        "routes.alertsRequest": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                }
+            }
+        },
         "routes.archiveRequest": {
             "type": "object",
             "properties": {
                 "archived": {
                     "type": "boolean"
+                }
+            }
+        },
+        "routes.challengeCodeRequest": {
+            "type": "object",
+            "properties": {
+                "challenge": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.challengeRequest": {
+            "type": "object",
+            "properties": {
+                "challenge": {
+                    "type": "string"
                 }
             }
         },
@@ -3088,11 +3622,39 @@
         "routes.loginResponse": {
             "type": "object",
             "properties": {
+                "challenge": {
+                    "type": "string"
+                },
+                "methods": {
+                    "description": "totp, email, passkey, recovery",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "mfa_required": {
+                    "type": "boolean"
+                },
                 "token": {
                     "type": "string"
                 },
                 "user": {
                     "$ref": "#/definitions/routes.UserDTO"
+                }
+            }
+        },
+        "routes.mfaVerifyRequest": {
+            "type": "object",
+            "properties": {
+                "challenge": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "method": {
+                    "description": "totp, email or recovery",
+                    "type": "string"
                 }
             }
         },
@@ -3138,6 +3700,26 @@
                 "date": {
                     "type": "string",
                     "format": "date"
+                }
+            }
+        },
+        "routes.passkeyBeginRequest": {
+            "type": "object",
+            "properties": {
+                "challenge": {
+                    "description": "The password step's challenge, when the passkey is the second step;\nempty for a passwordless sign-in.",
+                    "type": "string"
+                },
+                "client": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.passkeyRegisterRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
                 }
             }
         },
@@ -3236,6 +3818,14 @@
                     "type": "string"
                 },
                 "email": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.stepUpRequest": {
+            "type": "object",
+            "properties": {
+                "current_password": {
                     "type": "string"
                 }
             }

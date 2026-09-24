@@ -1,0 +1,11 @@
+{{define "subject"}}Nuevo inicio de sesión en tu cuenta de {{.AppName}}{{end}}
+{{define "action"}}Revisar tus dispositivos{{end}}
+{{define "body"}}
+Hola {{.Name}}:
+
+Se acaba de iniciar sesión en tu cuenta desde una dirección que no usaba últimamente:
+
+{{.Message}}
+
+Si fuiste tú, no hay nada que hacer. Si no, cierra la sesión de ese dispositivo y cambia tu contraseña.
+{{end}}

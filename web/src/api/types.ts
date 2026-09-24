@@ -26,6 +26,50 @@ export interface User {
   password_must_change: boolean;
   /** An address a code was sent to and not yet confirmed (GET /api/me only). */
   pending_email?: string;
+  /** GET /api/me only: 1 = password only, 2 = passed a second factor. */
+  session_aal?: number;
+  mfa_required?: boolean;
+  mfa_enrolled?: boolean;
+}
+
+export type SignInMethod = 'totp' | 'email' | 'passkey' | 'recovery';
+
+/** Either signed in (user) or a second step to take (challenge + methods). */
+export interface LoginResult {
+  user?: User;
+  token?: string;
+  mfa_required?: boolean;
+  challenge?: string;
+  methods?: SignInMethod[];
+}
+
+export interface PasskeyInfo {
+  id: number;
+  name: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface MFAStatus {
+  totp: boolean;
+  email: boolean;
+  passkeys: PasskeyInfo[];
+  recovery_left: number;
+  allowed: MfaMethod[];
+  required: boolean;
+  signin_alerts: boolean;
+  session_aal: number;
+}
+
+export interface TOTPSetup {
+  secret: string;
+  uri: string;
+  qr: string;
+}
+
+/** Recovery codes come back once, when the first factor is added. */
+export interface Enrolled {
+  recovery_codes?: string[];
 }
 
 export type Registration = 'closed' | 'request' | 'open';

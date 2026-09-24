@@ -56,6 +56,17 @@ func (s *Service) Limits(ctx context.Context) auth.Limits {
 	}
 }
 
+// MFARequired implements auth.Policy.
+func (s *Service) MFARequired(ctx context.Context) bool {
+	st, err := s.Settings(ctx)
+	if err != nil {
+		// Fail closed: without the settings, assume the strict default.
+		s.logger.Warn("system settings unavailable; two-factor assumed required", "error", err)
+		return true
+	}
+	return st.MfaRequired
+}
+
 // SessionTTL implements auth.Policy; 0 means SESSION_TTL from the environment.
 func (s *Service) SessionTTL(ctx context.Context) time.Duration {
 	st, err := s.Settings(ctx)
@@ -346,4 +357,12 @@ func displayName(u db.User) string {
 		return u.DisplayName
 	}
 	return u.Username
+}
+
+// InvalidateSettings drops the cached row (after a change made outside this
+// service: tests, or a manual fix in psql followed by a restart-free reload).
+func (s *Service) InvalidateSettings() {
+	s.mu.Lock()
+	s.settings = nil
+	s.mu.Unlock()
 }

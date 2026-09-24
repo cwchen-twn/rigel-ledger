@@ -324,6 +324,20 @@ type AuditLog struct {
 	ChangedAt time.Time
 }
 
+type AuthChallenge struct {
+	ID         int64
+	UserID     *int64
+	Kind       string
+	TokenHash  []byte
+	Client     string
+	Payload    []byte
+	CodeHash   []byte
+	CodeSentAt *time.Time
+	Attempts   int32
+	ExpiresAt  time.Time
+	CreatedAt  time.Time
+}
+
 type AuthEvent struct {
 	ID        int64
 	Username  string
@@ -379,6 +393,24 @@ type EmailToken struct {
 	CreatedAt time.Time
 }
 
+type MfaFactor struct {
+	ID          int64
+	UserID      int64
+	Kind        string
+	SecretEnc   []byte
+	LastStep    int64
+	ConfirmedAt *time.Time
+	CreatedAt   time.Time
+}
+
+type MfaRecoveryCode struct {
+	ID        int64
+	UserID    int64
+	CodeHash  []byte
+	UsedAt    *time.Time
+	CreatedAt time.Time
+}
+
 type Posting struct {
 	ID            int64
 	TransactionID int64
@@ -415,6 +447,7 @@ type Session struct {
 	LastUsedAt time.Time
 	ExpiresAt  time.Time
 	Ip         *netip.Addr
+	Aal        int16
 }
 
 type SystemSetting struct {
@@ -492,4 +525,16 @@ type User struct {
 	InitializedAt      *time.Time
 	PasswordMustChange bool
 	InvitedBy          *int64
+	WebauthnID         []byte
+	SigninAlerts       bool
+}
+
+type WebauthnCredential struct {
+	ID           int64
+	UserID       int64
+	CredentialID []byte
+	Data         []byte
+	Name         string
+	CreatedAt    time.Time
+	LastUsedAt   *time.Time
 }

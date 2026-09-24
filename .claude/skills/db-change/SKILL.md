@@ -20,7 +20,8 @@ description: How to change the rigel-ledger database schema or SQL queries safel
 ## The migration rule
 
 **The app is deployed (2026-09-24): never edit an applied migration.**
-`000001_init` and `000002_accounts_admin` are frozen. A schema change is a new
+Every migration in `migrations/` that is on main is frozen (`000001` ..
+`000003` at the time of writing). A schema change is a new
 pair: `make migrations/new name=<what>`, with both up and down, and the down
 must leave the database the previous migration expects (see `000002`'s down for
 how to restore a replaced function). Add the pair to

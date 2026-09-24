@@ -6,7 +6,7 @@ import (
 )
 
 func TestEveryTemplateRendersInEveryLanguage(t *testing.T) {
-	names := []string{"invite", "register", "verify", "email_changed", "access_request", "test"}
+	names := []string{"invite", "register", "verify", "email_changed", "access_request", "test", "signin_code", "signin_alert"}
 	for _, lang := range languages {
 		for _, name := range names {
 			if _, ok := parsed[lang+"/"+name]; !ok {

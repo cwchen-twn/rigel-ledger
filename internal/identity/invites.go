@@ -208,7 +208,7 @@ func (s *Service) AcceptInvite(ctx context.Context, token string, p Profile, pas
 	if err != nil {
 		return db.User{}, "", ledger.Translate(err, "user")
 	}
-	session, err := s.auth.OpenSession(ctx, out.ID, "web", c)
+	session, err := s.auth.OpenSession(ctx, out, "web", c, auth.AALPassword)
 	if err != nil {
 		return db.User{}, "", err
 	}

@@ -137,7 +137,7 @@ func (s *Service) VerifyLink(ctx context.Context, token string, c auth.Client) (
 		}
 		return db.User{}, "", ledger.Translate(err, "user")
 	}
-	session, err := s.auth.OpenSession(ctx, u.ID, "web", c)
+	session, err := s.auth.OpenSession(ctx, u, "web", c, auth.AALPassword)
 	if err != nil {
 		return db.User{}, "", err
 	}

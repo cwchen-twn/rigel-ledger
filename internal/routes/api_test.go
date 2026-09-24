@@ -30,6 +30,7 @@ type apiFixture struct {
 	srv    *httptest.Server
 	svc    *ledger.Service
 	ids    *identity.Service
+	mgr    *auth.Manager
 	store  *db.Store
 	outbox *outbox
 }
@@ -93,7 +94,12 @@ func newAPI(t *testing.T) *apiFixture {
 	if _, err := store.Pool.Exec(context.Background(), "UPDATE users SET initialized_at = now(), email_verified_at = now()"); err != nil {
 		t.Fatal(err)
 	}
-	return &apiFixture{t: t, srv: srv, svc: svc, ids: ids, store: store, outbox: ob}
+	// Two-factor sign-in is required by default; the tests that are about it
+	// turn it back on (requireMFA).
+	if _, err := store.Pool.Exec(context.Background(), "UPDATE system_settings SET mfa_required = false"); err != nil {
+		t.Fatal(err)
+	}
+	return &apiFixture{t: t, srv: srv, svc: svc, ids: ids, mgr: mgr, store: store, outbox: ob}
 }
 
 // client is one signed-in browser (cookie) or script (bearer).

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/cwchen-twn/rigel-ledger/internal/auth"
+	"github.com/cwchen-twn/rigel-ledger/internal/db"
 	"github.com/cwchen-twn/rigel-ledger/internal/ledger"
 	"github.com/cwchen-twn/rigel-ledger/internal/response"
 )
@@ -16,9 +17,15 @@ type loginRequest struct {
 	Client string `json:"client,omitempty"`
 }
 
+// loginResponse is either signed in (user, and token for client "api") or a
+// second step: mfa_required with a challenge and the methods to offer.
 type loginResponse struct {
-	User  UserDTO `json:"user"`
-	Token string  `json:"token,omitempty"`
+	User        *UserDTO `json:"user,omitempty"`
+	Token       string   `json:"token,omitempty"`
+	MFARequired bool     `json:"mfa_required,omitempty"`
+	Challenge   string   `json:"challenge,omitempty"`
+	// totp, email, passkey, recovery
+	Methods []string `json:"methods,omitempty"`
 }
 
 // login
@@ -42,7 +49,7 @@ func (h *handlers) login(w http.ResponseWriter, r *http.Request) {
 	if req.Client == "api" {
 		kind = "api"
 	}
-	u, token, err := h.auth.Login(r.Context(), req.Username, req.Password, kind, clientOf(r))
+	res, err := h.identity.Login(r.Context(), req.Username, req.Password, kind, clientOf(r))
 	if errors.Is(err, auth.ErrInvalidCredentials) {
 		response.Error(w, http.StatusUnauthorized, "invalid_credentials", err.Error(), nil)
 		return
@@ -51,8 +58,19 @@ func (h *handlers) login(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	resp := loginResponse{User: userDTO(u)}
-	if kind == "api" {
+	if res.Challenge != "" {
+		response.JSON(w, http.StatusOK, loginResponse{MFARequired: true, Challenge: res.Challenge, Methods: res.Methods})
+		return
+	}
+	h.signedIn(w, r, res.User, res.Token, kind)
+}
+
+// signedIn answers a finished sign-in: a cookie for the browser, the token in
+// the body for scripts.
+func (h *handlers) signedIn(w http.ResponseWriter, r *http.Request, u db.User, token, client string) {
+	dto := userDTO(u)
+	resp := loginResponse{User: &dto}
+	if client == "api" {
 		resp.Token = token
 	} else {
 		h.auth.SetCookie(r.Context(), w, token)
@@ -87,6 +105,11 @@ func (h *handlers) me(w http.ResponseWriter, r *http.Request) {
 	id, _ := auth.FromContext(r.Context())
 	out := userDTO(id.User)
 	out.PendingEmail = h.identity.PendingEmail(r.Context(), id.User)
+	out.SessionAAL = id.AAL
+	if st, err := h.identity.MFAState(r.Context(), id.User.ID); err == nil {
+		out.MFARequired = st.Required
+		out.MFAEnrolled = st.Enrolled()
+	}
 	response.JSON(w, http.StatusOK, out)
 }
 

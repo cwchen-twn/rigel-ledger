@@ -6,14 +6,22 @@ VALUES (@username, sqlc.narg(user_id), sqlc.narg(ip)::inet, @user_agent, @event,
 -- Failures inside the window for the three throttle keys, and when the
 -- oldest of each counted failure leaves the window.
 SELECT
-    count(*) FILTER (WHERE username = @username AND ip = sqlc.narg(ip)::inet) AS user_ip,
-    count(*) FILTER (WHERE ip = sqlc.narg(ip)::inet)                         AS ip,
-    count(*) FILTER (WHERE username = @username AND @username::TEXT <> '')   AS username,
-    coalesce(min(created_at), now())::TIMESTAMPTZ                            AS oldest
-FROM auth_events
-WHERE failure
-  AND created_at > now() - make_interval(secs => @window_seconds::BIGINT)
-  AND (username = @username OR ip = sqlc.narg(ip)::inet);
+    count(*) FILTER (WHERE e.username = @username AND e.ip = sqlc.narg(ip)::inet) AS user_ip,
+    count(*) FILTER (WHERE e.ip = sqlc.narg(ip)::inet)                           AS ip,
+    count(*) FILTER (WHERE e.username = @username AND @username::TEXT <> '')     AS username,
+    coalesce(min(e.created_at), now())::TIMESTAMPTZ                              AS oldest,
+    -- This address opened a full session for this username lately: the
+    -- owner's own device, exempt from the username-wide limit so a stranger
+    -- guessing elsewhere cannot lock the owner out.
+    EXISTS (
+        SELECT 1 FROM auth_events s
+        WHERE s.username = @username AND s.ip = sqlc.narg(ip)::inet AND s.event = 'signed_in'
+          AND s.created_at > now() - INTERVAL '30 days'
+    )::BOOLEAN                                                                   AS trusted_ip
+FROM auth_events e
+WHERE e.failure
+  AND e.created_at > now() - make_interval(secs => @window_seconds::BIGINT)
+  AND (e.username = @username OR e.ip = sqlc.narg(ip)::inet);
 
 -- name: ListUserAuthEvents :many
 SELECT id, username, user_id, coalesce(host(ip), '')::TEXT AS ip, user_agent, event, failure, detail, created_at

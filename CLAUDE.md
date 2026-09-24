@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 RigelLedger is a personal and family finance web application built with Go (backend) and SolidJS (frontend): double-entry bookkeeping, multi-currency, IFRS-flavoured reports, statement imports and stock investments. It is deployed (ledger.chenantunez.com, tailnet-only), so **applied migrations are frozen**: schema changes are new migration pairs.
 
-**Read `docs/ARCHITECTURE.md` before designing anything.** It is the accepted target design and the roadmap P1-P7; P1 and P2 are done, and P2.5a (accounts, administration, throttling) is implemented; P2.5b (two-factor sign-in) is next.
+**Read `docs/ARCHITECTURE.md` before designing anything.** It is the accepted target design and the roadmap P1-P7; P1, P2 and P2.5 (accounts, administration, throttling, two-factor sign-in) are done; P3 is next.
 
 ## Common Commands
 
@@ -36,6 +36,7 @@ make swag              # Regenerate Swagger/OpenAPI docs (writes to api/)
 # Admin CLI (also shipped in the image as rigel-ledger-cli)
 go run ./cmd/cli create-user -u alice -e alice@example.com   # password read from stdin; walks the wizard at first sign-in
 go run ./cmd/cli set-admin -u alice                          # promote (the Administration page needs an admin)
+go run ./cmd/cli reset-mfa -u alice                          # break-glass: drop every second factor and session
 ```
 
 To run a single test: `go test -run TestName ./internal/ledger/` (with `TEST_DATABASE_URL` set, e.g. from `.env`).
@@ -140,6 +141,7 @@ Copy `.env.example` to `.env`. Real environment variables always win over `.env`
 - Schema or query change: follow the `db-change` skill (`.claude/skills/db-change/SKILL.md`) -- edit `000001_init` in place until the first deploy, run `make sqlc`, add a DB test for any trigger.
 - Money: `NUMERIC` in Postgres, `shopspring/decimal` in Go, strings in JSON -- never floats anywhere. Dates are `YYYY-MM-DD` (`routes.Date`).
 - UI text, including account names, lives in the frontend i18n files keyed by stable codes; the database stores no translations. API error codes are translated as `error.<code>`, per-field codes as `field.<code>`, sign-in events as `event.<name>`. The one server-side exception is mail: `internal/mail/templates/{en,zh,es}/*.tmpl`, one file per message per language.
+- Two-factor sign-in: sessions carry `aal` (1 password/link, 2 second factor or passkey). `auth.Manager.RequireMFA` confines aal-1 sessions to enrolment while `system_settings.mfa_required`; login answers a challenge instead of a session when the user has a factor. Factors live in `mfa_factors` (email, TOTP sealed by `secretbox`), `webauthn_credentials`, `mfa_recovery_codes`; short-lived ceremony state in `auth_challenges`. Code in `internal/identity/{mfa,passkey}.go`; the frontend's WebAuthn JSON glue is `web/src/lib/webauthn.ts`. Passkeys bind to `APP_ORIGIN`'s host.
 - Sign-in and account flows go through `identity.Service`, which records every outcome in `auth_events` (also the throttle's source). New anonymous or code-checking endpoints call `auth.Manager.Check` first and record failures with `Failure: true`.
 - Sync and imports: design in `docs/ARCHITECTURE.md` ("Data sources and sync"). Taiwan bank, card, 集保 and e-invoice connectors come from [all-set-tw](https://github.com/TedLin1993/all-set-tw) (MIT) via a Node runner; Shioaji and Firstrade via a Python runner. Institution credentials live only in the runners' SOPS secrets, never in the database.
 - Deployment target: the Helm chart lives in the hcloud repo (`k3s/helm/rigel-ledger/`); this repo only builds the image. See `docs/ARCHITECTURE.md#deployment`.
@@ -161,6 +163,10 @@ Gitea (`git.chenantunez.com`, private) is the primary remote and push-mirrors ev
 - Gitea runner traps are inherited from hcloud (`hcloud/.gitea/CLAUDE.md`): checkout and the GoReleaser API use the in-cluster Service `http://gitea-http.gitea.svc.cluster.local:3000`, `setup-go` runs with `cache: false`, and docker needs the buildx plugin.
 - Toolchain pins: Go in `go.mod` + Dockerfile build stage; Bun in `web/package.json` `packageManager` + Dockerfile web stage; sqlc in the Makefile + both CI files (`SQLC_VERSION`). Renovate (hcloud's self-hosted bot, config in `renovate.json`) groups each pair so they move together.
 - How CI gets PostgreSQL 18 is the one intended difference between forges: GitHub uses a `services:` container; Gitea installs it inside the job from PGDG, because hcloud's runner puts jobs on docker's default bridge (no service DNS). Both use `localhost:5432`.
+
+## Deploying
+
+**No deploys to hcloud before v1.0.0** (the owner's call, 2026-09-24). Tags and releases are fine; production stays on what it runs, and features are checked on `make run/live` / a local server. Do not open hcloud chart bumps until then.
 
 ## Committing
 

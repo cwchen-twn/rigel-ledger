@@ -41,3 +41,11 @@ DELETE FROM sessions WHERE id = @id AND user_id = @user_id;
 
 -- name: DeleteUserSessions :exec
 DELETE FROM sessions WHERE user_id = @user_id;
+
+-- name: CreateSessionAAL :one
+INSERT INTO sessions (user_id, token_hash, kind, label, user_agent, expires_at, ip, aal)
+VALUES (@user_id, @token_hash, @kind, @label, @user_agent, @expires_at, sqlc.narg(ip)::inet, @aal)
+RETURNING *;
+
+-- name: RaiseSessionAAL :exec
+UPDATE sessions SET aal = 2 WHERE id = @id;

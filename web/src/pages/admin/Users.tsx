@@ -60,6 +60,7 @@ export function Users() {
       u.is_admin
         ? { label: t('admin.demote'), onSelect: () => act(() => api.admin.updateUser(u.id, { is_admin: false }), t('common.saved')) }
         : { label: t('admin.promote'), onSelect: () => act(() => api.admin.updateUser(u.id, { is_admin: true }), t('common.saved')) },
+      { label: t('admin.reset_mfa'), onSelect: () => confirm(t('admin.reset_mfa_confirm')) && act(() => api.admin.resetMFA(u.id), t('admin.mfa_was_reset')) },
       u.is_active
         ? { label: t('admin.deactivate'), onSelect: () => confirm(t('admin.deactivate_confirm')) && act(() => api.admin.updateUser(u.id, { is_active: false }), t('common.saved')), separatorBefore: true }
         : { label: t('admin.activate'), onSelect: () => act(() => api.admin.updateUser(u.id, { is_active: true }), t('common.saved')), separatorBefore: true },

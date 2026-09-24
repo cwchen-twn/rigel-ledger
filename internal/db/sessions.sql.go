@@ -14,7 +14,7 @@ import (
 const createSession = `-- name: CreateSession :one
 INSERT INTO sessions (user_id, token_hash, kind, label, user_agent, expires_at)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, user_id, token_hash, kind, label, user_agent, created_at, last_used_at, expires_at, ip
+RETURNING id, user_id, token_hash, kind, label, user_agent, created_at, last_used_at, expires_at, ip, aal
 `
 
 type CreateSessionParams struct {
@@ -47,6 +47,52 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		&i.LastUsedAt,
 		&i.ExpiresAt,
 		&i.Ip,
+		&i.Aal,
+	)
+	return i, err
+}
+
+const createSessionAAL = `-- name: CreateSessionAAL :one
+INSERT INTO sessions (user_id, token_hash, kind, label, user_agent, expires_at, ip, aal)
+VALUES ($1, $2, $3, $4, $5, $6, $7::inet, $8)
+RETURNING id, user_id, token_hash, kind, label, user_agent, created_at, last_used_at, expires_at, ip, aal
+`
+
+type CreateSessionAALParams struct {
+	UserID    int64
+	TokenHash []byte
+	Kind      string
+	Label     string
+	UserAgent string
+	ExpiresAt time.Time
+	Ip        *netip.Addr
+	Aal       int16
+}
+
+func (q *Queries) CreateSessionAAL(ctx context.Context, arg CreateSessionAALParams) (Session, error) {
+	row := q.db.QueryRow(ctx, createSessionAAL,
+		arg.UserID,
+		arg.TokenHash,
+		arg.Kind,
+		arg.Label,
+		arg.UserAgent,
+		arg.ExpiresAt,
+		arg.Ip,
+		arg.Aal,
+	)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.Kind,
+		&i.Label,
+		&i.UserAgent,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.ExpiresAt,
+		&i.Ip,
+		&i.Aal,
 	)
 	return i, err
 }
@@ -54,7 +100,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 const createSessionWithIP = `-- name: CreateSessionWithIP :one
 INSERT INTO sessions (user_id, token_hash, kind, label, user_agent, expires_at, ip)
 VALUES ($1, $2, $3, $4, $5, $6, $7::inet)
-RETURNING id, user_id, token_hash, kind, label, user_agent, created_at, last_used_at, expires_at, ip
+RETURNING id, user_id, token_hash, kind, label, user_agent, created_at, last_used_at, expires_at, ip, aal
 `
 
 type CreateSessionWithIPParams struct {
@@ -89,6 +135,7 @@ func (q *Queries) CreateSessionWithIP(ctx context.Context, arg CreateSessionWith
 		&i.LastUsedAt,
 		&i.ExpiresAt,
 		&i.Ip,
+		&i.Aal,
 	)
 	return i, err
 }
@@ -156,7 +203,7 @@ func (q *Queries) DeleteUserSessionsExcept(ctx context.Context, arg DeleteUserSe
 }
 
 const getSessionUser = `-- name: GetSessionUser :one
-SELECT s.id, s.user_id, s.token_hash, s.kind, s.label, s.user_agent, s.created_at, s.last_used_at, s.expires_at, s.ip, u.id, u.username, u.email, u.password_hash, u.display_name, u.is_admin, u.is_active, u.language, u.display_currency, u.timezone, u.date_format, u.theme, u.default_book_id, u.last_login_at, u.created_at, u.updated_at, u.email_verified_at, u.initialized_at, u.password_must_change, u.invited_by
+SELECT s.id, s.user_id, s.token_hash, s.kind, s.label, s.user_agent, s.created_at, s.last_used_at, s.expires_at, s.ip, s.aal, u.id, u.username, u.email, u.password_hash, u.display_name, u.is_admin, u.is_active, u.language, u.display_currency, u.timezone, u.date_format, u.theme, u.default_book_id, u.last_login_at, u.created_at, u.updated_at, u.email_verified_at, u.initialized_at, u.password_must_change, u.invited_by, u.webauthn_id, u.signin_alerts
 FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.token_hash = $1
@@ -184,6 +231,7 @@ func (q *Queries) GetSessionUser(ctx context.Context, tokenHash []byte) (GetSess
 		&i.Session.LastUsedAt,
 		&i.Session.ExpiresAt,
 		&i.Session.Ip,
+		&i.Session.Aal,
 		&i.User.ID,
 		&i.User.Username,
 		&i.User.Email,
@@ -204,6 +252,8 @@ func (q *Queries) GetSessionUser(ctx context.Context, tokenHash []byte) (GetSess
 		&i.User.InitializedAt,
 		&i.User.PasswordMustChange,
 		&i.User.InvitedBy,
+		&i.User.WebauthnID,
+		&i.User.SigninAlerts,
 	)
 	return i, err
 }
@@ -253,6 +303,15 @@ func (q *Queries) ListUserSessions(ctx context.Context, userID int64) ([]ListUse
 		return nil, err
 	}
 	return items, nil
+}
+
+const raiseSessionAAL = `-- name: RaiseSessionAAL :exec
+UPDATE sessions SET aal = 2 WHERE id = $1
+`
+
+func (q *Queries) RaiseSessionAAL(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, raiseSessionAAL, id)
+	return err
 }
 
 const touchSession = `-- name: TouchSession :exec

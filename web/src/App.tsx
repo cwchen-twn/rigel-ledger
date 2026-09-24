@@ -13,6 +13,7 @@ import Invite from '~/pages/Invite';
 import Login from '~/pages/Login';
 import Register from '~/pages/Register';
 import RequestAccess from '~/pages/RequestAccess';
+import SetupMFA from '~/pages/SetupMFA';
 import VerifyLink from '~/pages/VerifyLink';
 import Welcome from '~/pages/Welcome';
 import NotFound from '~/pages/NotFound';
@@ -84,6 +85,11 @@ const RequireUser: ParentComponent = (props) => {
     const u = user();
     return !!u && (!u.initialized || u.password_must_change);
   };
+  // Two-factor sign-in is required and this session has not passed one.
+  const needsMFA = () => {
+    const u = user();
+    return !!u && !pending() && !!u.mfa_required && (u.session_aal ?? 2) < 2;
+  };
   return (
     <Switch>
       <Match when={user.error}>
@@ -95,6 +101,9 @@ const RequireUser: ParentComponent = (props) => {
       </Match>
       <Match when={pending() && location.pathname !== '/welcome'}>
         <Navigate href="/welcome" />
+      </Match>
+      <Match when={needsMFA() && location.pathname !== '/setup-2fa'}>
+        <Navigate href="/setup-2fa" />
       </Match>
       <Match when={user()}>{props.children}</Match>
     </Switch>
@@ -165,6 +174,7 @@ export default function App() {
         <Route path="/invite/:token" component={() => <SignedOut page={() => <Invite />} />} />
         <Route path="/verify" component={VerifyLink} />
         <Route path="/welcome" component={WelcomeRoute} />
+        <Route path="/setup-2fa" component={() => <RequireUser><SetupMFA /></RequireUser>} />
         <Route path="/" component={() => <RequireUser><Home /></RequireUser>} />
         <Route path="/" component={UserLayout}>
           <Route path="/onboarding" component={Onboarding} />

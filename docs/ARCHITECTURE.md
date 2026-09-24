@@ -1,6 +1,6 @@
 # RigelLedger target architecture
 
-Status: **accepted direction; P1 and P2 done, P2.5 in progress** (2026-09-24). The schema,
+Status: **accepted direction; P1, P2 and P2.5 done** (2026-09-24). The schema,
 sqlc data layer, sessions and the book-scoped JSON API follow this document, and so does
 the SolidJS frontend. **The app is deployed** (ledger.chenantunez.com, tailnet-only), so
 `000001_init` is frozen: every schema change is a new migration pair.
@@ -737,15 +737,36 @@ Decided 2026-09-24, before the app is ever reachable outside the tailnet.
 - Users see their own sessions (and sign any out) and their sign-in history; admins
   see everyone's.
 
-### Two-factor sign-in (P2.5b, next)
+### Two-factor sign-in (P2.5b, implemented)
 
-- Enforced by `system_settings.mfa_required` (on by default, stored now, applied then).
-- Methods, any of which a user may enable: **email codes**, **TOTP** (secrets sealed
-  like the SMTP password) and **passkeys** (WebAuthn, RP = `APP_ORIGIN`), plus
-  one-time recovery codes. A password-only session is `aal 1` and reaches only
-  enrolment until a factor exists.
-- Before going public: exempt addresses with a recent success from the username-wide
-  lockout, so a stranger cannot lock the owner out.
+- **Sessions carry an assurance level**: 1 after a password (or an emailed link),
+  2 after a second factor or a passkey with user verification. With
+  `system_settings.mfa_required` (the default) a level-1 session reaches only
+  `/api/me`, logout, the wizard and enrolment (`403 mfa_enrollment_required`
+  elsewhere); adding a factor raises the session in place.
+- **Sign-in in two steps.** A correct password for a user with a factor returns a
+  challenge (5 minutes, 5 attempts) and the methods to offer; `POST /api/auth/mfa`
+  finishes it. A passkey also signs in on its own (discoverable, user verification
+  required).
+- **Factors**, any of the ones the admin allows (`mfa_methods`):
+  - **passkeys** (go-webauthn; RP ID and origin from `APP_ORIGIN`, so a new host
+    orphans them);
+  - **TOTP** (pquerna/otp, SHA-1/6/30 s, ±1 step; the seed is sealed like the SMTP
+    password; `last_step` refuses a replayed code, atomically);
+  - **email codes** to the verified address (enrolment proves the mailbox; weaker,
+    and labelled so);
+  - **ten recovery codes**, shown once, SHA-256 stored, single use, minted with the
+    first factor.
+- **Step-up:** removing a factor or making new codes needs the password in a
+  two-factor session; the last factor stays while two-factor is required.
+- **Break-glass:** admin "Reset two-factor sign-in", or
+  `rigel-ledger-cli reset-mfa -u <user>`: every factor, code and session goes.
+- **Lockout exemption:** an address that opened a full session (`signed_in`) for a
+  username in the last 30 days is exempt from that username's global limit, so a
+  stranger guessing elsewhere cannot lock the owner out. A password alone does not
+  earn it.
+- **New-sign-in alerts** mail the user when a session opens from an address not seen
+  in 90 days (per-user switch, on by default).
 
 ## Deployment
 
@@ -783,7 +804,7 @@ builds images.
 |---|---|
 | P1 | ~~Schema reset, sessions, sqlc; books, accounts, multi-currency transactions API and UI; the "All accounts" balances page; the user Settings page~~ (done) |
 | P2 | ~~Dockerfile, Gitea/GitHub CI and release; probes and the hcloud chart (tailnet-only ipAllowList, own Postgres role, nightly backup); release `v0.1.0` and deploy~~ (done, 2026-09-24) |
-| P2.5 | **Accounts and sign-in security.** a: first-login wizard, verified email, invitations, registration modes, bootstrap admin, the Administration page (users, requests, sign-in rules, defaults, SMTP), throttling and the sign-in audit, sessions (migration `000002`). b: two-factor sign-in -- email codes, TOTP, passkeys, recovery codes, enforcement (`000003`). Both before any public exposure |
+| P2.5 | **Accounts and sign-in security.** a: first-login wizard, verified email, invitations, registration modes, bootstrap admin, the Administration page (users, requests, sign-in rules, defaults, SMTP), throttling and the sign-in audit, sessions (migration `000002`). b: ~~two-factor sign-in -- email codes, TOTP, passkeys, recovery codes, enforcement (`000003`)~~ (done). Both before any public exposure |
 | P3 | Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency), book rebase, the three statements bound to closing rates with `rates_used`, display-currency translation, tag (trip) report |
 | P4 | **Sync and review**: import API with `import_rows` kinds, `source_accounts`, review queue, rules, matching (pending/posted, transfers, invoices, order emails), assertions, challenges; receipt attachments (upload, camera, optional local OCR); the tw-sync runner (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
 | P5 | Securities and futures: py-sync (Shioaji daily, Firstrade), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, 永豐 deposits, Banco Continental (if its export is not enough). Recurring list and subscription templates. (Points, average cost and the security commodity itself are done.) |
