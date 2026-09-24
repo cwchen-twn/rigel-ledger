@@ -62,22 +62,37 @@ export const AppShell: ParentComponent<{ bookId: number | null }> = (props) => {
         </div>
       </div>
 
-      <DropdownMenu
-        label={t('nav.books')}
-        triggerClass="flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-left text-sm hover:bg-accent"
-        trigger={
-          <>
-            <span class="truncate">
-              {current()?.name ?? t('nav.books')}
-              <Show when={current()}>
-                <span class="ml-1 text-xs text-muted-foreground">{current()!.base_currency}</span>
-              </Show>
+      {/* A book is the household's whole ledger, not an account: with one
+          book there is nothing to pick, so it is a label, not a menu. */}
+      <div class="grid gap-1 px-2">
+        <span class="text-[11px] uppercase tracking-wide text-muted-foreground">{t('nav.book')}</span>
+        <Show
+          when={(books()?.length ?? 0) > 1}
+          fallback={
+            <span class="truncate text-sm font-medium">
+              {current()?.name ?? '—'}
+              <Show when={current()}><span class="ml-1 text-xs font-normal text-muted-foreground">{current()!.base_currency}</span></Show>
             </span>
-            <ChevronsUpDown class="size-4 shrink-0 text-muted-foreground" />
-          </>
-        }
-        items={bookItems()}
-      />
+          }
+        >
+          <DropdownMenu
+            label={t('nav.books')}
+            triggerClass="-mx-2 flex items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-sm font-medium hover:bg-accent"
+            trigger={
+              <>
+                <span class="truncate">
+                  {current()?.name ?? t('nav.books')}
+                  <Show when={current()}>
+                    <span class="ml-1 text-xs font-normal text-muted-foreground">{current()!.base_currency}</span>
+                  </Show>
+                </span>
+                <ChevronsUpDown class="size-4 shrink-0 text-muted-foreground" />
+              </>
+            }
+            items={bookItems()}
+          />
+        </Show>
+      </div>
 
       <Show when={props.bookId}>
         {(id) => (

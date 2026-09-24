@@ -951,6 +951,44 @@ const docTemplate = `{
                     }
                 }
             },
+            "delete": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "books"
+                ],
+                "summary": "Delete a book and everything in it (owner; type its name to confirm)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "confirmation",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.deleteBookRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "409": {
+                        "description": "book_locked",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            },
             "patch": {
                 "consumes": [
                     "application/json"
@@ -4343,6 +4381,15 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "quote_currency": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.deleteBookRequest": {
+            "type": "object",
+            "properties": {
+                "confirm": {
+                    "description": "The book's name, typed again.",
                     "type": "string"
                 }
             }

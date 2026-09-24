@@ -1,3 +1,4 @@
+import { A } from '@solidjs/router';
 import { ChevronRight, CircleCheck, CircleAlert } from 'lucide-solid';
 import { createMemo, createResource, createSignal, For, Show } from 'solid-js';
 import { api } from '~/api/client';
@@ -6,6 +7,7 @@ import { PageHeader } from '~/components/AppShell';
 import { Money } from '~/components/Money';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Checkbox, Input } from '~/components/ui/input';
+import { buttonVariants } from '~/components/ui/button';
 import { EmptyState, Skeleton } from '~/components/ui/misc';
 import { useI18n } from '~/i18n';
 import { cn } from '~/lib/cn';
@@ -114,7 +116,12 @@ export default function Overview() {
       </div>
 
       <Show when={balances() && book.accounts()} fallback={<Skeleton class="h-64 w-full" />}>
-        <Show when={balances()!.accounts.some((a) => !isEmpty(a)) || showZero()} fallback={<EmptyState title={t('overview.empty')} />}>
+        <Show when={balances()!.accounts.some((a) => !isEmpty(a)) || showZero()} fallback={
+          <EmptyState title={t('overview.empty_title')}>
+            <p class="mb-3">{t('overview.empty_hint')}</p>
+            <A href={`/b/${book.id()}/accounts?new=bank`} class={buttonVariants({ size: 'sm' })}>{t('overview.add_bank')}</A>
+          </EmptyState>
+        }>
           <div class="grid gap-4 lg:grid-cols-2">
             <For each={CLASS_ORDER}>
               {(cls) => (

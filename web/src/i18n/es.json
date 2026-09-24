@@ -17,7 +17,8 @@
     "new_book": "Nuevo libro",
     "menu": "Menú",
     "admin": "Administración",
-    "reports": "Informes"
+    "reports": "Informes",
+    "book": "Libro"
   },
   "common": {
     "save": "Guardar",
@@ -50,12 +51,15 @@
     "welcome": "Accede a tus libros"
   },
   "onboarding": {
-    "title": "Crea tu primer libro",
-    "description": "Un libro es un conjunto de cuentas en una moneda base. Puedes compartirlo con tu familia después.",
+    "title": "Crea el libro de tu hogar",
+    "description": "Un libro reúne todas tus cuentas: cada banco, tarjeta, bróker y moneda, sumados en un resumen. La mayoría de los hogares necesita uno solo; las cuentas bancarias se añaden en el paso siguiente.",
     "book_name": "Nombre",
     "book_name_placeholder": "Familia",
     "base_currency": "Moneda base",
-    "base_currency_hint": "Todos los importes se guardan también en esta moneda. Los informes la usan."
+    "base_currency_hint": "Todos los importes se guardan también en esta moneda. Los informes la usan.",
+    "book_name_default": "Familia",
+    "another_title": "¿Crear otro libro?",
+    "another_description": "Un segundo libro es para finanzas totalmente separadas, como un negocio o el dinero de un familiar. Una cuenta bancaria, tarjeta o moneda no es un libro: añádela en Cuentas de tu libro actual."
   },
   "class": {
     "asset": "Activos",
@@ -97,7 +101,10 @@
     "check_ok": "Cuadrado",
     "check_bad": "Descuadrado",
     "show_zero": "Mostrar saldos cero",
-    "empty": "Aún no hay transacciones. Registra una para ver saldos aquí."
+    "empty": "Aún no hay transacciones. Registra una para ver saldos aquí.",
+    "empty_title": "Aún no hay cuentas con saldo",
+    "empty_hint": "Añade cada cuenta bancaria, tarjeta y bróker que uses; aquí se suman todas, en cualquier moneda.",
+    "add_bank": "Añadir una cuenta bancaria"
   },
   "transactions": {
     "title": "Transacciones",
@@ -172,7 +179,31 @@
     "opening_date": "Fecha del saldo",
     "opening_base": "Valor en moneda base",
     "cash": "Efectivo",
-    "group": "Grupo"
+    "group": "Grupo",
+    "page_hint": "Todas las cuentas bancarias, tarjetas, billeteras y brókers de este libro, en cualquier moneda. Se suman en el resumen y los informes.",
+    "welcome_title": "Ahora añade tus cuentas",
+    "welcome_hint": "Una por cada cuenta y moneda (Mega Bank USD, Mega Bank TWD, ...), más tus tarjetas y brókers. Usa \"Guardar y añadir otra\" para ir rápido.",
+    "quick_title": "Añadir una cuenta",
+    "quick_hint": "Elige el tipo; lo demás se configura solo y puede cambiarse después.",
+    "quick_kind": "Tipo",
+    "kind_bank": "Cuenta bancaria",
+    "kind_card": "Tarjeta de crédito",
+    "kind_cash": "Efectivo",
+    "kind_ewallet": "Billetera electrónica",
+    "kind_broker": "Efectivo en bróker",
+    "kind_loan": "Préstamo",
+    "kind_bank_example": "p. ej. Continental Ahorro",
+    "kind_card_example": "p. ej. Visa Continental",
+    "kind_cash_example": "p. ej. Billetera",
+    "kind_ewallet_example": "p. ej. Tigo Money",
+    "kind_broker_example": "p. ej. Firstrade",
+    "kind_loan_example": "p. ej. Préstamo personal",
+    "quick_currency_hint": "Cada moneda es su propia cuenta: USD y TWD en el mismo banco son dos.",
+    "quick_balance": "Saldo hoy",
+    "quick_owed": "Deuda hoy",
+    "quick_balance_hint": "Se registra como saldo inicial, con fecha de hoy",
+    "quick_save_another": "Guardar y añadir otra",
+    "quick_added": "Se añadió {name}"
   },
   "book": {
     "title": "Ajustes del libro",
@@ -223,7 +254,15 @@
     "rebase_gaps": "Faltan {n} tipos. Añádelos (o espera a la obtención diaria) y vuelve a comprobar:",
     "rebase_apply": "Cambiar la base a {to}",
     "rebase_confirm": "¿Volver a convertir todos los apuntes de este libro de {from} a {to}? Queda en el registro de auditoría.",
-    "rebased": "El libro ahora se lleva en {to}"
+    "rebased": "El libro ahora se lleva en {to}",
+    "books_title": "Libros",
+    "books_hint": "Un libro es un conjunto completo de cuentas en una moneda base. Las cuentas bancarias, tarjetas y monedas van dentro, no en libros propios.",
+    "another_hint": "Solo para finanzas totalmente separadas (un negocio, el dinero de un familiar).",
+    "delete_title": "Eliminar este libro",
+    "delete_hint": "Se eliminan para siempre todas sus cuentas, transacciones y etiquetas, y los miembros pierden el acceso. Solo una restauración desde copia de seguridad lo recupera.",
+    "delete_type": "Escribe \"{name}\" para confirmar",
+    "delete_button": "Eliminar el libro",
+    "deleted": "Se eliminó {name}"
   },
   "settings": {
     "title": "Ajustes",

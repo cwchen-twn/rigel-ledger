@@ -120,3 +120,37 @@ func TestTagReport(t *testing.T) {
 		t.Fatalf("in USD = %s %v", usd.Expenses, err)
 	}
 }
+
+func TestDeleteBookRemovesEverything(t *testing.T) {
+	f, _ := reportFixture(t)
+	if _, err := f.svc.CreateTransaction(f.ctx, f.acc, TransactionInput{Date: day("2026-03-01"), Tags: []string{"Japan"},
+		Lines: []LineInput{{AccountID: f.keys["travel"], Amount: d("100")}, {AccountID: f.keys["cash"], Amount: d("-100")}}}); err != nil {
+		t.Fatal(err)
+	}
+	wantCode(t, f.svc.DeleteBook(f.ctx, f.acc, "family"), "invalid_input") // the name is "Family"
+
+	if _, err := f.store.Pool.Exec(f.ctx, "UPDATE books SET lock_date = '2026-01-01' WHERE id = $1", f.acc.Book.ID); err != nil {
+		t.Fatal(err)
+	}
+	locked, _ := f.svc.ResolveAccess(f.ctx, f.user.ID, f.acc.Book.ID)
+	wantCode(t, f.svc.DeleteBook(f.ctx, locked, "Family"), "book_locked")
+	if _, err := f.store.Pool.Exec(f.ctx, "UPDATE books SET lock_date = NULL WHERE id = $1", f.acc.Book.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := f.svc.DeleteBook(f.ctx, f.acc, " Family "); err != nil {
+		t.Fatal(err)
+	}
+	var left int
+	if err := f.store.Pool.QueryRow(f.ctx, `SELECT (SELECT count(*) FROM books) + (SELECT count(*) FROM accounts)
+		+ (SELECT count(*) FROM transactions) + (SELECT count(*) FROM postings) + (SELECT count(*) FROM tags)`).Scan(&left); err != nil {
+		t.Fatal(err)
+	}
+	if left != 0 {
+		t.Fatalf("%d rows left behind", left)
+	}
+	u, _ := f.store.GetUserByID(f.ctx, f.user.ID)
+	if u.DefaultBookID != nil {
+		t.Fatal("the default book still points at the deleted one")
+	}
+}

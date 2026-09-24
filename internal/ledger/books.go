@@ -242,3 +242,39 @@ func (s *Service) RemoveMember(ctx context.Context, a Access, userID int64) erro
 	})
 	return translate(err, "member")
 }
+
+// DeleteBook removes a book and everything in it (owners only). confirm must
+// be the book's name, typed again: there is no undo short of a restore. A
+// locked book is refused -- its lock protects that history -- until the
+// lock date is cleared.
+func (s *Service) DeleteBook(ctx context.Context, a Access, confirm string) error {
+	if err := a.require(db.MemberRoleOwner); err != nil {
+		return err
+	}
+	if strings.TrimSpace(confirm) != a.Book.Name {
+		return fieldError("confirm", "mismatch", "type the book's name to confirm")
+	}
+	if a.Book.LockDate != nil {
+		return conflict("book_locked", "clear the lock date first")
+	}
+	return translate(s.store.WithTx(ctx, a.UserID, func(q *db.Queries) error {
+		id := a.Book.ID
+		if err := q.DeleteBookTransactions(ctx, id); err != nil {
+			return err
+		}
+		if err := q.DetachBookAccounts(ctx, id); err != nil {
+			return err
+		}
+		if err := q.DeleteBookAccounts(ctx, id); err != nil {
+			return err
+		}
+		if err := q.DeleteBookTags(ctx, id); err != nil {
+			return err
+		}
+		n, err := q.DeleteBook(ctx, id)
+		if err == nil && n == 0 {
+			return notFound("book")
+		}
+		return err
+	}), "book")
+}

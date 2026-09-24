@@ -241,3 +241,31 @@ func (h *handlers) removeMember(w http.ResponseWriter, r *http.Request) {
 	}
 	response.NoContent(w)
 }
+
+type deleteBookRequest struct {
+	// The book's name, typed again.
+	Confirm string `json:"confirm"`
+}
+
+// deleteBook
+//
+//	@Summary	Delete a book and everything in it (owner; type its name to confirm)
+//	@Tags		books
+//	@Accept		json
+//	@Param		bookID	path	int					true	"book id"
+//	@Param		body	body	deleteBookRequest	true	"confirmation"
+//	@Success	204
+//	@Failure	409	{object}	response.ErrorBody	"book_locked"
+//	@Router		/api/books/{bookID} [delete]
+func (h *handlers) deleteBook(w http.ResponseWriter, r *http.Request) {
+	var req deleteBookRequest
+	if err := response.Decode(w, r, &req); err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	if err := h.svc.DeleteBook(r.Context(), access(r), req.Confirm); err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	response.NoContent(w)
+}

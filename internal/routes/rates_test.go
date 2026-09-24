@@ -114,3 +114,21 @@ func TestTagAndRebaseEndpoints(t *testing.T) {
 		t.Fatalf("editor rebase = %d", res.StatusCode)
 	}
 }
+
+func TestDeleteBookEndpoint(t *testing.T) {
+	f := newAPI(t)
+	alice := f.browser("alice")
+	var book BookDTO
+	alice.json("POST", "/api/books", map[string]string{"name": "Mega Bank 天母", "base_currency": "USD"}, 201, &book)
+	alice.json("POST", fmt.Sprintf("/api/books/%d/members", book.ID), map[string]string{"username": "bob", "role": "editor"}, 204, nil)
+	if res, _ := f.browser("bob").do("DELETE", fmt.Sprintf("/api/books/%d", book.ID), map[string]string{"confirm": "Mega Bank 天母"}); res.StatusCode != 403 {
+		t.Fatalf("editor delete = %d", res.StatusCode)
+	}
+	if res, _ := alice.do("DELETE", fmt.Sprintf("/api/books/%d", book.ID), map[string]string{"confirm": "Mega"}); res.StatusCode != 422 {
+		t.Fatalf("wrong name = %d", res.StatusCode)
+	}
+	alice.json("DELETE", fmt.Sprintf("/api/books/%d", book.ID), map[string]string{"confirm": "Mega Bank 天母"}, 204, nil)
+	if res, _ := alice.do("GET", fmt.Sprintf("/api/books/%d", book.ID), nil); res.StatusCode != 404 {
+		t.Fatalf("after delete = %d", res.StatusCode)
+	}
+}

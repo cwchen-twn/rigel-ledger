@@ -17,7 +17,8 @@
     "new_book": "新增帳本",
     "menu": "選單",
     "admin": "系統管理",
-    "reports": "報表"
+    "reports": "報表",
+    "book": "帳本"
   },
   "common": {
     "save": "儲存",
@@ -50,12 +51,15 @@
     "welcome": "登入你的帳本"
   },
   "onboarding": {
-    "title": "建立你的第一本帳本",
-    "description": "一本帳本是一組以單一本位幣記帳的科目，之後可以和家人共用。",
+    "title": "建立你的家庭帳本",
+    "description": "一本帳本就能容納你所有的帳戶：各家銀行、信用卡、券商與各種幣別，並在總覽中加總。大多數家庭只需要一本；銀行帳戶會在下一步新增。",
     "book_name": "名稱",
     "book_name_placeholder": "家庭",
     "base_currency": "本位幣",
-    "base_currency_hint": "所有金額也會以此幣別記錄，報表以此為準。"
+    "base_currency_hint": "所有金額也會以此幣別記錄，報表以此為準。",
+    "book_name_default": "家庭",
+    "another_title": "要建立另一本帳本嗎？",
+    "another_description": "第二本帳本適用於完全分開的財務，例如公司或代管親人的資金。銀行帳戶、信用卡或幣別不是帳本：請在目前帳本的「科目」中新增。"
   },
   "class": {
     "asset": "資產",
@@ -97,7 +101,10 @@
     "check_ok": "平衡",
     "check_bad": "不平衡",
     "show_zero": "顯示零餘額",
-    "empty": "尚無交易，新增一筆後這裡就會顯示餘額。"
+    "empty": "尚無交易，新增一筆後這裡就會顯示餘額。",
+    "empty_title": "尚無有餘額的帳戶",
+    "empty_hint": "新增你使用的每個銀行帳戶、信用卡與券商，所有幣別都會在這裡加總。",
+    "add_bank": "新增銀行帳戶"
   },
   "transactions": {
     "title": "交易",
@@ -172,7 +179,31 @@
     "opening_date": "餘額日期",
     "opening_base": "本位幣價值",
     "cash": "現金",
-    "group": "群組"
+    "group": "群組",
+    "page_hint": "此帳本的所有銀行帳戶、信用卡、錢包與券商，任何幣別皆可，並在總覽與報表中加總。",
+    "welcome_title": "接著新增你的帳戶",
+    "welcome_hint": "每個銀行帳戶的每種幣別各一筆（例如兆豐美元、兆豐台幣⋯），再加上信用卡與券商。按「儲存並新增下一筆」可快速建立。",
+    "quick_title": "新增帳戶",
+    "quick_hint": "選擇帳戶種類即可，其餘設定會自動完成，之後也可修改。",
+    "quick_kind": "種類",
+    "kind_bank": "銀行帳戶",
+    "kind_card": "信用卡",
+    "kind_cash": "現金",
+    "kind_ewallet": "電子錢包",
+    "kind_broker": "券商交割帳戶",
+    "kind_loan": "貸款",
+    "kind_bank_example": "例如 兆豐 天母 美元",
+    "kind_card_example": "例如 國泰 CUBE 卡",
+    "kind_cash_example": "例如 錢包",
+    "kind_ewallet_example": "例如 LINE Pay",
+    "kind_broker_example": "例如 永豐交割戶、Firstrade",
+    "kind_loan_example": "例如 將來銀行信貸",
+    "quick_currency_hint": "每種幣別各為一個帳戶：同一家銀行的美元與台幣是兩個帳戶。",
+    "quick_balance": "目前餘額",
+    "quick_owed": "目前欠款",
+    "quick_balance_hint": "以今日為日期記為期初餘額",
+    "quick_save_another": "儲存並新增下一筆",
+    "quick_added": "已新增 {name}"
   },
   "book": {
     "title": "帳本設定",
@@ -223,7 +254,15 @@
     "rebase_gaps": "缺少 {n} 筆匯率。請先補上（或等待每日自動取得）後再檢查：",
     "rebase_apply": "將本位幣改為 {to}",
     "rebase_confirm": "確定將此帳本所有分錄由 {from} 重新換算為 {to}？此操作會記錄於稽核紀錄。",
-    "rebased": "帳本已改以 {to} 記帳"
+    "rebased": "帳本已改以 {to} 記帳",
+    "books_title": "帳本",
+    "books_hint": "帳本是一整套以單一本位幣記帳的科目。銀行帳戶、信用卡與幣別都放在帳本之內，而非各自一本。",
+    "another_hint": "僅適用於完全分開的財務（例如公司、代管親人的資金）。",
+    "delete_title": "刪除此帳本",
+    "delete_hint": "其中所有科目、交易與標籤將永久刪除，成員也將失去存取權；只有從備份還原才能復原。",
+    "delete_type": "輸入「{name}」以確認",
+    "delete_button": "刪除帳本",
+    "deleted": "已刪除 {name}"
   },
   "settings": {
     "title": "個人設定",

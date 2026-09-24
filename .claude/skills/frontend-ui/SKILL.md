@@ -82,6 +82,9 @@ repo (`web/src/components/ui/`), not in node_modules, and we change them freely.
   `MoneyInput` take the id, `aria-describedby` and `aria-invalid` from it, so every
   field has an accessible name (and Playwright's `get_by_label` works). A new custom
   control inside a Field spreads `useFieldProps()` from `~/components/ui/input`.
+- "Add an account" for people is `NewAccountDialog` (kind -> parent, class, cash,
+  cash-flow class); the full `AccountDialog` on the Accounts page is for everything
+  else. Never make users think in books to add a bank account.
 - Signed-out pages and the first-login wizard sit in `<AuthCard>`. `RequireUser` in
   `App.tsx` sends a user with `initialized === false` or `password_must_change` to
   `/welcome`; the API refuses them everything else with `onboarding_required`.

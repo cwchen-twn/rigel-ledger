@@ -1,5 +1,5 @@
 import { useNavigate } from '@solidjs/router';
-import { createSignal, Show } from 'solid-js';
+import { createResource, createSignal, Show } from 'solid-js';
 import { api } from '~/api/client';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
@@ -13,7 +13,10 @@ export default function Onboarding() {
   const { t, te, fieldErrors } = useI18n();
   const { user, currencies, refresh } = useSession();
   const navigate = useNavigate();
-  const [name, setName] = createSignal('');
+  const [name, setName] = createSignal(t('onboarding.book_name_default'));
+  // Reached again through "New book": say plainly that a bank account is not a book.
+  const [books] = createResource(() => api.books().catch(() => []));
+  const another = () => (books()?.length ?? 0) > 0;
   const [currency, setCurrency] = createSignal(user()?.display_currency ?? 'USD');
   const [errors, setErrors] = createSignal<Record<string, string>>({});
   const [error, setError] = createSignal('');
@@ -27,7 +30,8 @@ export default function Onboarding() {
       const b = await api.createBook(name(), currency());
       // The first book becomes the default one: reload the user to know it.
       refresh();
-      navigate(`/b/${b.id}`, { replace: true });
+      // Next: the accounts that live in it (each bank, card, broker).
+      navigate(`/b/${b.id}/accounts?new=bank&welcome=1`, { replace: true });
     } catch (err) {
       setErrors(fieldErrors(err));
       setError(te(err));
@@ -40,8 +44,8 @@ export default function Onboarding() {
     <div class="flex min-h-[70vh] items-center justify-center">
       <Card class="w-full max-w-md">
         <CardHeader>
-          <CardTitle class="text-xl">{t('onboarding.title')}</CardTitle>
-          <CardDescription>{t('onboarding.description')}</CardDescription>
+          <CardTitle class="text-xl">{another() ? t('onboarding.another_title') : t('onboarding.title')}</CardTitle>
+          <CardDescription>{another() ? t('onboarding.another_description') : t('onboarding.description')}</CardDescription>
         </CardHeader>
         <CardContent>
           <form class="grid gap-4" onSubmit={submit}>

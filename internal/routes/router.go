@@ -210,6 +210,7 @@ func New(d Deps) http.Handler {
 						r.Use(h.bookAccess)
 						r.Get("/", h.getBook)
 						r.Patch("/", h.updateBook)
+						r.Delete("/", h.deleteBook)
 
 						r.Get("/members", h.listMembers)
 						r.Post("/members", h.addMember)

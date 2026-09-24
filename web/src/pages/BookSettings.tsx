@@ -3,6 +3,7 @@ import { createEffect, createResource, createSignal, For, on, Show } from 'solid
 import { api } from '~/api/client';
 import type { CfClass, CommodityKind, Role } from '~/api/types';
 import { PageHeader } from '~/components/AppShell';
+import { BookDangerZone } from '~/components/BookDangerZone';
 import { RebaseCard } from '~/components/RebaseCard';
 import { MoneyInput } from '~/components/Money';
 import { Button } from '~/components/ui/button';
@@ -318,6 +319,7 @@ export default function BookSettings() {
             </Show>
           </CardContent>
         </Card>
+        <BookDangerZone />
       </div>
     </>
   );

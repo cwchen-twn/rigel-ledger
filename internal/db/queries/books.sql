@@ -45,3 +45,21 @@ ORDER BY m.created_at, u.username;
 
 -- name: SetBookBaseCurrency :one
 UPDATE books SET base_currency = @base_currency WHERE id = @id RETURNING *;
+
+-- name: DeleteBookTransactions :exec
+-- Postings and tag links go with them (ON DELETE CASCADE).
+DELETE FROM transactions WHERE book_id = @book_id;
+
+-- name: DetachBookAccounts :exec
+-- accounts.parent_id is RESTRICT: flatten the tree before deleting it.
+UPDATE accounts SET parent_id = NULL WHERE book_id = @book_id AND parent_id IS NOT NULL;
+
+-- name: DeleteBookAccounts :exec
+DELETE FROM accounts WHERE book_id = @book_id;
+
+-- name: DeleteBookTags :exec
+DELETE FROM tags WHERE book_id = @book_id;
+
+-- name: DeleteBook :execrows
+-- Members go with it; users.default_book_id is set NULL.
+DELETE FROM books WHERE id = @id;

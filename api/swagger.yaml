@@ -1048,6 +1048,12 @@ definitions:
       quote_currency:
         type: string
     type: object
+  routes.deleteBookRequest:
+    properties:
+      confirm:
+        description: The book's name, typed again.
+        type: string
+    type: object
   routes.identityRequest:
     properties:
       current_password:
@@ -1851,6 +1857,31 @@ paths:
       tags:
       - books
   /api/books/{bookID}:
+    delete:
+      consumes:
+      - application/json
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: confirmation
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.deleteBookRequest'
+      responses:
+        "204":
+          description: No Content
+        "409":
+          description: book_locked
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Delete a book and everything in it (owner; type its name to confirm)
+      tags:
+      - books
     get:
       parameters:
       - description: book id

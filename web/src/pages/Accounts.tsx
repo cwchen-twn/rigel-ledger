@@ -1,8 +1,10 @@
+import { useSearchParams } from '@solidjs/router';
 import { Archive, ArchiveRestore, Ellipsis, Pencil, Plus, Trash2 } from 'lucide-solid';
 import { batch, createEffect, createSignal, For, on, Show } from 'solid-js';
 import { api } from '~/api/client';
 import type { Account, AccountClass, CfClass } from '~/api/types';
 import { PageHeader } from '~/components/AppShell';
+import { NewAccountDialog, QUICK_KINDS, type QuickKind } from '~/components/NewAccountDialog';
 import { MoneyInput } from '~/components/Money';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
@@ -202,6 +204,9 @@ function AccountDialog(props: {
 }
 
 export default function Accounts() {
+  const [search, setSearch] = useSearchParams();
+  const wanted = () => (typeof search.new === 'string' && QUICK_KINDS.includes(search.new as QuickKind) ? (search.new as QuickKind) : undefined);
+  const [quick, setQuick] = createSignal(!!wanted());
   const { t, te } = useI18n();
   const book = useBook();
   const [showArchived, setShowArchived] = createSignal(false);
@@ -268,7 +273,29 @@ export default function Accounts() {
     <>
       <PageHeader
         title={t('accounts.title')}
-        actions={<Checkbox checked={showArchived()} onChange={(e) => setShowArchived(e.currentTarget.checked)} label={t('accounts.show_archived')} />}
+        description={t('accounts.page_hint')}
+        actions={
+          <>
+            <Checkbox checked={showArchived()} onChange={(e) => setShowArchived(e.currentTarget.checked)} label={t('accounts.show_archived')} />
+            <Show when={book.canEdit()}>
+              <Button onClick={() => setQuick(true)}><Plus /> {t('accounts.quick_title')}</Button>
+            </Show>
+          </>
+        }
+      />
+      <Show when={search.welcome === '1'}>
+        <div class="mb-4 rounded-lg border border-primary/30 bg-accent/40 p-4 text-sm">
+          <p class="font-medium">{t('accounts.welcome_title')}</p>
+          <p class="text-muted-foreground">{t('accounts.welcome_hint')}</p>
+        </div>
+      </Show>
+      <NewAccountDialog
+        open={quick()}
+        kind={wanted()}
+        onOpenChange={(o) => {
+          setQuick(o);
+          if (!o && search.new) setSearch({ new: undefined });
+        }}
       />
       <Show when={book.accounts()} fallback={<Skeleton class="h-96 w-full" />}>
         <div class="grid gap-4 lg:grid-cols-2">

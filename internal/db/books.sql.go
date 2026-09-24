@@ -64,6 +64,57 @@ func (q *Queries) CreateBook(ctx context.Context, arg CreateBookParams) (Book, e
 	return i, err
 }
 
+const deleteBook = `-- name: DeleteBook :execrows
+DELETE FROM books WHERE id = $1
+`
+
+// Members go with it; users.default_book_id is set NULL.
+func (q *Queries) DeleteBook(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteBook, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteBookAccounts = `-- name: DeleteBookAccounts :exec
+DELETE FROM accounts WHERE book_id = $1
+`
+
+func (q *Queries) DeleteBookAccounts(ctx context.Context, bookID int64) error {
+	_, err := q.db.Exec(ctx, deleteBookAccounts, bookID)
+	return err
+}
+
+const deleteBookTags = `-- name: DeleteBookTags :exec
+DELETE FROM tags WHERE book_id = $1
+`
+
+func (q *Queries) DeleteBookTags(ctx context.Context, bookID int64) error {
+	_, err := q.db.Exec(ctx, deleteBookTags, bookID)
+	return err
+}
+
+const deleteBookTransactions = `-- name: DeleteBookTransactions :exec
+DELETE FROM transactions WHERE book_id = $1
+`
+
+// Postings and tag links go with them (ON DELETE CASCADE).
+func (q *Queries) DeleteBookTransactions(ctx context.Context, bookID int64) error {
+	_, err := q.db.Exec(ctx, deleteBookTransactions, bookID)
+	return err
+}
+
+const detachBookAccounts = `-- name: DetachBookAccounts :exec
+UPDATE accounts SET parent_id = NULL WHERE book_id = $1 AND parent_id IS NOT NULL
+`
+
+// accounts.parent_id is RESTRICT: flatten the tree before deleting it.
+func (q *Queries) DetachBookAccounts(ctx context.Context, bookID int64) error {
+	_, err := q.db.Exec(ctx, detachBookAccounts, bookID)
+	return err
+}
+
 const getBook = `-- name: GetBook :one
 SELECT id, name, base_currency, lock_date, interest_dividend_cf_class, created_by, created_at, updated_at FROM books WHERE id = $1
 `

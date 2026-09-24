@@ -17,7 +17,8 @@
     "new_book": "New book",
     "menu": "Menu",
     "admin": "Administration",
-    "reports": "Reports"
+    "reports": "Reports",
+    "book": "Book"
   },
   "common": {
     "save": "Save",
@@ -50,12 +51,15 @@
     "welcome": "Sign in to your books"
   },
   "onboarding": {
-    "title": "Create your first book",
-    "description": "A book is one set of accounts in one base currency. You can share it with family later.",
+    "title": "Create your household book",
+    "description": "One book holds all your accounts: every bank, card, broker and currency, added up in one overview. Most households need exactly one; you add the bank accounts in the next step.",
     "book_name": "Name",
     "book_name_placeholder": "Family",
     "base_currency": "Base currency",
-    "base_currency_hint": "Every amount is also kept in this currency. Reports use it."
+    "base_currency_hint": "Every amount is also kept in this currency. Reports use it.",
+    "book_name_default": "Family",
+    "another_title": "Create another book?",
+    "another_description": "A second book is for finances kept completely apart, such as a business or a relative's money. A bank account, card or currency is not a book: add it under Accounts in your current book."
   },
   "class": {
     "asset": "Assets",
@@ -97,7 +101,10 @@
     "check_ok": "Balanced",
     "check_bad": "Out of balance",
     "show_zero": "Show zero balances",
-    "empty": "No transactions yet. Record one to see balances here."
+    "empty": "No transactions yet. Record one to see balances here.",
+    "empty_title": "No accounts with a balance yet",
+    "empty_hint": "Add each bank account, card and broker you use; they all add up here, in every currency.",
+    "add_bank": "Add a bank account"
   },
   "transactions": {
     "title": "Transactions",
@@ -172,7 +179,31 @@
     "opening_date": "Balance date",
     "opening_base": "Value in base currency",
     "cash": "Cash",
-    "group": "Group"
+    "group": "Group",
+    "page_hint": "Every bank account, card, wallet and broker of this book, in any currency. They all add up in the overview and the reports.",
+    "welcome_title": "Now add your accounts",
+    "welcome_hint": "One entry per bank account and currency (Mega Bank USD, Mega Bank TWD, ...), plus your cards and brokers. Use \"Save and add another\" to go through them quickly.",
+    "quick_title": "Add an account",
+    "quick_hint": "Pick what kind it is; the rest is set for you and can be changed later.",
+    "quick_kind": "Kind",
+    "kind_bank": "Bank account",
+    "kind_card": "Credit card",
+    "kind_cash": "Cash",
+    "kind_ewallet": "E-wallet",
+    "kind_broker": "Brokerage cash",
+    "kind_loan": "Loan",
+    "kind_bank_example": "e.g. Mega Bank 天母 USD",
+    "kind_card_example": "e.g. Cathay CUBE",
+    "kind_cash_example": "e.g. Wallet",
+    "kind_ewallet_example": "e.g. LINE Pay",
+    "kind_broker_example": "e.g. SinoPac 交割, Firstrade",
+    "kind_loan_example": "e.g. Next Bank 信貸",
+    "quick_currency_hint": "Each currency is its own account: USD and TWD at the same bank are two.",
+    "quick_balance": "Balance today",
+    "quick_owed": "Owed today",
+    "quick_balance_hint": "Booked as the opening balance, dated today",
+    "quick_save_another": "Save and add another",
+    "quick_added": "Added {name}"
   },
   "book": {
     "title": "Book settings",
@@ -223,7 +254,15 @@
     "rebase_gaps": "{n} rates are missing. Add them (or let the daily fetch fill them), then check again:",
     "rebase_apply": "Change the base to {to}",
     "rebase_confirm": "Re-translate every posting of this book from {from} to {to}? This is recorded in the audit log.",
-    "rebased": "The book is now kept in {to}"
+    "rebased": "The book is now kept in {to}",
+    "books_title": "Books",
+    "books_hint": "A book is a whole set of accounts in one base currency. Bank accounts, cards and currencies belong inside it, not in books of their own.",
+    "another_hint": "Only for finances kept completely apart (a business, a relative's money).",
+    "delete_title": "Delete this book",
+    "delete_hint": "Every account, transaction and tag in it is removed for good. Members lose access. Only a restore from backup brings it back.",
+    "delete_type": "Type \"{name}\" to confirm",
+    "delete_button": "Delete the book",
+    "deleted": "Deleted {name}"
   },
   "settings": {
     "title": "Settings",

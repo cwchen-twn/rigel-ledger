@@ -192,6 +192,15 @@ Family and account setup:
 - **Books and members.** A book is one set of accounts in one base currency. A family
   can keep a shared book and personal books side by side, and every domain table
   carries `book_id`.
+  - **A bank account, card or currency is an account, never a book.** The first live
+    use made the opposite mistake (thirteen books, one per bank and currency), so the
+    UI now says so:
+    - onboarding explains what a book holds and goes straight to "Add an account";
+    - the book switcher is a plain label while there is one book;
+    - "New book" warns that it is for finances kept completely apart;
+    - the quick "Add an account" form needs only a kind (bank, card, cash, e-wallet,
+      broker, loan), a name and a currency, and files the account in the right place.
+  - Books can be deleted by an owner, who types the name to confirm, unless locked.
 - **"Who spent it"** is a tag (person, trip, project), not a separate account, so the
   chart of accounts stays small.
 - **The chart of accounts** starts from a ~40-account personal template that is copied
