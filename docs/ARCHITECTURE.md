@@ -716,6 +716,10 @@ Decided 2026-09-24, before the app is ever reachable outside the tailnet.
   AES-256-GCM under `APP_ENCRYPTION_KEY` (SOPS), never returned by the API, and kept
   out of `audit_log`. `SMTP_*` / `MAIL_*` environment variables seed the row on the first
   start only.
+- **Until an admin configures mail, the driver is `log`**: codes and links are written
+  to the pod log. That is how the first admin verifies their address in the wizard
+  before the Mail tab is reachable (`kubectl logs ... | grep 'mail (log driver'`), and
+  why SMTP must be set before inviting anyone.
 - Mail templates are server-side (`internal/mail/templates/{en,zh,es}`): the one
   exception to "UI text lives in the frontend i18n".
 
