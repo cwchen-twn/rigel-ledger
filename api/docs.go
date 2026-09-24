@@ -1358,6 +1358,364 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/books/{bookID}/drift": {
+            "get": {
+                "description": "The newest balance each source reported, against the books on that date, in the account's commodity.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "imports"
+                ],
+                "summary": "Accounts whose institution balance differs from the books",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/routes.DriftDTO"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/imports": {
+            "post": {
+                "description": "Amounts are signed on the account: money in (or a card payment) \u003e 0. A row already staged (same connector and id) is counted as a duplicate.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "imports"
+                ],
+                "summary": "Stage a batch of rows from a source for review",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "batch",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.ImportBatchDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/routes.ImportResultDTO"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/imports/accept": {
+            "post": {
+                "description": "Each row is its own database transaction: one that fails (say, a new row without a category) does not stop the others.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "imports"
+                ],
+                "summary": "Accept rows as proposed (or against one category)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "rows",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.AcceptRowsDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.AcceptResultDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/imports/ignore": {
+            "post": {
+                "description": "They stay on record, so the same source rows are never staged again.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "imports"
+                ],
+                "summary": "Drop rows from the queue",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "rows",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.IgnoreRowsDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/imports/queue": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "imports"
+                ],
+                "summary": "Rows waiting for review, newest first",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/routes.ImportRowDTO"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/imports/rules": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "imports"
+                ],
+                "summary": "Categorisation rules",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/routes.ImportRuleDTO"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Waiting rows without a category are matched again at once.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "imports"
+                ],
+                "summary": "Always categorise matching rows to an account",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "rule",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.ImportRuleInputDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/routes.ImportRuleDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/imports/rules/{ruleID}": {
+            "delete": {
+                "tags": [
+                    "imports"
+                ],
+                "summary": "Delete a categorisation rule",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "rule id",
+                        "name": "ruleID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/imports/sources": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "imports"
+                ],
+                "summary": "The accounts sources have sent, and what each is mapped to",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/routes.SourceAccountDTO"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/imports/sources/{sourceID}": {
+            "patch": {
+                "description": "Its waiting rows are matched again at once.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "imports"
+                ],
+                "summary": "Map a source account to one of the book's accounts",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "source account id",
+                        "name": "sourceID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "mapping",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.MapSourceDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
         "/api/books/{bookID}/members": {
             "get": {
                 "produces": [
@@ -2814,6 +3172,40 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/api/me/tokens": {
+            "post": {
+                "description": "The token may only send import batches and read /api/me and /api/books.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "Make an API token for a sync runner or a script",
+                "parameters": [
+                    {
+                        "description": "label and lifetime",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.CreateTokenDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/routes.TokenCreatedDTO"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -2908,6 +3300,55 @@ const docTemplate = `{
                 },
                 "message": {
                     "type": "string"
+                }
+            }
+        },
+        "routes.AcceptFailureDTO": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "row_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "routes.AcceptResultDTO": {
+            "type": "object",
+            "properties": {
+                "accepted": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "failed": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.AcceptFailureDTO"
+                    }
+                },
+                "transactions": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "routes.AcceptRowsDTO": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "description": "Book them all against this category instead of the proposals.",
+                    "type": "integer"
+                },
+                "row_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
                 }
             }
         },
@@ -3403,6 +3844,18 @@ const docTemplate = `{
                 }
             }
         },
+        "routes.CreateTokenDTO": {
+            "type": "object",
+            "properties": {
+                "days": {
+                    "description": "Days until it expires; default 365, at most 730.",
+                    "type": "integer"
+                },
+                "label": {
+                    "type": "string"
+                }
+            }
+        },
         "routes.CurrencyDTO": {
             "type": "object",
             "properties": {
@@ -3429,6 +3882,26 @@ const docTemplate = `{
                 }
             }
         },
+        "routes.DriftDTO": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "asserted": {
+                    "type": "string"
+                },
+                "booked": {
+                    "type": "string"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                }
+            }
+        },
         "routes.EnrolledDTO": {
             "type": "object",
             "properties": {
@@ -3437,6 +3910,215 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "routes.IgnoreRowsDTO": {
+            "type": "object",
+            "properties": {
+                "row_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "routes.ImportAccountDTO": {
+            "type": "object",
+            "properties": {
+                "currency": {
+                    "type": "string"
+                },
+                "id": {
+                    "description": "The source's own id for the account (masked account number, card id).",
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.ImportBatchDTO": {
+            "type": "object",
+            "properties": {
+                "accounts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.ImportAccountDTO"
+                    }
+                },
+                "connector": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "rows": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.ImportRowInDTO"
+                    }
+                }
+            }
+        },
+        "routes.ImportResultDTO": {
+            "type": "object",
+            "properties": {
+                "balances": {
+                    "type": "integer"
+                },
+                "batch_id": {
+                    "type": "integer"
+                },
+                "duplicates": {
+                    "type": "integer"
+                },
+                "received": {
+                    "type": "integer"
+                },
+                "staged": {
+                    "type": "integer"
+                }
+            }
+        },
+        "routes.ImportRowDTO": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "description": "The mapped account; null while the source account is unmapped.",
+                    "type": "integer"
+                },
+                "amount": {
+                    "type": "string"
+                },
+                "connector": {
+                    "type": "string"
+                },
+                "counterparty": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "external_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "match_row_id": {
+                    "type": "integer"
+                },
+                "match_transaction_id": {
+                    "type": "integer"
+                },
+                "pending": {
+                    "type": "boolean"
+                },
+                "proposal": {
+                    "type": "string",
+                    "enum": [
+                        "new",
+                        "duplicate",
+                        "clears",
+                        "transfer"
+                    ]
+                },
+                "proposed_account_id": {
+                    "type": "integer"
+                },
+                "rule_id": {
+                    "type": "integer"
+                },
+                "source_account_id": {
+                    "type": "integer"
+                },
+                "source_label": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.ImportRowInDTO": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "type": "string"
+                },
+                "amount": {
+                    "type": "string"
+                },
+                "counterparty": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "description": "The source's id for the row, stable across resends.",
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string",
+                    "enum": [
+                        "transaction",
+                        "balance"
+                    ]
+                },
+                "pending": {
+                    "type": "boolean"
+                },
+                "raw": {
+                    "description": "The source record as it came, for the audit; never credentials.",
+                    "type": "object"
+                }
+            }
+        },
+        "routes.ImportRuleDTO": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "pattern": {
+                    "type": "string"
+                },
+                "source_account_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "routes.ImportRuleInputDTO": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "pattern": {
+                    "description": "Matched case-insensitively against the description and counterparty.",
+                    "type": "string"
+                },
+                "source_account_id": {
+                    "description": "Only rows from this source account; null for all.",
+                    "type": "integer"
                 }
             }
         },
@@ -3590,6 +4272,15 @@ const docTemplate = `{
                 },
                 "to": {
                     "type": "string"
+                }
+            }
+        },
+        "routes.MapSourceDTO": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "description": "null unmaps.",
+                    "type": "integer"
                 }
             }
         },
@@ -3872,11 +4563,40 @@ const docTemplate = `{
                 "kind": {
                     "type": "string"
                 },
+                "label": {
+                    "type": "string"
+                },
                 "last_used_at": {
                     "type": "string"
                 },
                 "user_agent": {
                     "type": "string"
+                }
+            }
+        },
+        "routes.SourceAccountDTO": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "connector": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "external_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "pending": {
+                    "type": "integer"
                 }
             }
         },
@@ -3976,6 +4696,18 @@ const docTemplate = `{
                 },
                 "transactions": {
                     "type": "integer"
+                }
+            }
+        },
+        "routes.TokenCreatedDTO": {
+            "type": "object",
+            "properties": {
+                "session": {
+                    "$ref": "#/definitions/routes.SessionDTO"
+                },
+                "token": {
+                    "description": "Shown this once; only its hash is stored.",
+                    "type": "string"
                 }
             }
         },

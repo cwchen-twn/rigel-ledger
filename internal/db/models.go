@@ -350,6 +350,16 @@ type AuthEvent struct {
 	CreatedAt time.Time
 }
 
+type BalanceAssertion struct {
+	ID        int64
+	BookID    int64
+	AccountID int64
+	Date      time.Time
+	Amount    decimal.Decimal
+	Source    string
+	CreatedAt time.Time
+}
+
 type Book struct {
 	ID                      int64
 	Name                    string
@@ -391,6 +401,54 @@ type EmailToken struct {
 	UsedAt    *time.Time
 	CreatedBy *int64
 	CreatedAt time.Time
+}
+
+type ImportBatch struct {
+	ID         int64
+	BookID     int64
+	Connector  string
+	Label      string
+	Received   int32
+	Duplicates int32
+	CreatedBy  *int64
+	CreatedAt  time.Time
+}
+
+type ImportRow struct {
+	ID                 int64
+	BookID             int64
+	BatchID            int64
+	SourceAccountID    int64
+	Kind               string
+	ExternalID         string
+	Date               time.Time
+	Amount             decimal.Decimal
+	Currency           string
+	Description        string
+	Counterparty       string
+	Pending            bool
+	Raw                []byte
+	Proposal           string
+	ProposedAccountID  *int64
+	MatchTransactionID *int64
+	MatchRowID         *int64
+	RuleID             *int64
+	Status             string
+	TransactionID      *int64
+	DecidedBy          *int64
+	DecidedAt          *time.Time
+	CreatedAt          time.Time
+}
+
+type ImportRule struct {
+	ID              int64
+	BookID          int64
+	Priority        int32
+	Pattern         string
+	SourceAccountID *int64
+	AccountID       int64
+	CreatedBy       *int64
+	CreatedAt       time.Time
 }
 
 type MfaFactor struct {
@@ -459,6 +517,17 @@ type Session struct {
 	ExpiresAt  time.Time
 	Ip         *netip.Addr
 	Aal        int16
+}
+
+type SourceAccount struct {
+	ID         int64
+	BookID     int64
+	Connector  string
+	ExternalID string
+	Label      string
+	Currency   *string
+	AccountID  *int64
+	CreatedAt  time.Time
 }
 
 type SystemSetting struct {

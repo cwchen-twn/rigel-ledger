@@ -168,14 +168,17 @@ postings(id, transaction_id, account_id, commodity_id, amount NUMERIC signed,
   -- prices trigger: no rate on or before the lock date of a book using it
 tags(id, book_id, name, kind);  transaction_tags(transaction_id, tag_id)
 attachments(id, book_id, sha256, filename, mime, bytes BYTEA, transaction_id NULL)
-source_accounts(book_id, connector, external_id, account_id)       -- P4 sync mapping
-balance_assertions(account_id, date, amount, source)               -- P4 reconciliation
-import_batches(id, book_id, account_id, source, parser, attachment_id,
-               period_start, period_end, statement_closing_balance)
-import_rows(id, batch_id, kind transaction|balance|holding|bill|invoice|trade|settlement|margin,
-            date, amount, currency, description, raw JSONB, external_id,
-            fingerprint, status pending|posted|ignored|duplicate, transaction_id)
-rules(id, book_id, priority, match JSONB, account_id, tag_ids)
+-- P4a (migration 000005, implemented; see "The import core" below)
+source_accounts(book_id, connector, external_id, label, currency, account_id NULL)
+import_batches(id, book_id, connector, label, received, duplicates, created_by)
+import_rows(id, batch_id, source_account_id, kind transaction|balance, external_id UNIQUE per book,
+            date, amount signed, currency, description, counterparty, pending, raw JSONB,
+            proposal new|duplicate|clears|transfer, proposed_account_id, match_transaction_id,
+            match_row_id, rule_id, status pending|accepted|ignored, transaction_id)
+import_rules(id, book_id, priority, pattern, source_account_id NULL, account_id)
+balance_assertions(account_id, date, amount, source)
+  -- later kinds (holding, bill, invoice, trade, settlement, margin) and
+  -- attachment_id arrive with P4b/P4c and P5
 audit_log(id, book_id, table_name, row_id, action, old JSONB, new JSONB,
           changed_by, changed_at)
 ```
@@ -574,6 +577,51 @@ in one review queue.
     resumes.
   - The runner never bypasses a security check.
 
+### The import core (P4a, implemented)
+
+What every source feeds, built before any connector so the runners have one
+contract to target. Migration `000005`; `internal/ledger/imports.go`,
+`internal/routes/handlers_imports.go`, `web/src/pages/Imports.tsx`.
+
+- **Runner tokens.** Settings -> API tokens makes a session of kind `token` (a new
+  kind; `api` stays the full-access script login). It is shown once, lives 1-730
+  days without sliding, carries aal 2, and `auth.TokenScope` confines it to
+  `GET /api/me`, `GET /api/books`, `POST /api/books/{id}/imports` and
+  `GET .../imports/sources`. A leaked runner token can add rows to the queue and
+  nothing else: it cannot read the books or accept its own rows.
+- **The batch.** `POST /api/books/{id}/imports` takes
+  `{connector, label, accounts[{id, label, currency}], rows[{kind, account, id, date,
+  amount, currency, description, counterparty, pending, raw}]}`, up to 5,000 rows and
+  16 MiB. Amounts are signed on the account (money in > 0). A row's key is
+  `<connector>:<id>`, unique per book, so resending a whole statement stages nothing
+  twice (it is counted as a duplicate).
+- **Matching, per row, in order** (on staging, on mapping its account, and for rows
+  without a category when a rule is added):
+  1. **duplicate**: a posting on the mapped account with the same amount within 3
+     days, not already claimed by a row of that account. A hand-entered transfer is
+     claimed once from each side.
+  2. **clears**: a posted (not pending) row within 10% and 5 days of an uncleared
+     two-posting entry -- the card estimate. Accepting books the posted figure; a
+     foreign other leg keeps its units and takes the posted figure as its base.
+  3. **transfer**: another waiting row on another mapped account, same currency,
+     opposite amount, within 3 days. Accepting books one transaction and takes both
+     rows off the queue.
+  4. **new**: the first rule (in priority order) whose pattern the description or
+     counterparty contains, case-insensitive, picks the category.
+- **Nothing auto-posts.** A row becomes a transaction (`source` `sync`, or `import`
+  for CSV; `external_id` = the row's key) only when accepted. Ignored rows stay on
+  record so they are never staged again. If what a row matched has been deleted, the
+  accept re-matches it and answers `match_gone`.
+- **Balance rows become assertions** as soon as their account is mapped. Drift is each
+  account's newest assertion against the books' sum on that date, in the account's
+  commodity; it shows on Imports and as a badge on Accounts. Nothing is overwritten.
+- **CSV** is parsed in the browser (UTF-8, Big5 or Windows-1252; comma, semicolon or
+  tab; one signed column or money out/in; ROC dates; decimal comma) and sent as
+  connector `csv`. Row ids are a SHA-256 of account, date, amount and text plus an
+  occurrence index, so re-importing the same or an overlapping export adds nothing.
+- **Not yet:** `holding`, `bill`, `invoice`, `trade`, `settlement` and `margin` kinds;
+  challenges; tags from rules; the runners themselves (P4c).
+
 ### Receipts
 
 - A receipt photo or PDF can be attached to a transaction when it is entered, or later.
@@ -862,7 +910,7 @@ builds images.
 | P2 | ~~Dockerfile, Gitea/GitHub CI and release; probes and the hcloud chart (tailnet-only ipAllowList, own Postgres role, nightly backup); release `v0.1.0` and deploy~~ (done, 2026-09-24) |
 | P2.5 | **Accounts and sign-in security.** a: first-login wizard, verified email, invitations, registration modes, bootstrap admin, the Administration page (users, requests, sign-in rules, defaults, SMTP), throttling and the sign-in audit, sessions (migration `000002`). b: ~~two-factor sign-in -- email codes, TOTP, passkeys, recovery codes, enforcement (`000003`)~~ (done). Both before any public exposure |
 | P3 | ~~Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency)~~ (P3a, done); ~~the three statements bound to closing rates with `rates_used`, display-currency translation~~ (P3b, done); ~~book rebase, tag (trip) report~~ (P3c, done) |
-| P4 | **Sync and review**: import API with `import_rows` kinds, `source_accounts`, review queue, rules, matching (pending/posted, transfers, invoices, order emails), assertions, challenges; receipt attachments (upload, camera, optional local OCR); the tw-sync runner (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
+| P4 | **Sync and review**: ~~import API, runner tokens, `source_accounts`, review queue, rules, matching (duplicates, pending/posted, transfers), balance assertions and drift, CSV import~~ (P4a, done); `import_rows` kinds for invoices, holdings and trades, order emails, challenges; receipt attachments (upload, camera, optional local OCR); the tw-sync runner (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
 | P5 | Securities and futures: py-sync (Shioaji daily, Firstrade), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, 永豐 deposits, Banco Continental (if its export is not enough). Recurring list and subscription templates. (Points, average cost and the security commodity itself are done.) |
 | P6 | PWA polish, then Flutter if a native feature is needed |
 | P7 | **Tax workbooks (TW, PY)**: `person` tags and `tax_profiles`; tax categories and account mappings per jurisdiction; `tax_withheld` accounts and foreign-tax-paid records; per-year rule files; workbook export (income by category, deductions with evidence, withholding, capital gains in the country's currency and rate). Needs P3 reports, P4 attachments and P5 lots. Prepares and cross-checks; does not file. |

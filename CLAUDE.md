@@ -76,7 +76,7 @@ api/                # Generated Swagger output (do not edit manually)
 ### Request Flow
 
 1. `internal/routes/router.go`: `auth.ResolveClientIP` (rightmost untrusted `X-Forwarded-For`, see `TRUSTED_PROXIES`), then `auth.Authenticate` resolves the session from the `rigel_session` cookie or an `Authorization: Bearer` token on every request.
-2. `/api/*` routes behind `auth.RequireUser` return 401 when anonymous and 403 `csrf` when a cookie-authenticated POST/PUT/PATCH/DELETE lacks `X-Rigel-Client`. Behind `auth.RequireInitialized`, a user who has not finished the first-login wizard gets 403 `onboarding_required` (only `/api/me`, logout, `/api/me/email*` and `/api/me/onboarding` are open to them). `/api/admin/*` is behind `auth.RequireAdmin` (404 for non-admins).
+2. `/api/*` routes behind `auth.RequireUser` return 401 when anonymous and 403 `csrf` when a cookie-authenticated POST/PUT/PATCH/DELETE lacks `X-Rigel-Client`. Behind `auth.RequireInitialized`, a user who has not finished the first-login wizard gets 403 `onboarding_required` (only `/api/me`, logout, `/api/me/email*` and `/api/me/onboarding` are open to them). `/api/admin/*` is behind `auth.RequireAdmin` (404 for non-admins). A `token` session (a sync runner's, made in Settings -> API tokens) only passes `auth.TokenScope`'s list (`tokenAllowed` in `handlers_imports.go`); anything else is 403 `token_scope`.
 3. `/api/books/{bookID}/*` goes through `bookAccess`, which loads the caller's membership (`ledger.Access`); a non-member gets 404, never 403.
 4. Handlers decode DTOs, call `ledger.Service` or `identity.Service`, and map `*ledger.Error` to 404/403/409/422 and `*auth.ThrottledError` to 429 (+ `Retry-After`), with `{"error":{"code","message","fields"}}`.
 5. `/livez` (process up, never touches the DB) and `/readyz` (pings the DB, 503 when down) are the kubelet probes.
@@ -94,6 +94,7 @@ api/                # Generated Swagger output (do not edit manually)
 - No stored balances: `Balances` sums postings and rolls up the account tree in Go.
 - Statements (`internal/ledger/reports.go`): `BalanceSheet`, `IncomeStatement`, `CashFlow`, computed per request, never persisted; values in the base, then translated at the report date (`reportCtx.out`). Revaluation uses `RateDetail` (the rate plus its date and path) so every report lists `rates_used`. Keep assets - liabilities - equity at zero by deriving the unrealised line, not by summing it. `Tags`/`Tag` (tagreport.go) sum expense postings of tagged transactions; `Rebase` (rebase.go) changes a book's base, re-translating every posting (dry run first; refuses on gaps or a lock date).
 - New books are seeded from `personalTemplate` in `template.go`; account names are i18n keys (`account.template.<key>`) until renamed.
+- Imports (`imports.go`, migration `000005`): sources stage `import_rows`; `propose` matches each (duplicate -> clears -> transfer -> rule) and `AcceptRow` is the only way a row becomes a transaction. Balance rows become `balance_assertions`; `Drifts` compares the newest one per account with the books. Windows and rules: `docs/ARCHITECTURE.md` "The import core".
 
 ### Frontend (web/src)
 
@@ -105,12 +106,12 @@ stores/      session (me, currencies, live language/theme), book (book, accounts
 components/  ui/ -- shadcn-style kit (tokens only, cva variants, Kobalte where a11y is hard)
              AppShell, AccountCombobox, Money/MoneyInput, TransactionSheet (simple + split entry)
 pages/       Login, Register, RequestAccess, Invite, VerifyLink, Welcome (wizard), SetupMFA, Onboarding (new book),
-             Overview (balances), Transactions, Accounts, Reports (3 statements), BookSettings, UserSettings, admin/ (tabs)
+             Overview (balances), Transactions, Accounts, Reports (3 statements), Imports (review queue), BookSettings, UserSettings, admin/ (tabs)
 i18n/        en.json, zh.json (Traditional), es.json -- same keys; account names under account.template.*
-lib/         money.ts (decimal strings via js-big-decimal), dates.ts, cn.ts
+lib/         money.ts (decimal strings via js-big-decimal), dates.ts, csv.ts (statement parsing), cn.ts
 ```
 
-Routes: signed out `/login`, `/register`, `/request-access`, `/invite/:token`, `/verify?token=`; `/welcome` (first-login wizard); `/onboarding` (new book), `/settings`, `/admin/:tab`, `/b/:bookId/{,transactions,accounts,reports/:tab,settings}`; `/` redirects to the default book.
+Routes: signed out `/login`, `/register`, `/request-access`, `/invite/:token`, `/verify?token=`; `/welcome` (first-login wizard); `/onboarding` (new book), `/settings`, `/admin/:tab`, `/b/:bookId/{,transactions,accounts,reports/:tab,imports,settings}`; `/` redirects to the default book.
 
 ## Configuration
 

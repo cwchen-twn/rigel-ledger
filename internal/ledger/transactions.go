@@ -16,6 +16,10 @@ type TransactionInput struct {
 	Memo  string
 	Lines []LineInput
 	Tags  []string
+	// Set by imports, never by the API: "import" or "sync", and the
+	// source's id, which the (book, source, external_id) key keeps unique.
+	Source     string
+	ExternalID *string
 }
 
 // TransactionView is a transaction with its postings and tag names.
@@ -94,24 +98,36 @@ func (s *Service) CreateTransaction(ctx context.Context, a Access, in Transactio
 	}
 	var id int64
 	err := s.store.WithTx(ctx, a.UserID, func(q *db.Queries) error {
-		t, err := q.CreateTransaction(ctx, db.CreateTransactionParams{
-			BookID: a.Book.ID,
-			Date:   in.Date,
-			Payee:  strings.TrimSpace(in.Payee),
-			Memo:   strings.TrimSpace(in.Memo),
-			Source: "manual",
-			UserID: &a.UserID,
-		})
-		if err != nil {
-			return err
-		}
-		id = t.ID
-		return s.writeLinesAndTags(ctx, q, a, t.ID, in)
+		var err error
+		id, err = s.createTx(ctx, q, a, in)
+		return err
 	})
 	if err != nil {
 		return TransactionView{}, translate(err, "transaction")
 	}
 	return s.GetTransaction(ctx, a, id)
+}
+
+// createTx writes a transaction inside the caller's database transaction,
+// so an import can create it and mark its row accepted atomically.
+func (s *Service) createTx(ctx context.Context, q *db.Queries, a Access, in TransactionInput) (int64, error) {
+	source := in.Source
+	if source == "" {
+		source = "manual"
+	}
+	t, err := q.CreateTransaction(ctx, db.CreateTransactionParams{
+		BookID:     a.Book.ID,
+		Date:       in.Date,
+		Payee:      strings.TrimSpace(in.Payee),
+		Memo:       strings.TrimSpace(in.Memo),
+		Source:     source,
+		ExternalID: in.ExternalID,
+		UserID:     &a.UserID,
+	})
+	if err != nil {
+		return 0, err
+	}
+	return t.ID, s.writeLinesAndTags(ctx, q, a, t.ID, in)
 }
 
 // UpdateTransaction replaces the header, every posting and the tags.
@@ -123,28 +139,33 @@ func (s *Service) UpdateTransaction(ctx context.Context, a Access, id int64, in 
 		return TransactionView{}, fieldError("date", "required", "a transaction needs a date")
 	}
 	err := s.store.WithTx(ctx, a.UserID, func(q *db.Queries) error {
-		cur, err := q.GetTransaction(ctx, db.GetTransactionParams{BookID: a.Book.ID, ID: id})
-		if err != nil {
-			return translate(err, "transaction")
-		}
-		if err := checkLock(a.Book, cur.Date, in.Date); err != nil {
-			return err
-		}
-		if _, err := q.UpdateTransaction(ctx, db.UpdateTransactionParams{
-			BookID: a.Book.ID, ID: id, Date: in.Date,
-			Payee: strings.TrimSpace(in.Payee), Memo: strings.TrimSpace(in.Memo), UserID: &a.UserID,
-		}); err != nil {
-			return err
-		}
-		if err := q.DeletePostings(ctx, id); err != nil {
-			return err
-		}
-		return s.writeLinesAndTags(ctx, q, a, id, in)
+		return s.updateTx(ctx, q, a, id, in)
 	})
 	if err != nil {
 		return TransactionView{}, translate(err, "transaction")
 	}
 	return s.GetTransaction(ctx, a, id)
+}
+
+// updateTx replaces a transaction inside the caller's database transaction.
+func (s *Service) updateTx(ctx context.Context, q *db.Queries, a Access, id int64, in TransactionInput) error {
+	cur, err := q.GetTransaction(ctx, db.GetTransactionParams{BookID: a.Book.ID, ID: id})
+	if err != nil {
+		return translate(err, "transaction")
+	}
+	if err := checkLock(a.Book, cur.Date, in.Date); err != nil {
+		return err
+	}
+	if _, err := q.UpdateTransaction(ctx, db.UpdateTransactionParams{
+		BookID: a.Book.ID, ID: id, Date: in.Date,
+		Payee: strings.TrimSpace(in.Payee), Memo: strings.TrimSpace(in.Memo), UserID: &a.UserID,
+	}); err != nil {
+		return err
+	}
+	if err := q.DeletePostings(ctx, id); err != nil {
+		return err
+	}
+	return s.writeLinesAndTags(ctx, q, a, id, in)
 }
 
 func (s *Service) DeleteTransaction(ctx context.Context, a Access, id int64) error {

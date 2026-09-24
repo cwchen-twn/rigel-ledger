@@ -1,6 +1,6 @@
-import { useSearchParams } from '@solidjs/router';
+import { A, useSearchParams } from '@solidjs/router';
 import { Archive, ArchiveRestore, Ellipsis, Pencil, Plus, Trash2 } from 'lucide-solid';
-import { batch, createEffect, createSignal, For, on, Show } from 'solid-js';
+import { batch, createEffect, createMemo, createResource, createSignal, For, on, Show } from 'solid-js';
 import { api } from '~/api/client';
 import type { Account, AccountClass, CfClass } from '~/api/types';
 import { PageHeader } from '~/components/AppShell';
@@ -209,6 +209,9 @@ export default function Accounts() {
   const [quick, setQuick] = createSignal(!!wanted());
   const { t, te } = useI18n();
   const book = useBook();
+  // Accounts whose institution's last reported balance disagrees with the books.
+  const [drift] = createResource(book.id, (id) => api.drift(id).catch(() => []));
+  const drifting = createMemo(() => new Set((drift() ?? []).map((d) => d.account_id)));
   const [showArchived, setShowArchived] = createSignal(false);
   const [dialog, setDialog] = createSignal<{ account: Account | null; parent: Account | null; cls: AccountClass } | null>(null);
 
@@ -247,6 +250,11 @@ export default function Accounts() {
           <Show when={a().is_cash}><Badge variant="outline">{t('accounts.cash')}</Badge></Show>
           <Show when={a().is_placeholder}><Badge variant="outline">{t('accounts.group')}</Badge></Show>
           <Show when={a().archived}><Badge>{t('accounts.archived')}</Badge></Show>
+          <Show when={drifting().has(a().id)}>
+            <A href={`/b/${book.id()}/imports`} title={t('imports.drift_badge_hint')}>
+              <Badge variant="warning">{t('imports.drift_badge')}</Badge>
+            </A>
+          </Show>
           <Show when={a().commodity}><span class="w-10 text-right text-xs text-muted-foreground">{a().commodity}</span></Show>
           <Show when={book.canEdit()}>
             <DropdownMenu

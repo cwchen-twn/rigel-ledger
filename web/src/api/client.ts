@@ -127,6 +127,7 @@ export const api = {
   onboarding: (p: T.Profile & { new_password?: string }) => post<T.User>('/api/me/onboarding', p),
   sessions: () => get<T.SessionInfo[]>('/api/me/sessions'),
   revokeSession: (id: number) => del(`/api/me/sessions/${id}`),
+  createToken: (label: string, days: number) => post<T.TokenCreated>('/api/me/tokens', { label, days }),
   myEvents: () => get<T.AuthEvent[]>('/api/me/events'),
 
   // Administration.
@@ -205,4 +206,18 @@ export const api = {
     post<T.RebasePlan>(`${book(id)}/rebase`, { base_currency, dry_run }),
   rate: (id: number, from: string, to: string, date: string) =>
     get<T.Rate>(`${book(id)}/rate${qs({ from, to, date })}`),
+
+  importBatch: (id: number, b: T.ImportBatch) => post<T.ImportResult>(`${book(id)}/imports`, b),
+  importSources: (id: number) => get<T.SourceAccount[]>(`${book(id)}/imports/sources`),
+  mapSource: (id: number, sourceId: number, account_id: number | null) =>
+    patch<void>(`${book(id)}/imports/sources/${sourceId}`, { account_id }),
+  importQueue: (id: number) => get<T.ImportRow[]>(`${book(id)}/imports/queue`),
+  acceptRows: (id: number, row_ids: number[], account_id: number | null = null) =>
+    post<T.AcceptResult>(`${book(id)}/imports/accept`, { row_ids, account_id }),
+  ignoreRows: (id: number, row_ids: number[]) => post<void>(`${book(id)}/imports/ignore`, { row_ids }),
+  importRules: (id: number) => get<T.ImportRule[]>(`${book(id)}/imports/rules`),
+  createRule: (id: number, r: { pattern: string; account_id: number; source_account_id: number | null }) =>
+    post<T.ImportRule>(`${book(id)}/imports/rules`, r),
+  deleteRule: (id: number, ruleId: number) => del(`${book(id)}/imports/rules/${ruleId}`),
+  drift: (id: number) => get<T.Drift[]>(`${book(id)}/drift`),
 };

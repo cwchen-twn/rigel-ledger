@@ -58,7 +58,12 @@ var ErrBadJSON = errors.New("bad json")
 // Decode reads a JSON body into v, rejecting unknown fields and bodies over
 // 1 MiB so a typo in a field name fails loudly instead of being ignored.
 func Decode(w http.ResponseWriter, r *http.Request, v any) error {
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes))
+	return DecodeLimit(w, r, v, maxBodyBytes)
+}
+
+// DecodeLimit is Decode with a larger body allowance (an import batch).
+func DecodeLimit(w http.ResponseWriter, r *http.Request, v any, limit int64) error {
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, limit))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
 		return fmt.Errorf("%w: %v", ErrBadJSON, err)

@@ -1,5 +1,5 @@
 import { A, useLocation, useNavigate } from '@solidjs/router';
-import { BookOpen, ChartColumn, ChevronsUpDown, LayoutDashboard, List, LogOut, Menu, Plus, Settings, Shield, SlidersHorizontal, Wallet } from 'lucide-solid';
+import { BookOpen, ChartColumn, ChevronsUpDown, Inbox, LayoutDashboard, List, LogOut, Menu, Plus, Settings, Shield, SlidersHorizontal, Wallet } from 'lucide-solid';
 import { createResource, createSignal, Show, type JSX, type ParentComponent } from 'solid-js';
 import { api } from '~/api/client';
 import { DropdownMenu, type MenuItem } from '~/components/ui/dropdown-menu';
@@ -101,6 +101,7 @@ export const AppShell: ParentComponent<{ bookId: number | null }> = (props) => {
             <NavLink href={`/b/${id()}/transactions`} icon={<List />} label={t('nav.transactions')} onClick={close} />
             <NavLink href={`/b/${id()}/accounts`} icon={<BookOpen />} label={t('nav.accounts')} onClick={close} />
             <NavLink href={`/b/${id()}/reports`} icon={<ChartColumn />} label={t('nav.reports')} onClick={close} />
+            <NavLink href={`/b/${id()}/imports`} icon={<Inbox />} label={t('nav.imports')} onClick={close} />
             <NavLink href={`/b/${id()}/settings`} icon={<SlidersHorizontal />} label={t('nav.book_settings')} onClick={close} />
           </nav>
         )}

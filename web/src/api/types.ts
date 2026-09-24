@@ -96,7 +96,9 @@ export interface Invitation extends Profile {
 
 export interface SessionInfo {
   id: number;
-  kind: 'web' | 'api';
+  /** token: made in settings for a sync runner, confined to sending batches. */
+  kind: 'web' | 'api' | 'token';
+  label: string;
   user_agent: string;
   ip: string;
   created_at: string;
@@ -466,4 +468,96 @@ export interface TagDetail {
   expenses: string;
   rates_used: RateUsed[];
   missing: string[];
+}
+
+// ---- imports (routes/handlers_imports.go) ----
+
+export interface TokenCreated {
+  /** Shown once; only its hash is stored. */
+  token: string;
+  session: SessionInfo;
+}
+
+export interface SourceAccount {
+  id: number;
+  connector: string;
+  external_id: string;
+  label: string;
+  currency: string | null;
+  account_id: number | null;
+  pending: number;
+}
+
+export type Proposal = 'new' | 'duplicate' | 'clears' | 'transfer';
+
+export interface ImportRow {
+  id: number;
+  kind: 'transaction' | 'balance';
+  external_id: string;
+  date: string;
+  /** Signed on the account: money in > 0. */
+  amount: string;
+  currency: string;
+  description: string;
+  counterparty: string;
+  pending: boolean;
+  proposal: Proposal;
+  proposed_account_id: number | null;
+  match_transaction_id: number | null;
+  match_row_id: number | null;
+  rule_id: number | null;
+  source_account_id: number;
+  source_label: string;
+  connector: string;
+  /** The mapped account; null while its source account is unmapped. */
+  account_id: number | null;
+}
+
+export interface ImportRowInput {
+  kind: 'transaction' | 'balance';
+  account: string;
+  id: string;
+  date: string;
+  amount: string;
+  currency?: string;
+  description?: string;
+  counterparty?: string;
+  pending?: boolean;
+  raw?: unknown;
+}
+
+export interface ImportBatch {
+  connector: string;
+  label: string;
+  accounts: { id: string; label: string; currency: string }[];
+  rows: ImportRowInput[];
+}
+
+export interface ImportResult {
+  batch_id: number;
+  received: number;
+  staged: number;
+  duplicates: number;
+  balances: number;
+}
+
+export interface AcceptResult {
+  accepted: number[];
+  transactions: number[];
+  failed: { row_id: number; code: string }[];
+}
+
+export interface ImportRule {
+  id: number;
+  pattern: string;
+  source_account_id: number | null;
+  account_id: number;
+}
+
+export interface Drift {
+  account_id: number;
+  date: string;
+  asserted: string;
+  booked: string;
+  source: string;
 }

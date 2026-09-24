@@ -200,6 +200,7 @@ type Identity struct {
 	Token     string
 	ViaCookie bool
 	AAL       int16
+	Kind      string // web (browser), api (a script's login) or token (made in settings)
 }
 
 type ctxKey struct{}
@@ -243,10 +244,11 @@ func (m *Manager) Authenticate(next http.Handler) http.Handler {
 			return
 		}
 		if time.Since(row.Session.LastUsedAt) > touchEvery {
-			_ = m.store.TouchSession(r.Context(), db.TouchSessionParams{
-				ID:        row.Session.ID,
-				ExpiresAt: time.Now().Add(m.sessionTTL(r.Context())),
-			})
+			expires := time.Now().Add(m.sessionTTL(r.Context()))
+			if row.Session.Kind == KindToken {
+				expires = row.Session.ExpiresAt // a token lives as long as it was made for, no longer
+			}
+			_ = m.store.TouchSession(r.Context(), db.TouchSessionParams{ID: row.Session.ID, ExpiresAt: expires})
 			if viaCookie {
 				m.SetCookie(r.Context(), w, token)
 			}
@@ -257,6 +259,7 @@ func (m *Manager) Authenticate(next http.Handler) http.Handler {
 			Token:     token,
 			ViaCookie: viaCookie,
 			AAL:       row.Session.Aal,
+			Kind:      row.Session.Kind,
 		})
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -330,6 +333,58 @@ func (m *Manager) RequireMFA(onError func(w http.ResponseWriter, status int, cod
 			id, _ := FromContext(r.Context())
 			if id.AAL < AALMFA && m.policy != nil && m.policy.MFARequired(r.Context()) {
 				onError(w, http.StatusForbidden, "mfa_enrollment_required")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// Session kinds. A web session slides and rides a cookie; an api one is a
+// script's full login; a token is made in settings for a runner and is
+// confined by TokenScope.
+const (
+	KindWeb   = "web"
+	KindAPI   = "api"
+	KindToken = "token"
+)
+
+// MaxTokenTTL caps an API token's lifetime: a runner's token is rotated at
+// least once every two years.
+const MaxTokenTTL = 2 * 365 * 24 * time.Hour
+
+// CreateToken makes an API token for a runner or a script. Only a two-factor
+// session may make one, and the token carries that level, so the runner is
+// not asked for a second factor it cannot give. It is shown once.
+func (m *Manager) CreateToken(ctx context.Context, u db.User, label string, ttl time.Duration, c Client) (string, db.Session, error) {
+	if ttl <= 0 || ttl > MaxTokenTTL {
+		ttl = MaxTokenTTL / 2
+	}
+	token, hash, err := NewToken()
+	if err != nil {
+		return "", db.Session{}, err
+	}
+	s, err := m.store.CreateSessionAAL(ctx, db.CreateSessionAALParams{
+		UserID: u.ID, TokenHash: hash, Kind: KindToken, Label: label, UserAgent: c.UserAgent,
+		ExpiresAt: time.Now().Add(ttl), Ip: c.IP, Aal: AALMFA,
+	})
+	if err != nil {
+		return "", db.Session{}, err
+	}
+	_ = m.Record(ctx, Event{Username: u.Username, UserID: &u.ID, IP: c.IP, UserAgent: c.UserAgent,
+		Name: "token_created", Detail: map[string]any{"label": label, "session_id": s.ID}})
+	return token, s, nil
+}
+
+// TokenScope confines API tokens to what a runner needs: who am I, which
+// books, and sending a batch. Everything else -- the review queue, settings,
+// making more tokens -- needs a person signed in, so a leaked runner token
+// cannot read the books or approve its own rows.
+func TokenScope(allowed func(method, path string) bool, onError func(w http.ResponseWriter, status int, code string)) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if id, _ := FromContext(r.Context()); id.Kind == KindToken && !allowed(r.Method, r.URL.Path) {
+				onError(w, http.StatusForbidden, "token_scope")
 				return
 			}
 			next.ServeHTTP(w, r)

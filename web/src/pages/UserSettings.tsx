@@ -3,6 +3,7 @@ import { createEffect, createResource, createSignal, For, on, Show } from 'solid
 import { api } from '~/api/client';
 import type { Language, Theme } from '~/api/types';
 import { PageHeader } from '~/components/AppShell';
+import { APITokens } from '~/components/APITokens';
 import { EmailVerification } from '~/components/EmailVerification';
 import { EventList } from '~/components/EventList';
 import { MFASettings } from '~/components/MFASettings';
@@ -226,7 +227,7 @@ export default function UserSettings() {
                 </tr>
               </thead>
               <tbody>
-                <For each={sessions() ?? []}>
+                <For each={(sessions() ?? []).filter((s) => s.kind !== 'token')}>
                   {(s) => (
                     <tr class={trClass}>
                       <td class={`${tdClass} max-w-sm`}>
@@ -247,6 +248,8 @@ export default function UserSettings() {
             </Table>
           </CardContent>
         </Card>
+
+        <APITokens tokens={(sessions() ?? []).filter((s) => s.kind === 'token')} onChange={refetchSessions} />
 
         <Card>
           <CardHeader><CardTitle>{t('security.history')}</CardTitle></CardHeader>

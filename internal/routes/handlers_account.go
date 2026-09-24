@@ -316,6 +316,7 @@ func (h *handlers) onboarding(w http.ResponseWriter, r *http.Request) {
 type SessionDTO struct {
 	ID         int64  `json:"id"`
 	Kind       string `json:"kind"`
+	Label      string `json:"label"`
 	UserAgent  string `json:"user_agent"`
 	IP         string `json:"ip"`
 	CreatedAt  string `json:"created_at"`
@@ -340,7 +341,7 @@ func (h *handlers) listSessions(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]SessionDTO, len(rows))
 	for i, s := range rows {
-		out[i] = SessionDTO{ID: s.ID, Kind: s.Kind, UserAgent: s.UserAgent, IP: s.Ip,
+		out[i] = SessionDTO{ID: s.ID, Kind: s.Kind, Label: s.Label, UserAgent: s.UserAgent, IP: s.Ip,
 			CreatedAt: timestamp(s.CreatedAt), LastUsedAt: timestamp(s.LastUsedAt), ExpiresAt: timestamp(s.ExpiresAt),
 			Current: s.ID == id.SessionID}
 	}

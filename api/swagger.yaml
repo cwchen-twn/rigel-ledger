@@ -69,6 +69,38 @@ definitions:
       message:
         type: string
     type: object
+  routes.AcceptFailureDTO:
+    properties:
+      code:
+        type: string
+      row_id:
+        type: integer
+    type: object
+  routes.AcceptResultDTO:
+    properties:
+      accepted:
+        items:
+          type: integer
+        type: array
+      failed:
+        items:
+          $ref: '#/definitions/routes.AcceptFailureDTO'
+        type: array
+      transactions:
+        items:
+          type: integer
+        type: array
+    type: object
+  routes.AcceptRowsDTO:
+    properties:
+      account_id:
+        description: Book them all against this category instead of the proposals.
+        type: integer
+      row_ids:
+        items:
+          type: integer
+        type: array
+    type: object
   routes.AccessRequestDTO:
     properties:
       created_at:
@@ -394,6 +426,14 @@ definitions:
       unit_cost:
         type: string
     type: object
+  routes.CreateTokenDTO:
+    properties:
+      days:
+        description: Days until it expires; default 365, at most 730.
+        type: integer
+      label:
+        type: string
+    type: object
   routes.CurrencyDTO:
     properties:
       code:
@@ -411,12 +451,166 @@ definitions:
         description: 1 unit of currency in the book's base; null when no rate is known.
         type: string
     type: object
+  routes.DriftDTO:
+    properties:
+      account_id:
+        type: integer
+      asserted:
+        type: string
+      booked:
+        type: string
+      date:
+        type: string
+      source:
+        type: string
+    type: object
   routes.EnrolledDTO:
     properties:
       recovery_codes:
         items:
           type: string
         type: array
+    type: object
+  routes.IgnoreRowsDTO:
+    properties:
+      row_ids:
+        items:
+          type: integer
+        type: array
+    type: object
+  routes.ImportAccountDTO:
+    properties:
+      currency:
+        type: string
+      id:
+        description: The source's own id for the account (masked account number, card
+          id).
+        type: string
+      label:
+        type: string
+    type: object
+  routes.ImportBatchDTO:
+    properties:
+      accounts:
+        items:
+          $ref: '#/definitions/routes.ImportAccountDTO'
+        type: array
+      connector:
+        type: string
+      label:
+        type: string
+      rows:
+        items:
+          $ref: '#/definitions/routes.ImportRowInDTO'
+        type: array
+    type: object
+  routes.ImportResultDTO:
+    properties:
+      balances:
+        type: integer
+      batch_id:
+        type: integer
+      duplicates:
+        type: integer
+      received:
+        type: integer
+      staged:
+        type: integer
+    type: object
+  routes.ImportRowDTO:
+    properties:
+      account_id:
+        description: The mapped account; null while the source account is unmapped.
+        type: integer
+      amount:
+        type: string
+      connector:
+        type: string
+      counterparty:
+        type: string
+      currency:
+        type: string
+      date:
+        type: string
+      description:
+        type: string
+      external_id:
+        type: string
+      id:
+        type: integer
+      kind:
+        type: string
+      match_row_id:
+        type: integer
+      match_transaction_id:
+        type: integer
+      pending:
+        type: boolean
+      proposal:
+        enum:
+        - new
+        - duplicate
+        - clears
+        - transfer
+        type: string
+      proposed_account_id:
+        type: integer
+      rule_id:
+        type: integer
+      source_account_id:
+        type: integer
+      source_label:
+        type: string
+    type: object
+  routes.ImportRowInDTO:
+    properties:
+      account:
+        type: string
+      amount:
+        type: string
+      counterparty:
+        type: string
+      currency:
+        type: string
+      date:
+        type: string
+      description:
+        type: string
+      id:
+        description: The source's id for the row, stable across resends.
+        type: string
+      kind:
+        enum:
+        - transaction
+        - balance
+        type: string
+      pending:
+        type: boolean
+      raw:
+        description: The source record as it came, for the audit; never credentials.
+        type: object
+    type: object
+  routes.ImportRuleDTO:
+    properties:
+      account_id:
+        type: integer
+      id:
+        type: integer
+      pattern:
+        type: string
+      source_account_id:
+        type: integer
+    type: object
+  routes.ImportRuleInputDTO:
+    properties:
+      account_id:
+        type: integer
+      pattern:
+        description: Matched case-insensitively against the description and counterparty.
+        type: string
+      source_account_id:
+        description: Only rows from this source account; null for all.
+        type: integer
     type: object
   routes.IncomeStatementDTO:
     properties:
@@ -519,6 +713,12 @@ definitions:
         type: string
       to:
         type: string
+    type: object
+  routes.MapSourceDTO:
+    properties:
+      account_id:
+        description: null unmaps.
+        type: integer
     type: object
   routes.MemberDTO:
     properties:
@@ -706,10 +906,29 @@ definitions:
         type: string
       kind:
         type: string
+      label:
+        type: string
       last_used_at:
         type: string
       user_agent:
         type: string
+    type: object
+  routes.SourceAccountDTO:
+    properties:
+      account_id:
+        type: integer
+      connector:
+        type: string
+      currency:
+        type: string
+      external_id:
+        type: string
+      id:
+        type: integer
+      label:
+        type: string
+      pending:
+        type: integer
     type: object
   routes.TOTPSetupDTO:
     properties:
@@ -775,6 +994,14 @@ definitions:
         type: string
       transactions:
         type: integer
+    type: object
+  routes.TokenCreatedDTO:
+    properties:
+      session:
+        $ref: '#/definitions/routes.SessionDTO'
+      token:
+        description: Shown this once; only its hash is stored.
+        type: string
     type: object
   routes.TransactionDTO:
     properties:
@@ -2142,6 +2369,244 @@ paths:
       summary: Add a security or a points programme (editor of this book)
       tags:
       - reference
+  /api/books/{bookID}/drift:
+    get:
+      description: The newest balance each source reported, against the books on that
+        date, in the account's commodity.
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/routes.DriftDTO'
+            type: array
+      summary: Accounts whose institution balance differs from the books
+      tags:
+      - imports
+  /api/books/{bookID}/imports:
+    post:
+      consumes:
+      - application/json
+      description: 'Amounts are signed on the account: money in (or a card payment)
+        > 0. A row already staged (same connector and id) is counted as a duplicate.'
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: batch
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.ImportBatchDTO'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/routes.ImportResultDTO'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Stage a batch of rows from a source for review
+      tags:
+      - imports
+  /api/books/{bookID}/imports/accept:
+    post:
+      consumes:
+      - application/json
+      description: 'Each row is its own database transaction: one that fails (say,
+        a new row without a category) does not stop the others.'
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: rows
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.AcceptRowsDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.AcceptResultDTO'
+      summary: Accept rows as proposed (or against one category)
+      tags:
+      - imports
+  /api/books/{bookID}/imports/ignore:
+    post:
+      consumes:
+      - application/json
+      description: They stay on record, so the same source rows are never staged again.
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: rows
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.IgnoreRowsDTO'
+      responses:
+        "204":
+          description: No Content
+      summary: Drop rows from the queue
+      tags:
+      - imports
+  /api/books/{bookID}/imports/queue:
+    get:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/routes.ImportRowDTO'
+            type: array
+      summary: Rows waiting for review, newest first
+      tags:
+      - imports
+  /api/books/{bookID}/imports/rules:
+    get:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/routes.ImportRuleDTO'
+            type: array
+      summary: Categorisation rules
+      tags:
+      - imports
+    post:
+      consumes:
+      - application/json
+      description: Waiting rows without a category are matched again at once.
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: rule
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.ImportRuleInputDTO'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/routes.ImportRuleDTO'
+      summary: Always categorise matching rows to an account
+      tags:
+      - imports
+  /api/books/{bookID}/imports/rules/{ruleID}:
+    delete:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: rule id
+        in: path
+        name: ruleID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      summary: Delete a categorisation rule
+      tags:
+      - imports
+  /api/books/{bookID}/imports/sources:
+    get:
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/routes.SourceAccountDTO'
+            type: array
+      summary: The accounts sources have sent, and what each is mapped to
+      tags:
+      - imports
+  /api/books/{bookID}/imports/sources/{sourceID}:
+    patch:
+      consumes:
+      - application/json
+      description: Its waiting rows are matched again at once.
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: source account id
+        in: path
+        name: sourceID
+        required: true
+        type: integer
+      - description: mapping
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.MapSourceDTO'
+      responses:
+        "204":
+          description: No Content
+      summary: Map a source account to one of the book's accounts
+      tags:
+      - imports
   /api/books/{bookID}/members:
     get:
       parameters:
@@ -3091,6 +3556,28 @@ paths:
           schema:
             $ref: '#/definitions/response.ErrorBody'
       summary: Replace the user's preferences
+      tags:
+      - me
+  /api/me/tokens:
+    post:
+      consumes:
+      - application/json
+      description: The token may only send import batches and read /api/me and /api/books.
+      parameters:
+      - description: label and lifetime
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.CreateTokenDTO'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/routes.TokenCreatedDTO'
+      summary: Make an API token for a sync runner or a script
       tags:
       - me
 swagger: "2.0"

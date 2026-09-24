@@ -150,6 +150,7 @@ func New(d Deps) http.Handler {
 
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireUser(writeAuthError))
+			r.Use(auth.TokenScope(tokenAllowed, writeAuthError))
 			// Reachable before the first-login wizard is finished: it uses them.
 			r.Post("/auth/logout", h.logout)
 			r.Get("/me", h.me)
@@ -183,6 +184,7 @@ func New(d Deps) http.Handler {
 					r.Get("/me/sessions", h.listSessions)
 					r.Delete("/me/sessions/{sessionID}", h.revokeSession)
 					r.Get("/me/events", h.myEvents)
+					r.Post("/me/tokens", h.createToken)
 
 					r.Route("/admin", func(r chi.Router) {
 						r.Use(auth.RequireAdmin(writeAuthError))
@@ -245,6 +247,17 @@ func New(d Deps) http.Handler {
 						r.Get("/reports/tags", h.tagReport)
 						r.Get("/reports/tag", h.tagDetail)
 						r.Post("/rebase", h.rebaseBook)
+
+						r.Post("/imports", h.importBatch)
+						r.Get("/imports/sources", h.listSources)
+						r.Patch("/imports/sources/{sourceID}", h.mapSource)
+						r.Get("/imports/queue", h.importQueue)
+						r.Post("/imports/accept", h.acceptRows)
+						r.Post("/imports/ignore", h.ignoreRows)
+						r.Get("/imports/rules", h.listRules)
+						r.Post("/imports/rules", h.createRule)
+						r.Delete("/imports/rules/{ruleID}", h.deleteRule)
+						r.Get("/drift", h.drift)
 					})
 				})
 			})
