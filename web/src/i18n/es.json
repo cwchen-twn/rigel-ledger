@@ -389,7 +389,9 @@
     "not_claimed": "Esta sincronización no está en curso",
     "challenge_gone": "Esta verificación caducó o ya se respondió",
     "disabled": "Activa la conexión primero",
-    "no_access": "El dueño de la conexión ya no tiene acceso a este libro"
+    "no_access": "El dueño de la conexión ya no tiene acceso a este libro",
+    "no_device": "Primero configura el sincronizador en tu dispositivo",
+    "sync_mode": "Tus conexiones se sincronizan en el servidor; no hace falta un sincronizador en el dispositivo"
   },
   "profile": {
     "username_hint": "Para iniciar sesión: a-z, 0-9, punto, guion, guion bajo"
@@ -504,7 +506,9 @@
     "runner_token_revoked": "Token del sincronizador revocado",
     "connection_created": "Entidad conectada",
     "connection_credentials_replaced": "Credenciales de la conexión reemplazadas",
-    "connection_deleted": "Entidad desconectada"
+    "connection_deleted": "Entidad desconectada",
+    "sync_mode_changed": "Modo de sincronización cambiado",
+    "device_token_created": "Token del sincronizador del dispositivo creado"
   },
   "admin": {
     "title": "Administración",
@@ -902,7 +906,7 @@
     "syncing": "Sincronizando…",
     "sync_requested": "El sincronizador la atiende en un minuto",
     "enabled": "Sincronizar automáticamente",
-    "key_retired": "La clave del sincronizador cambió. Vuelve a introducir las credenciales para seguir sincronizando.",
+    "key_retired": "Estas credenciales se cifraron para otro sincronizador (cambió su clave o tu modo de sincronización). Vuelve a introducirlas para seguir sincronizando.",
     "error_other": "La última sincronización falló ({code}).",
     "error_bad_credentials": "La entidad rechazó los datos de acceso. Reemplaza las credenciales.",
     "error_bad_otp": "El código de un solo uso era incorrecto. Vuelve a pulsar Sincronizar ahora.",
@@ -924,7 +928,8 @@
     "how_title": "Cómo se guardan tus credenciales",
     "how_sealed": "Se cifran en tu navegador con la clave del sincronizador antes de salir de él. El servidor solo guarda texto cifrado que no puede abrir; el sincronizador las abre solo mientras inicia sesión por ti, dentro del clúster.",
     "how_review": "Nada se registra automáticamente: las filas obtenidas esperan tu aprobación en la cola de Importaciones del libro.",
-    "how_csv": "¿Prefieres no compartir un acceso? Un CSV del extracto en la página de Importaciones hace lo mismo a mano."
+    "how_csv": "¿Prefieres no compartir un acceso? Un CSV del extracto en la página de Importaciones hace lo mismo a mano.",
+    "how_sealed_client": "Se cifran en tu navegador con la clave de tu propio dispositivo antes de salir de él. El servidor solo guarda texto cifrado que no puede abrir, y el sincronizador de la app tampoco: solo el de tu ordenador las abre, mientras inicia sesión por ti desde allí."
   },
   "runner": {
     "tokens_title": "Token del sincronizador",
@@ -940,5 +945,32 @@
     "key_retired": "Retirada",
     "connectors_title": "Entidades disponibles",
     "no_connectors": "El sincronizador aún no ha publicado entidades"
+  },
+  "sync": {
+    "mode_server": "En el servidor",
+    "mode_client": "En tu propio dispositivo",
+    "mode_default": "Predeterminado ({mode})",
+    "mode_line": "Modo de sincronización: {mode}",
+    "mode_server_hint": "El sincronizador de la app inicia sesión en tus entidades según el horario. No hay nada que instalar.",
+    "mode_client_hint": "Un pequeño sincronizador en tu propio ordenador inicia sesión desde tu conexión. Sincroniza mientras ese ordenador está encendido.",
+    "settings_title": "Sincronización bancaria",
+    "settings_hint": "Un administrador decide dónde se sincronizan tus conexiones.",
+    "go_connections": "Ir a Conexiones",
+    "column": "Sincronización",
+    "column_for": "Modo de sincronización de {user}",
+    "default_mode": "Sincronización bancaria para personas nuevas",
+    "default_mode_hint": "En su propio dispositivo evita que los accesos salgan de la dirección del servidor; cámbialo por persona en Usuarios.",
+    "device_title": "Tu dispositivo",
+    "device_ready": "Listo",
+    "device_not_set_up": "Sin configurar",
+    "device_hint": "Ejecuta el contenedor de sincronización en un ordenador que dejes encendido, con un token de dispositivo. Solo hace falta Docker.",
+    "device_seen": "visto por última vez {when}",
+    "device_offers": "Entidades disponibles: {n}",
+    "device_new_token": "Nuevo token de dispositivo",
+    "device_default_label": "Mi ordenador",
+    "device_step_install": "Instala Docker en un ordenador que dejes encendido (Docker Desktop en macOS o Windows).",
+    "device_step_token": "Crea aquí un token de dispositivo.",
+    "device_step_run": "Inicia el contenedor de sincronización con ese token (consulta las instrucciones); esta tarjeta pasa a Listo cuando se conecte.",
+    "device_in_use": "en uso"
   }
 }

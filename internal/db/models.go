@@ -542,6 +542,7 @@ type RunnerConnector struct {
 	Country   string
 	Fields    []byte
 	UpdatedAt time.Time
+	OwnerID   *int64
 }
 
 type RunnerKey struct {
@@ -549,6 +550,7 @@ type RunnerKey struct {
 	PublicKey []byte
 	CreatedAt time.Time
 	RetiredAt *time.Time
+	OwnerID   *int64
 }
 
 type Session struct {
@@ -603,6 +605,7 @@ type SystemSetting struct {
 	MailFromName           string
 	UpdatedBy              *int64
 	UpdatedAt              time.Time
+	DefaultSyncMode        string
 }
 
 type Tag struct {
@@ -653,6 +656,7 @@ type User struct {
 	InvitedBy          *int64
 	WebauthnID         []byte
 	SigninAlerts       bool
+	SyncMode           *string
 }
 
 type WebauthnCredential struct {

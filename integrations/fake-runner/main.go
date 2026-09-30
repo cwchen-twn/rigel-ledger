@@ -6,6 +6,10 @@
 //
 //	RUNNER_TOKEN=... go run ./integrations/fake-runner -url http://localhost:8080 -key /tmp/fake-runner.key
 //
+// With a server runner token it syncs every server-mode person; with a
+// device token (Connections -> Your device) only that person, the way a
+// runner on their own computer would.
+//
 // The pretend institution: any username; password "wrong" fails with
 // bad_credentials; password "otp" asks for a one-time code, and the code is
 // 123456. It sends one checking account with three transactions and a
@@ -205,7 +209,7 @@ func main() {
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	token := os.Getenv("RUNNER_TOKEN")
 	if token == "" {
-		log.Error("RUNNER_TOKEN is not set (rigel-ledger-cli create-runner-token, or Administration -> Sync runner)")
+		log.Error("RUNNER_TOKEN is not set: a server runner token (rigel-ledger-cli create-runner-token, or Administration -> Sync runner) or a device token (Connections -> Your device)")
 		os.Exit(2)
 	}
 	priv, err := loadKey(*keyPath)

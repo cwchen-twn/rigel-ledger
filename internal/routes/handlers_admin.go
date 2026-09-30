@@ -48,6 +48,8 @@ type AdminSettingsDTO struct {
 	DefaultTimezone        string   `json:"default_timezone"`
 	DefaultDateFormat      string   `json:"default_date_format"`
 	DefaultTheme           string   `json:"default_theme"`
+	// Where new people's connections sync until an admin says otherwise.
+	DefaultSyncMode string `json:"default_sync_mode" enums:"server,client"`
 	// null: SESSION_TTL from the environment.
 	SessionTTLSeconds    *int64 `json:"session_ttl_seconds"`
 	InviteTTLSeconds     int64  `json:"invite_ttl_seconds"`
@@ -74,7 +76,7 @@ func adminSettingsDTO(s db.SystemSetting) AdminSettingsDTO {
 		Registration: s.Registration, MfaRequired: s.MfaRequired, MfaMethods: s.MfaMethods,
 		DefaultLanguage: s.DefaultLanguage, DefaultDisplayCurrency: s.DefaultDisplayCurrency,
 		DefaultTimezone: s.DefaultTimezone, DefaultDateFormat: s.DefaultDateFormat, DefaultTheme: s.DefaultTheme,
-		SessionTTLSeconds: s.SessionTtlSeconds, InviteTTLSeconds: s.InviteTtlSeconds,
+		DefaultSyncMode: s.DefaultSyncMode, SessionTTLSeconds: s.SessionTtlSeconds, InviteTTLSeconds: s.InviteTtlSeconds,
 		LoginMaxFailures: s.LoginMaxFailures, LoginIPMaxFailures: s.LoginIpMaxFailures,
 		LoginUserMaxFailures: s.LoginUserMaxFailures, LoginWindowSeconds: s.LoginWindowSeconds,
 		MailConfigured: s.MailConfigured, MailDriver: s.MailDriver, SMTPHost: s.SmtpHost, SMTPPort: s.SmtpPort,
@@ -113,6 +115,7 @@ type adminSettingsRequest struct {
 	DefaultTimezone        string   `json:"default_timezone"`
 	DefaultDateFormat      string   `json:"default_date_format"`
 	DefaultTheme           string   `json:"default_theme"`
+	DefaultSyncMode        string   `json:"default_sync_mode"`
 	SessionTTLSeconds      *int64   `json:"session_ttl_seconds"`
 	InviteTTLSeconds       int64    `json:"invite_ttl_seconds"`
 	LoginMaxFailures       int      `json:"login_max_failures"`
@@ -147,6 +150,7 @@ func (h *handlers) updateAdminSettings(w http.ResponseWriter, r *http.Request) {
 			Language: req.DefaultLanguage, DisplayCurrency: req.DefaultDisplayCurrency,
 			Timezone: req.DefaultTimezone, DateFormat: req.DefaultDateFormat, Theme: req.DefaultTheme,
 		},
+		DefaultSyncMode:      req.DefaultSyncMode,
 		SessionTTL:           ttl,
 		InviteTTL:            time.Duration(req.InviteTTLSeconds) * time.Second,
 		LoginMaxFailures:     req.LoginMaxFailures,
@@ -249,6 +253,8 @@ type AdminUserDTO struct {
 	Invited       bool    `json:"invited"` // has not accepted yet
 	LastLoginAt   *string `json:"last_login_at"`
 	CreatedAt     string  `json:"created_at"`
+	// server or client; null follows the instance default.
+	SyncMode *string `json:"sync_mode"`
 }
 
 func adminUserDTO(u db.User, invitePending bool) AdminUserDTO {
@@ -256,7 +262,7 @@ func adminUserDTO(u db.User, invitePending bool) AdminUserDTO {
 		ID: u.ID, Username: u.Username, Email: u.Email, DisplayName: u.DisplayName, IsAdmin: u.IsAdmin,
 		IsActive: u.IsActive, EmailVerified: u.EmailVerifiedAt != nil, Initialized: u.InitializedAt != nil,
 		InvitePending: invitePending, Invited: u.PasswordHash == "" && u.InitializedAt == nil,
-		LastLoginAt: timestampPtr(u.LastLoginAt), CreatedAt: timestamp(u.CreatedAt),
+		LastLoginAt: timestampPtr(u.LastLoginAt), CreatedAt: timestamp(u.CreatedAt), SyncMode: u.SyncMode,
 	}
 }
 
@@ -283,6 +289,8 @@ func (h *handlers) adminUsers(w http.ResponseWriter, r *http.Request) {
 type adminUserRequest struct {
 	IsActive *bool `json:"is_active"`
 	IsAdmin  *bool `json:"is_admin"`
+	// server, client, or "" to follow the instance default.
+	SyncMode *string `json:"sync_mode"`
 }
 
 // adminUpdateUser
@@ -306,6 +314,23 @@ func (h *handlers) adminUpdateUser(w http.ResponseWriter, r *http.Request) {
 	if err := response.Decode(w, r, &req); err != nil {
 		h.fail(w, r, err)
 		return
+	}
+	if req.SyncMode != nil {
+		// Unlike the rest, an admin may set their own: the owner's server sync.
+		if err := h.conns.SetMode(r.Context(), admin(r).ID, userID, *req.SyncMode); err != nil {
+			h.fail(w, r, err)
+			return
+		}
+		h.auditAdmin(r, "sync_mode_changed")
+		if req.IsActive == nil && req.IsAdmin == nil {
+			u, err := h.identity.User(r.Context(), userID)
+			if err != nil {
+				h.fail(w, r, err)
+				return
+			}
+			response.JSON(w, http.StatusOK, adminUserDTO(u, false))
+			return
+		}
 	}
 	u, err := h.identity.UpdateUser(r.Context(), admin(r), userID, identity.UserChange{IsActive: req.IsActive, IsAdmin: req.IsAdmin})
 	if err != nil {

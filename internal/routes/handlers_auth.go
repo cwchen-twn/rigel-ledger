@@ -110,6 +110,9 @@ func (h *handlers) me(w http.ResponseWriter, r *http.Request) {
 		out.MFARequired = st.Required
 		out.MFAEnrolled = st.Enrolled()
 	}
+	if h.conns != nil {
+		out.SyncMode, _ = h.conns.Mode(r.Context(), id.User.ID)
+	}
 	response.JSON(w, http.StatusOK, out)
 }
 

@@ -2954,6 +2954,81 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/me/device": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "connections"
+                ],
+                "summary": "Your own sync runner: its tokens, keys and connectors",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.DeviceDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/device/tokens": {
+            "post": {
+                "description": "Only in client sync mode. The runner it signs in reaches your connections only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "connections"
+                ],
+                "summary": "Make a token for the sync runner on your own device (shown once)",
+                "parameters": [
+                    {
+                        "description": "label and lifetime",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.CreateTokenDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/routes.TokenCreatedDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/device/tokens/{sessionID}": {
+            "delete": {
+                "tags": [
+                    "connections"
+                ],
+                "summary": "Revoke your device runner's token",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "token id",
+                        "name": "sessionID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
         "/api/me/email": {
             "post": {
                 "description": "After the first-login wizard the current password is required. The address changes only when the code is confirmed.",
@@ -4008,6 +4083,14 @@ const docTemplate = `{
                 "default_language": {
                     "type": "string"
                 },
+                "default_sync_mode": {
+                    "description": "Where new people's connections sync until an admin says otherwise.",
+                    "type": "string",
+                    "enum": [
+                        "server",
+                        "client"
+                    ]
+                },
                 "default_theme": {
                     "type": "string"
                 },
@@ -4112,6 +4195,10 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "last_login_at": {
+                    "type": "string"
+                },
+                "sync_mode": {
+                    "description": "server or client; null follows the instance default.",
                     "type": "string"
                 },
                 "username": {
@@ -4512,10 +4599,6 @@ const docTemplate = `{
                 "interval_hours": {
                     "type": "integer"
                 },
-                "key_retired": {
-                    "description": "The runner's key changed since these credentials were sealed: enter them again.",
-                    "type": "boolean"
-                },
                 "label": {
                     "type": "string"
                 },
@@ -4524,6 +4607,10 @@ const docTemplate = `{
                 },
                 "last_run_at": {
                     "type": "string"
+                },
+                "needs_reentry": {
+                    "description": "Sealed to a key this person's sync no longer uses (the runner's key\nchanged, or their sync mode did): enter the credentials again.",
+                    "type": "boolean"
                 },
                 "run_requested": {
                     "type": "boolean"
@@ -4690,6 +4777,57 @@ const docTemplate = `{
                 },
                 "rate": {
                     "description": "1 unit of currency in the book's base; null when no rate is known.",
+                    "type": "string"
+                }
+            }
+        },
+        "routes.DeviceDTO": {
+            "type": "object",
+            "properties": {
+                "connectors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.ConnectorDTO"
+                    }
+                },
+                "keys": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.RunnerKeyDTO"
+                    }
+                },
+                "sync_mode": {
+                    "description": "Where this person's connections sync; the device only matters for client.",
+                    "type": "string",
+                    "enum": [
+                        "server",
+                        "client"
+                    ]
+                },
+                "tokens": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.DeviceTokenDTO"
+                    }
+                }
+            }
+        },
+        "routes.DeviceTokenDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "last_used_at": {
                     "type": "string"
                 }
             }
@@ -5792,6 +5930,14 @@ const docTemplate = `{
                     "description": "Only on GET /api/me: 1 = password only, 2 = passed a second factor.",
                     "type": "integer"
                 },
+                "sync_mode": {
+                    "description": "Only on GET /api/me: where this person's connections sync -- server\n(the cluster's runner) or client (a runner on their own device). An\nadmin sets it.",
+                    "type": "string",
+                    "enum": [
+                        "server",
+                        "client"
+                    ]
+                },
                 "theme": {
                     "type": "string"
                 },
@@ -5902,6 +6048,9 @@ const docTemplate = `{
                 "default_language": {
                     "type": "string"
                 },
+                "default_sync_mode": {
+                    "type": "string"
+                },
                 "default_theme": {
                     "type": "string"
                 },
@@ -5948,6 +6097,10 @@ const docTemplate = `{
                 },
                 "is_admin": {
                     "type": "boolean"
+                },
+                "sync_mode": {
+                    "description": "server, client, or \"\" to follow the instance default.",
+                    "type": "string"
                 }
             }
         },

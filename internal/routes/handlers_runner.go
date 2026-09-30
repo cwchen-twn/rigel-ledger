@@ -9,6 +9,16 @@ import (
 	"github.com/cwchen-twn/rigel-ledger/internal/response"
 )
 
+// runnerOf is the caller of the runner API: the server runner, or the device
+// runner of the person who made the token.
+func runnerOf(r *http.Request) connections.Runner {
+	id, _ := auth.FromContext(r.Context())
+	if id.Kind == auth.KindPersonalRunner {
+		return connections.DeviceRunner(id.User.ID)
+	}
+	return connections.ServerRunner
+}
+
 // The sync runner's API (/api/runner/*, a runner token only). The runner
 // registers its keys and connectors, claims due connections, opens their
 // sealed credentials itself, and reports back: rows, challenges, the end
@@ -43,7 +53,7 @@ func (h *handlers) runnerKeys(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	keys, err := h.conns.RegisterKeys(r.Context(), req.PublicKeys)
+	keys, err := h.conns.RegisterKeys(r.Context(), runnerOf(r), req.PublicKeys)
 	if err != nil {
 		h.fail(w, r, err)
 		return
@@ -94,7 +104,7 @@ func (h *handlers) publishConnectors(w http.ResponseWriter, r *http.Request) {
 			cs[i].Fields = append(cs[i].Fields, connections.Field{Name: f.Name, Label: f.Label, Kind: f.Kind, Optional: f.Optional})
 		}
 	}
-	if err := h.conns.PublishConnectors(r.Context(), cs); err != nil {
+	if err := h.conns.PublishConnectors(r.Context(), runnerOf(r), cs); err != nil {
 		h.fail(w, r, err)
 		return
 	}
@@ -132,7 +142,7 @@ func (h *handlers) claimJobs(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	jobs, err := h.conns.Claim(r.Context(), req.Limit)
+	jobs, err := h.conns.Claim(r.Context(), runnerOf(r), req.Limit)
 	if err != nil {
 		h.fail(w, r, err)
 		return
@@ -166,7 +176,7 @@ func (h *handlers) runnerImport(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	res, err := h.conns.Import(r.Context(), id, importInput(req))
+	res, err := h.conns.Import(r.Context(), runnerOf(r), id, importInput(req))
 	if err != nil {
 		h.fail(w, r, err)
 		return
@@ -208,7 +218,7 @@ func (h *handlers) raiseChallenge(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	ch, err := h.conns.Challenge(r.Context(), id, connections.ChallengeInput{Kind: req.Kind, Prompt: req.Prompt,
+	ch, err := h.conns.Challenge(r.Context(), runnerOf(r), id, connections.ChallengeInput{Kind: req.Kind, Prompt: req.Prompt,
 		Image: req.Image, TTL: time.Duration(req.TTLSeconds) * time.Second})
 	if err != nil {
 		h.fail(w, r, err)
@@ -241,7 +251,7 @@ func (h *handlers) challengeAnswer(w http.ResponseWriter, r *http.Request) {
 		badParam(w, "challengeID", "invalid")
 		return
 	}
-	a, err := h.conns.TakeAnswer(r.Context(), id, cid)
+	a, err := h.conns.TakeAnswer(r.Context(), runnerOf(r), id, cid)
 	if err != nil {
 		h.fail(w, r, err)
 		return
@@ -275,7 +285,7 @@ func (h *handlers) finishRun(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	if err := h.conns.Finish(r.Context(), id, req.Status, req.Error); err != nil {
+	if err := h.conns.Finish(r.Context(), runnerOf(r), id, req.Status, req.Error); err != nil {
 		h.fail(w, r, err)
 		return
 	}
@@ -326,7 +336,7 @@ func (h *handlers) runnerStatus(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	cs, _, err := h.conns.Catalog(ctx)
+	cs, err := h.conns.ServerConnectors(ctx)
 	if err != nil {
 		h.fail(w, r, err)
 		return

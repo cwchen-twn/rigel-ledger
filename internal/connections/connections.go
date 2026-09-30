@@ -71,6 +71,40 @@ func connectorOf(c db.RunnerConnector) Connector {
 	return out
 }
 
+// Sync modes: where a person's connections are synced.
+const (
+	ModeServer = "server" // the cluster's runner
+	ModeClient = "client" // a runner on the person's own device
+)
+
+// Runner is who is calling the runner API: the server runner (Owner nil)
+// or one person's device runner (Owner = that person). Every runner method
+// is confined to it.
+type Runner struct{ Owner *int64 }
+
+// ServerRunner is the cluster's runner.
+var ServerRunner = Runner{}
+
+// DeviceRunner is userID's own runner.
+func DeviceRunner(userID int64) Runner { return Runner{Owner: &userID} }
+
+// Mode is the person's effective sync mode (their own, else the default).
+func (s *Service) Mode(ctx context.Context, userID int64) (string, error) {
+	return s.store.EffectiveSyncMode(ctx, userID)
+}
+
+// runnerFor is the runner a person's connections are sealed to and synced by.
+func (s *Service) runnerFor(ctx context.Context, userID int64) (Runner, error) {
+	m, err := s.Mode(ctx, userID)
+	if err != nil {
+		return Runner{}, err
+	}
+	if m == ModeServer {
+		return ServerRunner, nil
+	}
+	return DeviceRunner(userID), nil
+}
+
 // ---------------------------------------------------------------------------
 // Runner side
 // ---------------------------------------------------------------------------
@@ -78,7 +112,7 @@ func connectorOf(c db.RunnerConnector) Connector {
 // RegisterKeys records the public keys the runner holds, newest last; every
 // other key is retired, and connections sealed to it wait for their owner
 // to enter the credentials again.
-func (s *Service) RegisterKeys(ctx context.Context, keys [][]byte) ([]db.RunnerKey, error) {
+func (s *Service) RegisterKeys(ctx context.Context, r Runner, keys [][]byte) ([]db.RunnerKey, error) {
 	if len(keys) == 0 || len(keys) > 5 {
 		return nil, ledger.FieldError("public_keys", "out_of_range", "1 to 5 keys")
 	}
@@ -89,21 +123,24 @@ func (s *Service) RegisterKeys(ctx context.Context, keys [][]byte) ([]db.RunnerK
 			if !sealing.ValidPublicKey(k) {
 				return ledger.FieldError("public_keys["+strconv.Itoa(i)+"]", "invalid", "not an X25519 public key")
 			}
-			rk, err := q.UpsertRunnerKey(ctx, k)
+			rk, err := q.UpsertRunnerKey(ctx, db.UpsertRunnerKeyParams{PublicKey: k, Owner: r.Owner})
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ledger.FieldError("public_keys["+strconv.Itoa(i)+"]", "taken", "another runner registered this key")
+			}
 			if err != nil {
 				return err
 			}
 			keep = append(keep, rk.ID)
 			out = append(out, rk)
 		}
-		return q.RetireRunnerKeysExcept(ctx, keep)
+		return q.RetireRunnerKeysExcept(ctx, db.RetireRunnerKeysExceptParams{Keep: keep, Owner: r.Owner})
 	})
 	return out, err
 }
 
 // PublishConnectors records what the runner can connect to. A connector it
 // stops publishing stays, so existing connections keep their name.
-func (s *Service) PublishConnectors(ctx context.Context, cs []Connector) error {
+func (s *Service) PublishConnectors(ctx context.Context, r Runner, cs []Connector) error {
 	for i, c := range cs {
 		at := "connectors[" + strconv.Itoa(i) + "]"
 		if !idPattern.MatchString(c.ID) || strings.TrimSpace(c.Name) == "" {
@@ -121,7 +158,7 @@ func (s *Service) PublishConnectors(ctx context.Context, cs []Connector) error {
 	return s.store.WithTx(ctx, 0, func(q *db.Queries) error {
 		for _, c := range cs {
 			fields, _ := json.Marshal(c.Fields)
-			if err := q.UpsertConnector(ctx, db.UpsertConnectorParams{ID: c.ID, Name: strings.TrimSpace(c.Name),
+			if err := q.UpsertConnector(ctx, db.UpsertConnectorParams{ID: c.ID, Owner: r.Owner, Name: strings.TrimSpace(c.Name),
 				Country: strings.ToUpper(strings.TrimSpace(c.Country)), Fields: fields}); err != nil {
 				return err
 			}
@@ -131,15 +168,17 @@ func (s *Service) PublishConnectors(ctx context.Context, cs []Connector) error {
 }
 
 // Claim hands the runner up to limit due connections.
-func (s *Service) Claim(ctx context.Context, limit int) ([]db.ClaimJobsRow, error) {
+func (s *Service) Claim(ctx context.Context, r Runner, limit int) ([]db.ClaimJobsRow, error) {
 	if limit <= 0 || limit > 50 {
 		limit = 10
 	}
-	return s.store.ClaimJobs(ctx, int32(limit))
+	return s.store.ClaimJobs(ctx, db.ClaimJobsParams{Owner: r.Owner, Lim: int32(limit)})
 }
 
-func (s *Service) claimed(ctx context.Context, id int64) (db.Connection, error) {
-	c, err := s.store.GetClaimedConnection(ctx, id)
+// claimed is a connection this runner has claimed; another runner's is
+// reported the same as an unclaimed one.
+func (s *Service) claimed(ctx context.Context, r Runner, id int64) (db.Connection, error) {
+	c, err := s.store.GetClaimedConnection(ctx, db.GetClaimedConnectionParams{ID: id, Owner: r.Owner})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return db.Connection{}, ledger.Conflict("not_claimed", "claim the job before working on it")
 	}
@@ -148,8 +187,8 @@ func (s *Service) claimed(ctx context.Context, id int64) (db.Connection, error) 
 
 // Import stages a batch for a claimed connection, as its owner, into its
 // book. The connector is the connection's, whatever the batch says.
-func (s *Service) Import(ctx context.Context, id int64, in ledger.ImportInput) (ledger.ImportResult, error) {
-	c, err := s.claimed(ctx, id)
+func (s *Service) Import(ctx context.Context, r Runner, id int64, in ledger.ImportInput) (ledger.ImportResult, error) {
+	c, err := s.claimed(ctx, r, id)
 	if err != nil {
 		return ledger.ImportResult{}, err
 	}
@@ -163,7 +202,10 @@ func (s *Service) Import(ctx context.Context, id int64, in ledger.ImportInput) (
 
 // Finish ends a run: ok, or failed with a stable code (bad_credentials,
 // challenge_expired, institution_down, ...), never the institution's text.
-func (s *Service) Finish(ctx context.Context, id int64, status, code string) error {
+func (s *Service) Finish(ctx context.Context, r Runner, id int64, status, code string) error {
+	if _, err := s.claimed(ctx, r, id); err != nil {
+		return err
+	}
 	if status != "ok" && status != "failed" {
 		return ledger.FieldError("status", "invalid", "ok or failed")
 	}
@@ -192,8 +234,8 @@ type ChallengeInput struct {
 
 // Challenge asks the owner for what the runner cannot provide itself. The
 // connection shows as needing action until the owner answers.
-func (s *Service) Challenge(ctx context.Context, id int64, in ChallengeInput) (db.CreateConnectionChallengeRow, error) {
-	if _, err := s.claimed(ctx, id); err != nil {
+func (s *Service) Challenge(ctx context.Context, r Runner, id int64, in ChallengeInput) (db.CreateConnectionChallengeRow, error) {
+	if _, err := s.claimed(ctx, r, id); err != nil {
 		return db.CreateConnectionChallengeRow{}, err
 	}
 	if in.Kind != "otp" && in.Kind != "captcha" && in.Kind != "device" {
@@ -229,18 +271,18 @@ type Answer struct {
 }
 
 // TakeAnswer is the runner polling a challenge.
-func (s *Service) TakeAnswer(ctx context.Context, id, challengeID int64) (Answer, error) {
-	if _, err := s.claimed(ctx, id); err != nil {
+func (s *Service) TakeAnswer(ctx context.Context, r Runner, id, challengeID int64) (Answer, error) {
+	if _, err := s.claimed(ctx, r, id); err != nil {
 		return Answer{}, err
 	}
-	r, err := s.store.TakeChallengeAnswer(ctx, db.TakeChallengeAnswerParams{ID: challengeID, ConnectionID: id})
+	a, err := s.store.TakeChallengeAnswer(ctx, db.TakeChallengeAnswerParams{ID: challengeID, ConnectionID: id})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Answer{}, ledger.NotFound("challenge")
 	}
 	if err != nil {
 		return Answer{}, err
 	}
-	return Answer{Sealed: r.AnswerSealed, Answered: r.AnsweredAt != nil, Expired: r.AnsweredAt == nil && time.Now().After(r.ExpiresAt)}, nil
+	return Answer{Sealed: a.AnswerSealed, Answered: a.AnsweredAt != nil, Expired: a.AnsweredAt == nil && time.Now().After(a.ExpiresAt)}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -248,9 +290,18 @@ func (s *Service) TakeAnswer(ctx context.Context, id, challengeID int64) (Answer
 // ---------------------------------------------------------------------------
 
 // Catalog is what a person can link, and the key to seal to (nil while no
-// runner has registered one).
-func (s *Service) Catalog(ctx context.Context) ([]Connector, *db.RunnerKey, error) {
-	rows, err := s.store.ListConnectors(ctx)
+// runner has registered one): the server runner's in server mode, their own
+// device's in client mode.
+func (s *Service) Catalog(ctx context.Context, userID int64) ([]Connector, *db.RunnerKey, error) {
+	r, err := s.runnerFor(ctx, userID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return s.catalogOf(ctx, r)
+}
+
+func (s *Service) catalogOf(ctx context.Context, r Runner) ([]Connector, *db.RunnerKey, error) {
+	rows, err := s.store.ListConnectors(ctx, r.Owner)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -258,7 +309,7 @@ func (s *Service) Catalog(ctx context.Context) ([]Connector, *db.RunnerKey, erro
 	for i, r := range rows {
 		out[i] = connectorOf(r)
 	}
-	k, err := s.store.ActiveRunnerKey(ctx)
+	k, err := s.store.ActiveRunnerKey(ctx, r.Owner)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return out, nil, nil
 	}
@@ -293,11 +344,19 @@ func (s *Service) canFeed(ctx context.Context, userID, bookID int64) error {
 	return nil
 }
 
-// checkSealed accepts only a blob sealed to the current key. That is all
-// the app can know about it: it cannot open it.
-func (s *Service) checkSealed(ctx context.Context, keyID int64, blob []byte) error {
-	k, err := s.store.ActiveRunnerKey(ctx)
+// checkSealed accepts only a blob sealed to the current key of the runner
+// the person's mode uses. That is all the app can know about it: it cannot
+// open it.
+func (s *Service) checkSealed(ctx context.Context, userID, keyID int64, blob []byte) error {
+	r, err := s.runnerFor(ctx, userID)
+	if err != nil {
+		return err
+	}
+	k, err := s.store.ActiveRunnerKey(ctx, r.Owner)
 	if errors.Is(err, pgx.ErrNoRows) {
+		if r.Owner != nil {
+			return ledger.Invalid("no_device", "set up the sync runner on your device first")
+		}
 		return ledger.Invalid("no_runner", "no sync runner has registered yet")
 	}
 	if err != nil {
@@ -323,7 +382,7 @@ func interval(h int) (int16, error) {
 }
 
 func (s *Service) Create(ctx context.Context, userID int64, in Input) (int64, error) {
-	cs, _, err := s.Catalog(ctx)
+	cs, _, err := s.Catalog(ctx, userID)
 	if err != nil {
 		return 0, err
 	}
@@ -337,7 +396,7 @@ func (s *Service) Create(ctx context.Context, userID int64, in Input) (int64, er
 	if err := s.canFeed(ctx, userID, in.BookID); err != nil {
 		return 0, err
 	}
-	if err := s.checkSealed(ctx, in.KeyID, in.Sealed); err != nil {
+	if err := s.checkSealed(ctx, userID, in.KeyID, in.Sealed); err != nil {
 		return 0, err
 	}
 	iv, err := interval(in.IntervalHours)
@@ -371,7 +430,7 @@ func (s *Service) ReplaceCredentials(ctx context.Context, userID, id, keyID int6
 	if _, err := s.get(ctx, userID, id); err != nil {
 		return err
 	}
-	if err := s.checkSealed(ctx, keyID, sealed); err != nil {
+	if err := s.checkSealed(ctx, userID, keyID, sealed); err != nil {
 		return err
 	}
 	return s.store.WithTx(ctx, userID, func(q *db.Queries) error {
@@ -469,8 +528,63 @@ func (s *Service) RunnerTokens(ctx context.Context) ([]db.ListRunnerSessionsRow,
 	return s.store.ListRunnerSessions(ctx)
 }
 
+// RunnerKeys are the server runner's keys.
 func (s *Service) RunnerKeys(ctx context.Context) ([]db.RunnerKey, error) {
-	return s.store.ListRunnerKeys(ctx)
+	return s.store.ListRunnerKeys(ctx, nil)
+}
+
+// ServerConnectors is what the server runner offers (Administration).
+func (s *Service) ServerConnectors(ctx context.Context) ([]Connector, error) {
+	cs, _, err := s.catalogOf(ctx, ServerRunner)
+	return cs, err
+}
+
+// Device is a person's own runner: its tokens, keys and connectors.
+type Device struct {
+	Mode       string
+	Tokens     []db.ListPersonalRunnerSessionsRow
+	Keys       []db.RunnerKey
+	Connectors []Connector
+}
+
+func (s *Service) Device(ctx context.Context, userID int64) (Device, error) {
+	m, err := s.Mode(ctx, userID)
+	if err != nil {
+		return Device{}, err
+	}
+	d := Device{Mode: m}
+	if d.Tokens, err = s.store.ListPersonalRunnerSessions(ctx, userID); err != nil {
+		return d, err
+	}
+	if d.Keys, err = s.store.ListRunnerKeys(ctx, &userID); err != nil {
+		return d, err
+	}
+	d.Connectors, _, err = s.catalogOf(ctx, DeviceRunner(userID))
+	return d, err
+}
+
+func (s *Service) RevokeDeviceToken(ctx context.Context, userID, sessionID int64) error {
+	n, err := s.store.DeletePersonalRunnerSession(ctx, db.DeletePersonalRunnerSessionParams{ID: sessionID, UserID: userID})
+	if err == nil && n == 0 {
+		return ledger.NotFound("token")
+	}
+	return err
+}
+
+// SetMode is an admin's call: "" follows the instance default. Connections
+// sealed to the other runner then ask their owner to re-enter.
+func (s *Service) SetMode(ctx context.Context, adminID, userID int64, mode string) error {
+	var m *string
+	switch mode {
+	case "":
+	case ModeServer, ModeClient:
+		m = &mode
+	default:
+		return ledger.FieldError("sync_mode", "invalid", "server, client or empty for the default")
+	}
+	return s.store.WithTx(ctx, adminID, func(q *db.Queries) error {
+		return q.SetUserSyncMode(ctx, db.SetUserSyncModeParams{ID: userID, SyncMode: m})
+	})
 }
 
 func (s *Service) RevokeRunnerToken(ctx context.Context, sessionID int64) error {

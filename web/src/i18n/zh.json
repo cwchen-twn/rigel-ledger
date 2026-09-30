@@ -389,7 +389,9 @@
     "not_claimed": "此同步未在進行中",
     "challenge_gone": "此驗證已過期或已回覆",
     "disabled": "請先啟用此連結",
-    "no_access": "連結擁有者已無此帳本的權限"
+    "no_access": "連結擁有者已無此帳本的權限",
+    "no_device": "請先在你的裝置上設定同步程式",
+    "sync_mode": "你的連結在伺服器上同步，不需要裝置同步程式"
   },
   "profile": {
     "username_hint": "用於登入：a-z、0-9、點、連字號、底線"
@@ -504,7 +506,9 @@
     "runner_token_revoked": "已撤銷同步程式權杖",
     "connection_created": "已連結金融機構",
     "connection_credentials_replaced": "已更換連結的登入資料",
-    "connection_deleted": "已解除金融機構連結"
+    "connection_deleted": "已解除金融機構連結",
+    "sync_mode_changed": "已變更同步模式",
+    "device_token_created": "已建立裝置同步程式權杖"
   },
   "admin": {
     "title": "系統管理",
@@ -902,7 +906,7 @@
     "syncing": "同步中…",
     "sync_requested": "同步程式會在一分鐘內處理",
     "enabled": "自動同步",
-    "key_retired": "同步程式的金鑰已更換，請重新輸入登入資料以繼續同步。",
+    "key_retired": "這組登入資料是為另一個同步程式加密的（其金鑰或你的同步模式已變更），請重新輸入以繼續同步。",
     "error_other": "上次同步失敗（{code}）。",
     "error_bad_credentials": "金融機構拒絕了登入資料，請更換。",
     "error_bad_otp": "一次性驗證碼錯誤，請再按一次「立即同步」。",
@@ -924,7 +928,8 @@
     "how_title": "登入資料如何保管",
     "how_sealed": "登入資料在離開瀏覽器前，就以同步程式的金鑰加密。伺服器只保存無法解開的密文；同步程式只在叢集內代你登入時才會解開。",
     "how_review": "不會自動入帳：抓取的資料列會在帳本的「匯入」清單中等你接受。",
-    "how_csv": "不想提供登入資料？也可以在「匯入」頁面手動匯入對帳單 CSV。"
+    "how_csv": "不想提供登入資料？也可以在「匯入」頁面手動匯入對帳單 CSV。",
+    "how_sealed_client": "登入資料在離開瀏覽器前，就以你自己裝置的金鑰加密。伺服器只保存無法解開的密文，應用程式自己的同步程式也無法解開；只有你電腦上的同步程式能在代你登入時解開。"
   },
   "runner": {
     "tokens_title": "同步程式權杖",
@@ -940,5 +945,32 @@
     "key_retired": "已停用",
     "connectors_title": "可連結的金融機構",
     "no_connectors": "同步程式尚未公布任何金融機構"
+  },
+  "sync": {
+    "mode_server": "在伺服器上",
+    "mode_client": "在你自己的裝置上",
+    "mode_default": "預設（{mode}）",
+    "mode_line": "同步模式：{mode}",
+    "mode_server_hint": "由應用程式的同步程式定時代你登入金融機構，無需安裝任何東西。",
+    "mode_client_hint": "由你電腦上的小型同步程式，從你自己的網路登入；電腦開機時才會同步。",
+    "settings_title": "銀行同步",
+    "settings_hint": "由管理員決定你的連結在哪裡同步。",
+    "go_connections": "前往「連結帳戶」",
+    "column": "同步",
+    "column_for": "{user} 的同步模式",
+    "default_mode": "新使用者的銀行同步",
+    "default_mode_hint": "在自己的裝置上同步，可避免所有登入都來自伺服器的位址；可在「使用者」中逐一調整。",
+    "device_title": "你的裝置",
+    "device_ready": "已就緒",
+    "device_not_set_up": "尚未設定",
+    "device_hint": "在常開機的電腦上執行同步容器，並以裝置權杖登入；只需要 Docker。",
+    "device_seen": "上次連線 {when}",
+    "device_offers": "可連結機構：{n}",
+    "device_new_token": "新增裝置權杖",
+    "device_default_label": "我的電腦",
+    "device_step_install": "在常開機的電腦上安裝 Docker（macOS 或 Windows 可用 Docker Desktop）。",
+    "device_step_token": "在此建立裝置權杖。",
+    "device_step_run": "以該權杖啟動同步容器（請見同步程式說明）；連線後此卡片會顯示「已就緒」。",
+    "device_in_use": "使用中"
   }
 }

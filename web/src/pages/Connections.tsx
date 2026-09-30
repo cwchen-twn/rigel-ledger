@@ -1,4 +1,4 @@
-import { KeyRound, Link2, Plus, RefreshCw, ShieldCheck, Trash2 } from 'lucide-solid';
+import { Copy, KeyRound, Laptop, Link2, Plus, RefreshCw, Server, ShieldCheck, Trash2 } from 'lucide-solid';
 import { createEffect, createMemo, createResource, createSignal, For, on, onCleanup, Show } from 'solid-js';
 import { api } from '~/api/client';
 import type { Connection, Connector } from '~/api/types';
@@ -41,7 +41,10 @@ function useLabel() {
 export default function Connections() {
   const { t, te } = useI18n();
   const label = useLabel();
-  const [catalog, { refetch: refetchCatalog }] = createResource(() => api.connectors());
+  const { user } = useSession();
+  const mode = () => user()?.sync_mode ?? 'client';
+  // The mode decides the runner, so the key and connectors follow it.
+  const [catalog, { refetch: refetchCatalog }] = createResource(mode, () => api.connectors());
   const [list, { refetch }] = createResource(() => api.connections());
   const [supported] = createResource(() => canSeal());
   const [adding, setAdding] = createSignal(false);
@@ -57,7 +60,7 @@ export default function Connections() {
 
   // While the runner is (or is about to be) working on one of them, follow along.
   const busy = () =>
-    (list() ?? []).some((c) => c.enabled && !c.key_retired && (c.run_requested || c.status === 'new' || c.status === 'needs_user_action'));
+    (list() ?? []).some((c) => c.enabled && !c.needs_reentry && (c.run_requested || c.status === 'new' || c.status === 'needs_user_action'));
   let timer: ReturnType<typeof setInterval> | undefined;
   createEffect(
     on(busy, (b) => {
@@ -92,7 +95,17 @@ export default function Connections() {
         <Show when={supported() === false}>
           <p class="rounded-md border border-destructive/40 p-3 text-sm text-destructive">{t('connections.browser_too_old')}</p>
         </Show>
-        <Show when={catalog() && !catalog()!.key}>
+        <div class="flex items-start gap-3 rounded-md border p-3 text-sm" data-testid="sync-mode">
+          {mode() === 'server' ? <Server class="mt-0.5 size-4 shrink-0" /> : <Laptop class="mt-0.5 size-4 shrink-0" />}
+          <div class="grid gap-0.5">
+            <span class="font-medium">{t('sync.mode_line', { mode: t(`sync.mode_${mode()}`) })}</span>
+            <span class="text-muted-foreground">{t(`sync.mode_${mode()}_hint`)}</span>
+          </div>
+        </div>
+        <Show when={mode() === 'client'}>
+          <DeviceCard onChange={refetchCatalog} />
+        </Show>
+        <Show when={mode() === 'server' && catalog() && !catalog()!.key}>
           <p class="rounded-md border p-3 text-sm text-muted-foreground">{t('connections.no_runner')}</p>
         </Show>
 
@@ -123,7 +136,7 @@ export default function Connections() {
                         </CardDescription>
                       </div>
                       <div class="flex flex-wrap gap-2">
-                        <Button size="sm" variant="outline" disabled={!c.enabled || c.run_requested || c.key_retired}
+                        <Button size="sm" variant="outline" disabled={!c.enabled || c.run_requested || c.needs_reentry}
                           onClick={() => act(() => api.syncConnection(c.id), t('connections.sync_requested'))}>
                           <RefreshCw class={c.run_requested ? 'animate-spin' : ''} /> {c.run_requested ? t('connections.syncing') : t('connections.sync_now')}
                         </Button>
@@ -137,7 +150,7 @@ export default function Connections() {
                     </div>
                   </CardHeader>
                   <CardContent class="grid gap-3">
-                    <Show when={c.key_retired}>
+                    <Show when={c.needs_reentry}>
                       <p class="text-sm text-destructive">{t('connections.key_retired')}</p>
                     </Show>
                     <Show when={c.status === 'failed' && c.last_error}>
@@ -169,7 +182,7 @@ export default function Connections() {
             <CardTitle class="flex items-center gap-2"><ShieldCheck class="size-4" /> {t('connections.how_title')}</CardTitle>
           </CardHeader>
           <CardContent class="grid gap-2 text-sm text-muted-foreground">
-            <p>{t('connections.how_sealed')}</p>
+            <p>{mode() === 'server' ? t('connections.how_sealed') : t('connections.how_sealed_client')}</p>
             <p>{t('connections.how_review')}</p>
             <p>{t('connections.how_csv')}</p>
           </CardContent>
@@ -401,5 +414,107 @@ function CredentialsDialog(props: {
         </div>
       </form>
     </Dialog>
+  );
+}
+
+/** Client sync: the person's own runner, its token and whether it has checked in. */
+function DeviceCard(props: { onChange: () => void }) {
+  const { t, te } = useI18n();
+  const [device, { refetch }] = createResource(() => api.device());
+  const [made, setMade] = createSignal('');
+  const [busy, setBusy] = createSignal(false);
+  const key = () => device()?.keys.find((k) => !k.retired_at);
+  const seen = () => {
+    const ts = (device()?.tokens ?? []).filter((x) => x.last_used_at !== x.created_at).map((x) => x.last_used_at).sort();
+    return ts[ts.length - 1];
+  };
+  // Until the runner registers its key, look again now and then.
+  let timer: ReturnType<typeof setInterval> | undefined;
+  createEffect(
+    on(key, (k) => {
+      clearInterval(timer);
+      if (!k && (device()?.tokens.length ?? 0) > 0) timer = setInterval(() => refetch(), 3000);
+      if (k) props.onChange();
+    }),
+  );
+  onCleanup(() => clearInterval(timer));
+
+  const create = async () => {
+    setBusy(true);
+    try {
+      const res = await api.createDeviceToken(t('sync.device_default_label'), 365);
+      setMade(res.token);
+      refetch();
+    } catch (err) {
+      toast.error(te(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const revoke = async (id: number) => {
+    try {
+      await api.revokeDeviceToken(id);
+      toast.success(t('tokens.revoked'));
+    } catch (err) {
+      toast.error(te(err));
+    }
+    refetch();
+  };
+
+  return (
+    <Card data-testid="device-card">
+      <CardHeader>
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="grid gap-1">
+            <CardTitle class="flex items-center gap-2">
+              <Laptop class="size-4" /> {t('sync.device_title')}
+              <Show when={key()} fallback={<Badge variant="warning">{t('sync.device_not_set_up')}</Badge>}>
+                <Badge variant="secondary">{t('sync.device_ready')}</Badge>
+              </Show>
+            </CardTitle>
+            <CardDescription>
+              {key()
+                ? [seen() ? t('sync.device_seen', { when: formatDateTime(seen()!) }) : '', t('sync.device_offers', { n: device()?.connectors.length ?? 0 })].filter(Boolean).join(' · ')
+                : t('sync.device_hint')}
+            </CardDescription>
+          </div>
+          <Button size="sm" variant="outline" disabled={busy()} onClick={create}>
+            <KeyRound /> {t('sync.device_new_token')}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent class="grid gap-3">
+        <Show when={made()}>
+          <div class="grid gap-2 rounded-md border border-amber-500/40 p-3">
+            <p class="text-sm">{t('tokens.shown_once')}</p>
+            <code class="rounded-md border bg-muted px-3 py-2 font-mono text-sm break-all" data-testid="new-device-token">{made()}</code>
+            <div class="flex gap-2">
+              <Button size="sm" variant="outline" onClick={async () => {
+                try { await navigator.clipboard.writeText(made()); toast.success(t('tokens.copied')); } catch { toast.error(t('tokens.copy_failed')); }
+              }}><Copy /> {t('tokens.copy')}</Button>
+              <Button size="sm" onClick={() => setMade('')}>{t('tokens.done')}</Button>
+            </div>
+          </div>
+        </Show>
+        <Show when={!key()}>
+          <ol class="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+            <li>{t('sync.device_step_install')}</li>
+            <li>{t('sync.device_step_token')}</li>
+            <li>{t('sync.device_step_run')}</li>
+          </ol>
+        </Show>
+        <For each={device()?.tokens ?? []}>
+          {(x) => (
+            <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span>
+                <span class="font-medium">{x.label}</span>
+                <span class="text-muted-foreground"> · {x.last_used_at !== x.created_at ? formatDateTime(x.last_used_at) : key() ? t('sync.device_in_use') : t('tokens.never_used')}</span>
+              </span>
+              <Button size="sm" variant="ghost" onClick={() => revoke(x.id)}><Trash2 /> {t('tokens.revoke')}</Button>
+            </div>
+          )}
+        </For>
+      </CardContent>
+    </Card>
   );
 }

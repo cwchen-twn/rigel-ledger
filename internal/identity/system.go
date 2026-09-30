@@ -93,6 +93,7 @@ type SettingsInput struct {
 	MfaRequired          bool
 	MfaMethods           []string
 	Defaults             ledger.Preferences
+	DefaultSyncMode      string        // server | client; "" keeps client
 	SessionTTL           time.Duration // 0: SESSION_TTL from the environment
 	InviteTTL            time.Duration
 	LoginMaxFailures     int
@@ -125,6 +126,12 @@ func (s *Service) UpdateSettings(ctx context.Context, admin db.User, in Settings
 	if in.MfaRequired && len(methods) == 0 {
 		return db.SystemSetting{}, ledger.FieldError("mfa_methods", "required", "enable at least one method while two-factor sign-in is required")
 	}
+	if in.DefaultSyncMode == "" {
+		in.DefaultSyncMode = "client"
+	}
+	if in.DefaultSyncMode != "server" && in.DefaultSyncMode != "client" {
+		return db.SystemSetting{}, ledger.FieldError("default_sync_mode", "invalid", "server or client")
+	}
 	if err := s.ledger.ValidatePreferences(ctx, in.Defaults, "default_"); err != nil {
 		return db.SystemSetting{}, err
 	}
@@ -154,7 +161,7 @@ func (s *Service) UpdateSettings(ctx context.Context, admin db.User, in Settings
 			Registration: in.Registration, MfaRequired: in.MfaRequired, MfaMethods: methods,
 			DefaultLanguage: in.Defaults.Language, DefaultDisplayCurrency: in.Defaults.DisplayCurrency,
 			DefaultTimezone: in.Defaults.Timezone, DefaultDateFormat: in.Defaults.DateFormat,
-			DefaultTheme: in.Defaults.Theme, SessionTtlSeconds: ttl,
+			DefaultTheme: in.Defaults.Theme, DefaultSyncMode: in.DefaultSyncMode, SessionTtlSeconds: ttl,
 			InviteTtlSeconds:     int64(in.InviteTTL / time.Second),
 			LoginMaxFailures:     int32(in.LoginMaxFailures),
 			LoginIpMaxFailures:   int32(in.LoginIPMaxFailures),

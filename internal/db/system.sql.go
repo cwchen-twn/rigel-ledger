@@ -19,7 +19,7 @@ func (q *Queries) ClearSMTPPassword(ctx context.Context) error {
 }
 
 const getSystemSettings = `-- name: GetSystemSettings :one
-SELECT id, registration, mfa_required, mfa_methods, default_language, default_display_currency, default_timezone, default_date_format, default_theme, session_ttl_seconds, invite_ttl_seconds, login_max_failures, login_ip_max_failures, login_user_max_failures, login_window_seconds, mail_configured, mail_driver, smtp_host, smtp_port, smtp_security, smtp_user, smtp_pass_enc, mail_from, mail_from_name, updated_by, updated_at FROM system_settings WHERE id
+SELECT id, registration, mfa_required, mfa_methods, default_language, default_display_currency, default_timezone, default_date_format, default_theme, session_ttl_seconds, invite_ttl_seconds, login_max_failures, login_ip_max_failures, login_user_max_failures, login_window_seconds, mail_configured, mail_driver, smtp_host, smtp_port, smtp_security, smtp_user, smtp_pass_enc, mail_from, mail_from_name, updated_by, updated_at, default_sync_mode FROM system_settings WHERE id
 `
 
 func (q *Queries) GetSystemSettings(ctx context.Context) (SystemSetting, error) {
@@ -52,6 +52,7 @@ func (q *Queries) GetSystemSettings(ctx context.Context) (SystemSetting, error) 
 		&i.MailFromName,
 		&i.UpdatedBy,
 		&i.UpdatedAt,
+		&i.DefaultSyncMode,
 	)
 	return i, err
 }
@@ -69,7 +70,7 @@ UPDATE system_settings SET
     mail_from_name  = $8,
     updated_by      = $9
 WHERE id
-RETURNING id, registration, mfa_required, mfa_methods, default_language, default_display_currency, default_timezone, default_date_format, default_theme, session_ttl_seconds, invite_ttl_seconds, login_max_failures, login_ip_max_failures, login_user_max_failures, login_window_seconds, mail_configured, mail_driver, smtp_host, smtp_port, smtp_security, smtp_user, smtp_pass_enc, mail_from, mail_from_name, updated_by, updated_at
+RETURNING id, registration, mfa_required, mfa_methods, default_language, default_display_currency, default_timezone, default_date_format, default_theme, session_ttl_seconds, invite_ttl_seconds, login_max_failures, login_ip_max_failures, login_user_max_failures, login_window_seconds, mail_configured, mail_driver, smtp_host, smtp_port, smtp_security, smtp_user, smtp_pass_enc, mail_from, mail_from_name, updated_by, updated_at, default_sync_mode
 `
 
 type UpdateMailSettingsParams struct {
@@ -126,6 +127,7 @@ func (q *Queries) UpdateMailSettings(ctx context.Context, arg UpdateMailSettings
 		&i.MailFromName,
 		&i.UpdatedBy,
 		&i.UpdatedAt,
+		&i.DefaultSyncMode,
 	)
 	return i, err
 }
@@ -140,15 +142,16 @@ UPDATE system_settings SET
     default_timezone         = $6,
     default_date_format      = $7,
     default_theme            = $8,
-    session_ttl_seconds      = $9,
-    invite_ttl_seconds       = $10,
-    login_max_failures       = $11,
-    login_ip_max_failures    = $12,
-    login_user_max_failures  = $13,
-    login_window_seconds     = $14,
-    updated_by               = $15
+    default_sync_mode        = $9,
+    session_ttl_seconds      = $10,
+    invite_ttl_seconds       = $11,
+    login_max_failures       = $12,
+    login_ip_max_failures    = $13,
+    login_user_max_failures  = $14,
+    login_window_seconds     = $15,
+    updated_by               = $16
 WHERE id
-RETURNING id, registration, mfa_required, mfa_methods, default_language, default_display_currency, default_timezone, default_date_format, default_theme, session_ttl_seconds, invite_ttl_seconds, login_max_failures, login_ip_max_failures, login_user_max_failures, login_window_seconds, mail_configured, mail_driver, smtp_host, smtp_port, smtp_security, smtp_user, smtp_pass_enc, mail_from, mail_from_name, updated_by, updated_at
+RETURNING id, registration, mfa_required, mfa_methods, default_language, default_display_currency, default_timezone, default_date_format, default_theme, session_ttl_seconds, invite_ttl_seconds, login_max_failures, login_ip_max_failures, login_user_max_failures, login_window_seconds, mail_configured, mail_driver, smtp_host, smtp_port, smtp_security, smtp_user, smtp_pass_enc, mail_from, mail_from_name, updated_by, updated_at, default_sync_mode
 `
 
 type UpdateSystemSettingsParams struct {
@@ -160,6 +163,7 @@ type UpdateSystemSettingsParams struct {
 	DefaultTimezone        string
 	DefaultDateFormat      string
 	DefaultTheme           string
+	DefaultSyncMode        string
 	SessionTtlSeconds      *int64
 	InviteTtlSeconds       int64
 	LoginMaxFailures       int32
@@ -179,6 +183,7 @@ func (q *Queries) UpdateSystemSettings(ctx context.Context, arg UpdateSystemSett
 		arg.DefaultTimezone,
 		arg.DefaultDateFormat,
 		arg.DefaultTheme,
+		arg.DefaultSyncMode,
 		arg.SessionTtlSeconds,
 		arg.InviteTtlSeconds,
 		arg.LoginMaxFailures,
@@ -215,6 +220,7 @@ func (q *Queries) UpdateSystemSettings(ctx context.Context, arg UpdateSystemSett
 		&i.MailFromName,
 		&i.UpdatedBy,
 		&i.UpdatedAt,
+		&i.DefaultSyncMode,
 	)
 	return i, err
 }

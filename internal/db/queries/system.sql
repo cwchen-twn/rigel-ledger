@@ -11,6 +11,7 @@ UPDATE system_settings SET
     default_timezone         = @default_timezone,
     default_date_format      = @default_date_format,
     default_theme            = @default_theme,
+    default_sync_mode        = @default_sync_mode,
     session_ttl_seconds      = sqlc.narg(session_ttl_seconds),
     invite_ttl_seconds       = @invite_ttl_seconds,
     login_max_failures       = @login_max_failures,

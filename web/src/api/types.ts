@@ -30,7 +30,12 @@ export interface User {
   session_aal?: number;
   mfa_required?: boolean;
   mfa_enrolled?: boolean;
+  /** GET /api/me only: where this person's connections sync. An admin sets it. */
+  sync_mode?: SyncMode;
 }
+
+/** server: the cluster's sync runner; client: a runner on the person's own device. */
+export type SyncMode = 'server' | 'client';
 
 export type SignInMethod = 'totp' | 'email' | 'passkey' | 'recovery';
 
@@ -128,6 +133,7 @@ export interface SystemSettingsInput {
   default_timezone: string;
   default_date_format: string;
   default_theme: Theme;
+  default_sync_mode: SyncMode;
   /** null: SESSION_TTL from the environment. */
   session_ttl_seconds: number | null;
   invite_ttl_seconds: number;
@@ -173,6 +179,8 @@ export interface AdminUser {
   invited: boolean;
   last_login_at: string | null;
   created_at: string;
+  /** null follows the instance default. */
+  sync_mode: SyncMode | null;
 }
 
 export interface AccessRequest {
@@ -606,8 +614,8 @@ export interface Connection {
   last_error: string;
   last_run_at: string | null;
   run_requested: boolean;
-  /** The runner's key changed since these credentials were sealed. */
-  key_retired: boolean;
+  /** Sealed to a key this person's sync no longer uses (the runner's key, or their sync mode, changed). */
+  needs_reentry: boolean;
   challenge: ConnectionChallenge | null;
 }
 
@@ -620,6 +628,14 @@ export interface RunnerKey {
 
 export interface RunnerStatus {
   tokens: { id: number; label: string; created_by: string; created_at: string; last_used_at: string; expires_at: string }[];
+  keys: RunnerKey[];
+  connectors: Connector[];
+}
+
+/** A person's own sync runner (client sync mode). */
+export interface Device {
+  sync_mode: SyncMode;
+  tokens: { id: number; label: string; created_at: string; last_used_at: string; expires_at: string }[];
   keys: RunnerKey[];
   connectors: Connector[];
 }

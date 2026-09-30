@@ -209,6 +209,9 @@ func New(d Deps) http.Handler {
 					r.Put("/me/connections/{connectionID}/credentials", h.replaceCredentials)
 					r.Post("/me/connections/{connectionID}/sync", h.syncConnection)
 					r.Post("/me/connections/{connectionID}/challenges/{challengeID}", h.answerChallenge)
+					r.Get("/me/device", h.myDevice)
+					r.Post("/me/device/tokens", h.createDeviceToken)
+					r.Delete("/me/device/tokens/{sessionID}", h.revokeDeviceToken)
 
 					r.Route("/admin", func(r chi.Router) {
 						r.Use(auth.RequireAdmin(writeAuthError))

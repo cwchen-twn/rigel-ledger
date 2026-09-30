@@ -389,7 +389,9 @@
     "not_claimed": "This sync is not in progress",
     "challenge_gone": "This check expired or was already answered",
     "disabled": "Turn the connection on first",
-    "no_access": "The connection's owner no longer has access to this book"
+    "no_access": "The connection's owner no longer has access to this book",
+    "no_device": "Set up the sync runner on your device first",
+    "sync_mode": "Your connections sync on the server; no device runner is needed"
   },
   "profile": {
     "username_hint": "Used to sign in: a-z, 0-9, dot, dash, underscore"
@@ -504,7 +506,9 @@
     "runner_token_revoked": "Sync runner token revoked",
     "connection_created": "Institution connected",
     "connection_credentials_replaced": "Connection credentials replaced",
-    "connection_deleted": "Institution disconnected"
+    "connection_deleted": "Institution disconnected",
+    "sync_mode_changed": "Sync mode changed",
+    "device_token_created": "Device runner token created"
   },
   "admin": {
     "title": "Administration",
@@ -902,7 +906,7 @@
     "syncing": "Syncing…",
     "sync_requested": "The runner picks it up within a minute",
     "enabled": "Sync automatically",
-    "key_retired": "The sync runner's key changed. Enter the credentials again to keep syncing.",
+    "key_retired": "These credentials were encrypted for another sync runner (its key or your sync mode changed). Enter the credentials again to keep syncing.",
     "error_other": "The last sync failed ({code}).",
     "error_bad_credentials": "The institution rejected the sign-in details. Replace the credentials.",
     "error_bad_otp": "The one-time code was wrong. Try Sync now again.",
@@ -924,7 +928,8 @@
     "how_title": "How your credentials are kept",
     "how_sealed": "They are encrypted in your browser to the sync runner's key before they leave it. The server keeps only ciphertext it cannot open; the runner opens them only while it signs in for you, inside the cluster.",
     "how_review": "Nothing is booked automatically: fetched rows wait in the book's Imports queue for you to accept.",
-    "how_csv": "Rather not share a login? A statement CSV on the Imports page does the same job by hand."
+    "how_csv": "Rather not share a login? A statement CSV on the Imports page does the same job by hand.",
+    "how_sealed_client": "They are encrypted in your browser to your own device's key before they leave it. The server keeps only ciphertext it cannot open, and neither can the app's own runner: only the runner on your computer opens them, while it signs in for you from there."
   },
   "runner": {
     "tokens_title": "Runner token",
@@ -940,5 +945,32 @@
     "key_retired": "Retired",
     "connectors_title": "Institutions offered",
     "no_connectors": "The runner has not published any institutions yet"
+  },
+  "sync": {
+    "mode_server": "On the server",
+    "mode_client": "On your own device",
+    "mode_default": "Default ({mode})",
+    "mode_line": "Sync mode: {mode}",
+    "mode_server_hint": "The app's own sync runner signs in to your institutions on a schedule. Nothing to install.",
+    "mode_client_hint": "A small sync runner on your own computer signs in, from your own connection. It syncs while that computer is on.",
+    "settings_title": "Bank sync",
+    "settings_hint": "An administrator decides where your connections sync.",
+    "go_connections": "Go to Connections",
+    "column": "Sync",
+    "column_for": "Sync mode for {user}",
+    "default_mode": "Bank sync for new people",
+    "default_mode_hint": "On their own device keeps logins off the server's address; change it per person under Users.",
+    "device_title": "Your device",
+    "device_ready": "Ready",
+    "device_not_set_up": "Not set up",
+    "device_hint": "Run the sync container on a computer you leave on, signed in with a device token. Only Docker is needed.",
+    "device_seen": "last seen {when}",
+    "device_offers": "Institutions offered: {n}",
+    "device_new_token": "New device token",
+    "device_default_label": "My computer",
+    "device_step_install": "Install Docker on a computer you leave on (Docker Desktop on macOS or Windows).",
+    "device_step_token": "Make a device token here.",
+    "device_step_run": "Start the sync container with that token (see the runner's instructions); this card turns Ready when it checks in.",
+    "device_in_use": "in use"
   }
 }

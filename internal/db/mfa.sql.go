@@ -330,7 +330,7 @@ func (q *Queries) GetPasskeyByCredentialID(ctx context.Context, credentialID []b
 }
 
 const getUserByWebAuthnID = `-- name: GetUserByWebAuthnID :one
-SELECT id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by, webauthn_id, signin_alerts FROM users WHERE webauthn_id = $1
+SELECT id, username, email, password_hash, display_name, is_admin, is_active, language, display_currency, timezone, date_format, theme, default_book_id, last_login_at, created_at, updated_at, email_verified_at, initialized_at, password_must_change, invited_by, webauthn_id, signin_alerts, sync_mode FROM users WHERE webauthn_id = $1
 `
 
 func (q *Queries) GetUserByWebAuthnID(ctx context.Context, webauthnID []byte) (User, error) {
@@ -359,6 +359,7 @@ func (q *Queries) GetUserByWebAuthnID(ctx context.Context, webauthnID []byte) (U
 		&i.InvitedBy,
 		&i.WebauthnID,
 		&i.SigninAlerts,
+		&i.SyncMode,
 	)
 	return i, err
 }

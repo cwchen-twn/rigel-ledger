@@ -106,3 +106,9 @@ func (s *Service) MyEvents(ctx context.Context, userID int64, limit int32) ([]db
 	}
 	return s.store.ListUserAuthEvents(ctx, db.ListUserAuthEventsParams{UserID: &userID, Lim: limit})
 }
+
+// User is one account, for the admin pages.
+func (s *Service) User(ctx context.Context, userID int64) (db.User, error) {
+	u, err := s.store.GetUserByID(ctx, userID)
+	return u, ledger.Translate(err, "user")
+}
