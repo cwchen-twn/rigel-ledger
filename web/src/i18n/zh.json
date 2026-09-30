@@ -384,7 +384,7 @@
     "unmapped": "請先將此列的來源帳戶對應到科目",
     "match_gone": "此列原本對應的項目已不存在，已重新比對",
     "transfer_gone": "轉帳的另一方已不在待審清單中",
-    "token_scope": "此權杖只能傳送匯入資料",
+    "token_scope": "此 token 只能傳送匯入資料",
     "no_runner": "尚未設定同步程式",
     "not_claimed": "此同步未在進行中",
     "challenge_gone": "此驗證已過期或已回覆",
@@ -501,14 +501,14 @@
     "signin_code_sent": "已寄送登入驗證碼",
     "recovery_regenerated": "重新產生救援碼",
     "admin_rates_refreshed": "管理員手動取得匯率",
-    "token_created": "已建立 API 權杖",
-    "runner_token_created": "已建立同步程式權杖",
-    "runner_token_revoked": "已撤銷同步程式權杖",
+    "token_created": "已建立 API token",
+    "runner_token_created": "已建立同步程式 token",
+    "runner_token_revoked": "已撤銷同步程式 token",
     "connection_created": "已連結金融機構",
     "connection_credentials_replaced": "已更換連結的登入資料",
     "connection_deleted": "已解除金融機構連結",
     "sync_mode_changed": "已變更同步模式",
-    "device_token_created": "已建立裝置同步程式權杖"
+    "device_token_created": "已建立裝置同步程式 token"
   },
   "admin": {
     "title": "系統管理",
@@ -767,7 +767,7 @@
   "imports": {
     "title": "匯入",
     "empty": "沒有待審項目",
-    "empty_hint": "匯入銀行 CSV，或在個人設定中以 API 權杖連接同步程式。",
+    "empty_hint": "匯入銀行 CSV，或在個人設定中以 API token 連接同步程式。",
     "sources_title": "金融機構帳戶",
     "sources_hint": "每個帳戶都對應到帳本中的一個科目。",
     "sources_unmapped": "尚未對應：{count} 個。選擇科目前，其資料列會持續等待。",
@@ -844,9 +844,9 @@
     "balance_title": "金融機構回報的餘額"
   },
   "tokens": {
-    "title": "API 權杖",
-    "hint": "供你自己的匯入腳本使用：權杖只能將資料送到帳本的待審清單，無法讀取帳本或接受任何項目。要同步銀行，請改用「連結帳戶」。",
-    "new": "新增權杖",
+    "title": "API token",
+    "hint": "供你自己的匯入腳本使用：token 只能將資料送到帳本的待審清單，無法讀取帳本或接受任何項目。要同步銀行，請改用「連結帳戶」。",
+    "new": "新增 token",
     "new_hint": "以執行位置命名，方便日後撤銷。",
     "label": "名稱",
     "label_hint": "例如：叢集上的 tw-sync",
@@ -854,7 +854,7 @@
     "expires": "到期",
     "never_used": "從未使用",
     "revoke": "撤銷",
-    "revoked": "已撤銷權杖",
+    "revoked": "已撤銷 token",
     "shown_once": "請立即複製：僅顯示這一次。請存放在同步程式的機密設定中。",
     "copy": "複製",
     "copied": "已複製",
@@ -932,11 +932,11 @@
     "how_sealed_client": "登入資料在離開瀏覽器前，就以你自己裝置的金鑰加密。伺服器只保存無法解開的密文，應用程式自己的同步程式也無法解開；只有你電腦上的同步程式能在代你登入時解開。"
   },
   "runner": {
-    "tokens_title": "同步程式權杖",
+    "tokens_title": "同步程式 token",
     "tokens_hint": "同步程式以此登入，只能存取同步程式 API：無法讀取帳本或接受資料列。",
-    "no_tokens": "尚未建立同步程式權杖",
+    "no_tokens": "尚未建立同步程式 token",
     "created_by": "建立者",
-    "new_token": "新增同步程式權杖",
+    "new_token": "新增同步程式 token",
     "new_token_hint": "請放入同步程式的機密設定（RUNNER_TOKEN），有效期一年。",
     "keys_title": "加密金鑰",
     "keys_hint": "由同步程式註冊；瀏覽器以目前的金鑰加密登入資料，私鑰從不離開同步程式。",
@@ -963,14 +963,14 @@
     "device_title": "你的裝置",
     "device_ready": "已就緒",
     "device_not_set_up": "尚未設定",
-    "device_hint": "在常開機的電腦上執行同步容器，並以裝置權杖登入；只需要 Docker。",
+    "device_hint": "在常開機的電腦上執行同步容器，並以裝置 token 登入；只需要 Docker。",
     "device_seen": "上次連線 {when}",
     "device_offers": "可連結機構：{n}",
-    "device_new_token": "新增裝置權杖",
+    "device_new_token": "新增裝置 token",
     "device_default_label": "我的電腦",
     "device_step_install": "在常開機的電腦上安裝 Docker（macOS 或 Windows 可用 Docker Desktop）。",
-    "device_step_token": "在此建立裝置權杖。",
-    "device_step_run": "以該權杖啟動同步容器（請見同步程式說明）；連線後此卡片會顯示「已就緒」。",
+    "device_step_token": "在此建立裝置 token。",
+    "device_step_run": "以該 token 啟動同步容器（請見同步程式說明）；連線後此卡片會顯示「已就緒」。",
     "device_in_use": "使用中"
   }
 }
