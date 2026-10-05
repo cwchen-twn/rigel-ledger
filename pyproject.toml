@@ -3,11 +3,11 @@ name = "rigel-ledger"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = "==3.14.8"
 dependencies = []
 
 [dependency-groups]
 dev = [
-    "git-of-theseus>=0.3.4",
-    "pre-commit>=4.3.0",
+    "git-of-theseus==0.3.4",
+    "pre-commit==4.6.2",
 ]
