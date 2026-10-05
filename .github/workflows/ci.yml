@@ -70,6 +70,29 @@ jobs:
       - name: make audit
         run: make audit
 
+
+  tw-sync:
+    # The Node sync runner (integrations/tw-sync): typecheck and node:test.
+    # Node runs its TypeScript directly (type stripping, 22.18+), so there is
+    # no build; Bun only installs the dev dependencies, as in web/.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.4.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "22"
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version-file: integrations/tw-sync/package.json
+
+      - name: Check
+        run: cd integrations/tw-sync && bun install --frozen-lockfile && bun run check
+
   hooks:
     runs-on: ubuntu-latest
     steps:

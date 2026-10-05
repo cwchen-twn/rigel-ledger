@@ -39,6 +39,8 @@ go run ./cmd/cli set-admin -u alice                          # promote (the Admi
 go run ./cmd/cli reset-mfa -u alice                          # break-glass: drop every second factor and session
 go run ./cmd/cli create-runner-token -u alice -l tw-sync     # link alice's sync runner: its token, printed once
 RUNNER_TOKEN=... go run ./integrations/fake-runner -url http://localhost:8080   # a pretend institution, for Connections
+make tw-sync/check                                           # typecheck + test the Node sync runner
+cd integrations/tw-sync && DATA_DIR=./data node src/main.ts try fake   # one connector from the terminal, no app
 ```
 
 To run a single test: `go test -run TestName ./internal/ledger/` (with `TEST_DATABASE_URL` set, e.g. from `.env`).
@@ -72,6 +74,9 @@ web/
   src/              # SolidJS app
   static/           # Vite build output (static/dist/, gitignored) and icons
   templates/        # Thin Go html/template shell -- renders <div id="app"> only
+integrations/
+  fake-runner/      # Go reference runner against one pretend institution (development only)
+  tw-sync/          # Node runner for Taiwan institutions (all-set-tw connectors, vendored); its own README
 migrations/         # golang-migrate SQL, embedded; 000001_init, then one pair per change (frozen once applied)
 docs/               # ARCHITECTURE.md -- target design and roadmap
 api/                # Generated Swagger output (do not edit manually)

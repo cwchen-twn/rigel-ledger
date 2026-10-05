@@ -1,0 +1,23 @@
+{
+  "name": "tw-sync",
+  "private": true,
+  "type": "module",
+  "description": "A person's sync runner for Taiwan institutions, linked to RigelLedger under Settings -> Sync runner",
+  "license": "MIT",
+  "packageManager": "bun@1.4.2",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "bin": {
+    "tw-sync": "src/main.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "test": "node --disable-warning=ExperimentalWarning --test 'test/*.test.ts'",
+    "check": "bun run typecheck && bun run test"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.0",
+    "typescript": "7.0.2"
+  }
+}
