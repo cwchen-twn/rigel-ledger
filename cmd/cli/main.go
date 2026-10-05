@@ -6,7 +6,7 @@
 //	rigel-ledger-cli reset-password -u alice
 //	rigel-ledger-cli set-admin -u alice --admin=true
 //	rigel-ledger-cli reset-mfa -u alice       # lost every second factor
-//	rigel-ledger-cli create-runner-token -u alice -l tw-sync   # for the runner's secret
+//	rigel-ledger-cli create-runner-token -u alice -l tw-sync   # links alice's sync runner
 //
 // A password not given with -p is read from stdin, so it stays out of the
 // shell history and the process list. A created user still walks the
@@ -41,8 +41,9 @@ Usage:
   rigel-ledger-cli reset-password -u USER [-p PASS]
   rigel-ledger-cli set-admin      -u USER --admin=true|false
   rigel-ledger-cli reset-mfa      -u USER    remove every second factor and session (break-glass)
-  rigel-ledger-cli create-runner-token -u ADMIN [-l LABEL] [--days 365]
-                                             a token for the sync runner, printed once
+  rigel-ledger-cli create-runner-token -u USER [-l LABEL] [--days 365]
+                                             link USER's sync runner: its token, printed once
+                                             (revokes the one linked before)
 
 Configuration comes from the same environment (or .env) as the server.
 `, version)
@@ -139,8 +140,8 @@ func main() {
 		days := fs.Int("days", 365, "lifetime, 1-730 days")
 		_ = fs.Parse(args)
 		u, err := store.GetUserByUsername(ctx, strings.ToLower(*username))
-		if err != nil || !u.IsAdmin {
-			die(fmt.Errorf("%q is not an admin", *username))
+		if err != nil {
+			die(fmt.Errorf("no user %q", *username))
 		}
 		if *days < 1 || *days > 730 {
 			die(fmt.Errorf("--days must be 1-730"))
@@ -150,7 +151,7 @@ func main() {
 		if err != nil {
 			die(err)
 		}
-		fmt.Fprintln(os.Stderr, "runner token (shown once; put it in the runner's secret):")
+		fmt.Fprintf(os.Stderr, "%s's runner token (shown once; put it in the runner's RUNNER_TOKEN):\n", u.Username)
 		fmt.Println(token)
 
 	default:

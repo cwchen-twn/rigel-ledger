@@ -49,3 +49,7 @@ RETURNING *;
 
 -- name: RaiseSessionAAL :exec
 UPDATE sessions SET aal = 2 WHERE id = @id;
+
+-- name: DeleteUserRunnerSessions :exec
+-- A person has one runner: linking another unlinks the last.
+DELETE FROM sessions WHERE user_id = @user_id AND kind = 'runner';

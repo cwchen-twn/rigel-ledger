@@ -11,12 +11,12 @@ import (
 )
 
 const activeRunnerKey = `-- name: ActiveRunnerKey :one
-SELECT id, public_key, created_at, retired_at, owner_id FROM runner_keys WHERE retired_at IS NULL AND owner_id IS NOT DISTINCT FROM $1::BIGINT
+SELECT id, public_key, created_at, retired_at, owner_id FROM runner_keys WHERE retired_at IS NULL AND owner_id = $1
 ORDER BY id DESC LIMIT 1
 `
 
 // What browsers seal to: the newest key the runner holds.
-func (q *Queries) ActiveRunnerKey(ctx context.Context, owner *int64) (RunnerKey, error) {
+func (q *Queries) ActiveRunnerKey(ctx context.Context, owner int64) (RunnerKey, error) {
 	row := q.db.QueryRow(ctx, activeRunnerKey, owner)
 	var i RunnerKey
 	err := row.Scan(
@@ -61,12 +61,9 @@ UPDATE connections c SET claimed_at = now()
 WHERE c.id IN (
     SELECT x.id FROM connections x
     JOIN runner_keys k ON k.id = x.key_id AND k.retired_at IS NULL
-    JOIN users u ON u.id = x.user_id
     WHERE x.enabled
-      AND k.owner_id IS NOT DISTINCT FROM $1::BIGINT
-      AND ($1::BIGINT IS NULL OR x.user_id = $1::BIGINT)
-      AND coalesce(u.sync_mode, (SELECT default_sync_mode FROM system_settings WHERE id))
-          = CASE WHEN $1::BIGINT IS NULL THEN 'server' ELSE 'client' END
+      AND k.owner_id = $1
+      AND x.user_id = $1
       AND (x.claimed_at IS NULL OR x.claimed_at < now() - interval '30 minutes')
       AND (x.last_run_at IS NULL
            OR x.last_run_at < now() - make_interval(hours => x.interval_hours::INT)
@@ -79,7 +76,7 @@ RETURNING c.id, c.user_id, c.book_id, c.connector, c.sealed, c.key_id
 `
 
 type ClaimJobsParams struct {
-	Owner *int64
+	Owner int64
 	Lim   int32
 }
 
@@ -93,10 +90,8 @@ type ClaimJobsRow struct {
 }
 
 // Due connections, handed to one runner at a time: the claim lapses after 30
-// minutes, so a runner that died mid-run does not strand its jobs. The server
-// runner gets server-mode people's connections; a device runner its owner's,
-// while the owner is in client mode. Either way only those sealed to one of
-// that runner's current keys.
+// minutes, so a runner that died mid-run does not strand its jobs. A runner
+// gets only its owner's connections sealed to one of its current keys.
 func (q *Queries) ClaimJobs(ctx context.Context, arg ClaimJobsParams) ([]ClaimJobsRow, error) {
 	rows, err := q.db.Query(ctx, claimJobs, arg.Owner, arg.Lim)
 	if err != nil {
@@ -219,44 +214,21 @@ func (q *Queries) DeleteConnection(ctx context.Context, arg DeleteConnectionPara
 	return result.RowsAffected(), nil
 }
 
-const deletePersonalRunnerSession = `-- name: DeletePersonalRunnerSession :execrows
-DELETE FROM sessions WHERE id = $1 AND user_id = $2 AND kind = 'personal_runner'
+const deleteRunnerSession = `-- name: DeleteRunnerSession :execrows
+DELETE FROM sessions WHERE id = $1 AND user_id = $2 AND kind = 'runner'
 `
 
-type DeletePersonalRunnerSessionParams struct {
+type DeleteRunnerSessionParams struct {
 	ID     int64
 	UserID int64
 }
 
-func (q *Queries) DeletePersonalRunnerSession(ctx context.Context, arg DeletePersonalRunnerSessionParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deletePersonalRunnerSession, arg.ID, arg.UserID)
+func (q *Queries) DeleteRunnerSession(ctx context.Context, arg DeleteRunnerSessionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteRunnerSession, arg.ID, arg.UserID)
 	if err != nil {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
-}
-
-const deleteRunnerSession = `-- name: DeleteRunnerSession :execrows
-DELETE FROM sessions WHERE id = $1 AND kind = 'runner'
-`
-
-func (q *Queries) DeleteRunnerSession(ctx context.Context, id int64) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteRunnerSession, id)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const effectiveSyncMode = `-- name: EffectiveSyncMode :one
-SELECT coalesce(u.sync_mode, s.default_sync_mode)::TEXT FROM users u, system_settings s WHERE u.id = $1 AND s.id
-`
-
-func (q *Queries) EffectiveSyncMode(ctx context.Context, userID int64) (string, error) {
-	row := q.db.QueryRow(ctx, effectiveSyncMode, userID)
-	var column_1 string
-	err := row.Scan(&column_1)
-	return column_1, err
 }
 
 const finishRun = `-- name: FinishRun :execrows
@@ -280,12 +252,12 @@ func (q *Queries) FinishRun(ctx context.Context, arg FinishRunParams) (int64, er
 
 const getClaimedConnection = `-- name: GetClaimedConnection :one
 SELECT c.id, c.user_id, c.book_id, c.connector, c.label, c.sealed, c.key_id, c.enabled, c.interval_hours, c.status, c.last_error, c.last_run_at, c.run_requested_at, c.claimed_at, c.created_at, c.updated_at FROM connections c JOIN runner_keys k ON k.id = c.key_id
-WHERE c.id = $1 AND c.claimed_at IS NOT NULL AND k.owner_id IS NOT DISTINCT FROM $2::BIGINT
+WHERE c.id = $1 AND c.claimed_at IS NOT NULL AND k.owner_id = $2
 `
 
 type GetClaimedConnectionParams struct {
 	ID    int64
-	Owner *int64
+	Owner int64
 }
 
 // Only the runner holding the key it is sealed to works on a connection.
@@ -351,10 +323,10 @@ func (q *Queries) GetUserConnection(ctx context.Context, arg GetUserConnectionPa
 }
 
 const listConnectors = `-- name: ListConnectors :many
-SELECT id, name, country, fields, updated_at, owner_id FROM runner_connectors WHERE owner_id IS NOT DISTINCT FROM $1::BIGINT ORDER BY country, name
+SELECT id, name, country, fields, updated_at, owner_id FROM runner_connectors WHERE owner_id = $1 ORDER BY country, name
 `
 
-func (q *Queries) ListConnectors(ctx context.Context, owner *int64) ([]RunnerConnector, error) {
+func (q *Queries) ListConnectors(ctx context.Context, owner int64) ([]RunnerConnector, error) {
 	rows, err := q.db.Query(ctx, listConnectors, owner)
 	if err != nil {
 		return nil, err
@@ -381,51 +353,15 @@ func (q *Queries) ListConnectors(ctx context.Context, owner *int64) ([]RunnerCon
 	return items, nil
 }
 
-const listPersonalRunnerSessions = `-- name: ListPersonalRunnerSessions :many
-SELECT id, label, created_at, last_used_at, expires_at FROM sessions
-WHERE user_id = $1 AND kind = 'personal_runner' AND expires_at > now()
-ORDER BY created_at
-`
-
-type ListPersonalRunnerSessionsRow struct {
-	ID         int64
-	Label      string
-	CreatedAt  time.Time
-	LastUsedAt time.Time
-	ExpiresAt  time.Time
-}
-
-func (q *Queries) ListPersonalRunnerSessions(ctx context.Context, userID int64) ([]ListPersonalRunnerSessionsRow, error) {
-	rows, err := q.db.Query(ctx, listPersonalRunnerSessions, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListPersonalRunnerSessionsRow{}
-	for rows.Next() {
-		var i ListPersonalRunnerSessionsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Label,
-			&i.CreatedAt,
-			&i.LastUsedAt,
-			&i.ExpiresAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listRunnerKeys = `-- name: ListRunnerKeys :many
-SELECT id, public_key, created_at, retired_at, owner_id FROM runner_keys WHERE owner_id IS NOT DISTINCT FROM $1::BIGINT ORDER BY id DESC
+
+SELECT id, public_key, created_at, retired_at, owner_id FROM runner_keys WHERE owner_id = $1 ORDER BY id DESC
 `
 
-func (q *Queries) ListRunnerKeys(ctx context.Context, owner *int64) ([]RunnerKey, error) {
+// ---------------------------------------------------------------------------
+// A person's runner
+// ---------------------------------------------------------------------------
+func (q *Queries) ListRunnerKeys(ctx context.Context, owner int64) ([]RunnerKey, error) {
 	rows, err := q.db.Query(ctx, listRunnerKeys, owner)
 	if err != nil {
 		return nil, err
@@ -452,11 +388,9 @@ func (q *Queries) ListRunnerKeys(ctx context.Context, owner *int64) ([]RunnerKey
 }
 
 const listRunnerSessions = `-- name: ListRunnerSessions :many
-
-SELECT s.id, s.label, s.created_at, s.last_used_at, s.expires_at, u.username
-FROM sessions s JOIN users u ON u.id = s.user_id
-WHERE s.kind = 'runner' AND s.expires_at > now()
-ORDER BY s.created_at
+SELECT id, label, created_at, last_used_at, expires_at FROM sessions
+WHERE user_id = $1 AND kind = 'runner' AND expires_at > now()
+ORDER BY created_at
 `
 
 type ListRunnerSessionsRow struct {
@@ -465,14 +399,10 @@ type ListRunnerSessionsRow struct {
 	CreatedAt  time.Time
 	LastUsedAt time.Time
 	ExpiresAt  time.Time
-	Username   string
 }
 
-// ---------------------------------------------------------------------------
-// Administration
-// ---------------------------------------------------------------------------
-func (q *Queries) ListRunnerSessions(ctx context.Context) ([]ListRunnerSessionsRow, error) {
-	rows, err := q.db.Query(ctx, listRunnerSessions)
+func (q *Queries) ListRunnerSessions(ctx context.Context, userID int64) ([]ListRunnerSessionsRow, error) {
+	rows, err := q.db.Query(ctx, listRunnerSessions, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -486,7 +416,6 @@ func (q *Queries) ListRunnerSessions(ctx context.Context) ([]ListRunnerSessionsR
 			&i.CreatedAt,
 			&i.LastUsedAt,
 			&i.ExpiresAt,
-			&i.Username,
 		); err != nil {
 			return nil, err
 		}
@@ -501,18 +430,15 @@ func (q *Queries) ListRunnerSessions(ctx context.Context) ([]ListRunnerSessionsR
 const listUserConnections = `-- name: ListUserConnections :many
 SELECT c.id, c.book_id, b.name AS book_name, c.connector, c.label, c.enabled, c.interval_hours,
        c.status, c.last_error, c.last_run_at, c.run_requested_at, c.created_at,
-       -- Sealed to a key this person's mode no longer uses (retired, or the
-       -- other runner's): the credentials must be entered again.
-       (k.retired_at IS NOT NULL OR k.owner_id IS DISTINCT FROM
-           CASE WHEN coalesce(u.sync_mode, (SELECT default_sync_mode FROM system_settings WHERE id)) = 'server'
-                THEN NULL ELSE c.user_id END)::BOOLEAN AS needs_reentry,
+       -- Sealed to a key the person's runner no longer holds: the
+       -- credentials must be entered again.
+       (k.retired_at IS NOT NULL OR k.owner_id <> c.user_id)::BOOLEAN AS needs_reentry,
        -- challenge_id 0: nothing is waiting on this person
        coalesce(ch.id, 0)::BIGINT AS challenge_id, coalesce(ch.kind, '')::TEXT AS challenge_kind,
        coalesce(ch.prompt, '')::TEXT AS challenge_prompt, ch.image AS challenge_image,
        coalesce(ch.expires_at, c.created_at)::TIMESTAMPTZ AS challenge_expires_at
 FROM connections c
 JOIN books b ON b.id = c.book_id
-JOIN users u ON u.id = c.user_id
 JOIN runner_keys k ON k.id = c.key_id
 LEFT JOIN LATERAL (
     SELECT x.id, x.kind, x.prompt, x.image, x.expires_at FROM connection_challenges x
@@ -629,11 +555,11 @@ func (q *Queries) RequestRun(ctx context.Context, arg RequestRunParams) (int64, 
 
 const retireRunnerKeysExcept = `-- name: RetireRunnerKeysExcept :exec
 UPDATE runner_keys SET retired_at = now()
-WHERE retired_at IS NULL AND owner_id IS NOT DISTINCT FROM $1::BIGINT AND NOT (id = ANY($2::BIGINT[]))
+WHERE retired_at IS NULL AND owner_id = $1 AND NOT (id = ANY($2::BIGINT[]))
 `
 
 type RetireRunnerKeysExceptParams struct {
-	Owner *int64
+	Owner int64
 	Keep  []int64
 }
 
@@ -654,20 +580,6 @@ type SetConnectionStatusParams struct {
 
 func (q *Queries) SetConnectionStatus(ctx context.Context, arg SetConnectionStatusParams) error {
 	_, err := q.db.Exec(ctx, setConnectionStatus, arg.Status, arg.ID)
-	return err
-}
-
-const setUserSyncMode = `-- name: SetUserSyncMode :exec
-UPDATE users SET sync_mode = $1 WHERE id = $2
-`
-
-type SetUserSyncModeParams struct {
-	SyncMode *string
-	ID       int64
-}
-
-func (q *Queries) SetUserSyncMode(ctx context.Context, arg SetUserSyncModeParams) error {
-	_, err := q.db.Exec(ctx, setUserSyncMode, arg.SyncMode, arg.ID)
 	return err
 }
 
@@ -732,14 +644,14 @@ func (q *Queries) UpdateConnection(ctx context.Context, arg UpdateConnectionPara
 }
 
 const upsertConnector = `-- name: UpsertConnector :exec
-INSERT INTO runner_connectors (id, owner_id, name, country, fields) VALUES ($1, $2::BIGINT, $3, $4, $5)
-ON CONFLICT ((coalesce(owner_id, 0)), id) DO UPDATE
+INSERT INTO runner_connectors (id, owner_id, name, country, fields) VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (owner_id, id) DO UPDATE
     SET name = EXCLUDED.name, country = EXCLUDED.country, fields = EXCLUDED.fields, updated_at = now()
 `
 
 type UpsertConnectorParams struct {
 	ID      string
-	Owner   *int64
+	Owner   int64
 	Name    string
 	Country string
 	Fields  []byte
@@ -758,20 +670,20 @@ func (q *Queries) UpsertConnector(ctx context.Context, arg UpsertConnectorParams
 
 const upsertRunnerKey = `-- name: UpsertRunnerKey :one
 
-INSERT INTO runner_keys (public_key, owner_id) VALUES ($1, $2::BIGINT)
+INSERT INTO runner_keys (public_key, owner_id) VALUES ($1, $2)
 ON CONFLICT (public_key) DO UPDATE SET retired_at = NULL
-    WHERE runner_keys.owner_id IS NOT DISTINCT FROM EXCLUDED.owner_id
+    WHERE runner_keys.owner_id = EXCLUDED.owner_id
 RETURNING id, public_key, created_at, retired_at, owner_id
 `
 
 type UpsertRunnerKeyParams struct {
 	PublicKey []byte
-	Owner     *int64
+	Owner     int64
 }
 
 // ---------------------------------------------------------------------------
-// Runner side. Every query takes the runner's owner: NULL for the server
-// runner, a user id for that person's device runner.
+// Runner side. Every query takes the runner's owner: the person whose
+// runner it is. A runner never sees anyone else's keys, connectors or jobs.
 // ---------------------------------------------------------------------------
 // A key already registered by another runner is not taken over (no row).
 func (q *Queries) UpsertRunnerKey(ctx context.Context, arg UpsertRunnerKeyParams) (RunnerKey, error) {

@@ -172,12 +172,6 @@ definitions:
         type: string
       default_language:
         type: string
-      default_sync_mode:
-        description: Where new people's connections sync until an admin says otherwise.
-        enum:
-        - server
-        - client
-        type: string
       default_theme:
         type: string
       default_timezone:
@@ -248,9 +242,6 @@ definitions:
       is_admin:
         type: boolean
       last_login_at:
-        type: string
-      sync_mode:
-        description: server or client; null follows the instance default.
         type: string
       username:
         type: string
@@ -640,41 +631,6 @@ definitions:
         type: string
       rate:
         description: 1 unit of currency in the book's base; null when no rate is known.
-        type: string
-    type: object
-  routes.DeviceDTO:
-    properties:
-      connectors:
-        items:
-          $ref: '#/definitions/routes.ConnectorDTO'
-        type: array
-      keys:
-        items:
-          $ref: '#/definitions/routes.RunnerKeyDTO'
-        type: array
-      sync_mode:
-        description: Where this person's connections sync; the device only matters
-          for client.
-        enum:
-        - server
-        - client
-        type: string
-      tokens:
-        items:
-          $ref: '#/definitions/routes.DeviceTokenDTO'
-        type: array
-    type: object
-  routes.DeviceTokenDTO:
-    properties:
-      created_at:
-        type: string
-      expires_at:
-        type: string
-      id:
-        type: integer
-      label:
-        type: string
-      last_used_at:
         type: string
     type: object
   routes.DriftDTO:
@@ -1187,6 +1143,7 @@ definitions:
           $ref: '#/definitions/routes.RunnerKeyDTO'
         type: array
       tokens:
+        description: 'The linked runner''s token: one at most.'
         items:
           $ref: '#/definitions/routes.RunnerTokenDTO'
         type: array
@@ -1195,8 +1152,6 @@ definitions:
     properties:
       created_at:
         type: string
-      created_by:
-        type: string
       expires_at:
         type: string
       id:
@@ -1204,6 +1159,7 @@ definitions:
       label:
         type: string
       last_used_at:
+        description: null until the runner has used it.
         type: string
     type: object
   routes.SealingKeyDTO:
@@ -1418,15 +1374,6 @@ definitions:
         description: 'Only on GET /api/me: 1 = password only, 2 = passed a second
           factor.'
         type: integer
-      sync_mode:
-        description: |-
-          Only on GET /api/me: where this person's connections sync -- server
-          (the cluster's runner) or client (a runner on their own device). An
-          admin sets it.
-        enum:
-        - server
-        - client
-        type: string
       theme:
         type: string
       timezone:
@@ -1499,8 +1446,6 @@ definitions:
         type: string
       default_language:
         type: string
-      default_sync_mode:
-        type: string
       default_theme:
         type: string
       default_timezone:
@@ -1532,9 +1477,6 @@ definitions:
         type: boolean
       is_admin:
         type: boolean
-      sync_mode:
-        description: server, client, or "" to follow the instance default.
-        type: string
     type: object
   routes.alertsRequest:
     properties:
@@ -2026,53 +1968,6 @@ paths:
           schema:
             $ref: '#/definitions/response.ErrorBody'
       summary: Fetch the latest exchange rates now, or one past day's (admin)
-      tags:
-      - admin
-  /api/admin/runner:
-    get:
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/routes.RunnerStatusDTO'
-      summary: 'The sync runner: its tokens, keys and connectors'
-      tags:
-      - admin
-  /api/admin/runner/tokens:
-    post:
-      consumes:
-      - application/json
-      parameters:
-      - description: label and lifetime
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/routes.CreateTokenDTO'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/routes.TokenCreatedDTO'
-      summary: Make a token for the sync runner (shown once)
-      tags:
-      - admin
-  /api/admin/runner/tokens/{sessionID}:
-    delete:
-      parameters:
-      - description: token id
-        in: path
-        name: sessionID
-        required: true
-        type: integer
-      responses:
-        "204":
-          description: No Content
-      summary: Revoke a sync runner token
       tags:
       - admin
   /api/admin/settings:
@@ -3754,55 +3649,6 @@ paths:
       summary: Sync a connection at the runner's next poll
       tags:
       - connections
-  /api/me/device:
-    get:
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/routes.DeviceDTO'
-      summary: 'Your own sync runner: its tokens, keys and connectors'
-      tags:
-      - connections
-  /api/me/device/tokens:
-    post:
-      consumes:
-      - application/json
-      description: Only in client sync mode. The runner it signs in reaches your connections
-        only.
-      parameters:
-      - description: label and lifetime
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/routes.CreateTokenDTO'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/routes.TokenCreatedDTO'
-      summary: Make a token for the sync runner on your own device (shown once)
-      tags:
-      - connections
-  /api/me/device/tokens/{sessionID}:
-    delete:
-      parameters:
-      - description: token id
-        in: path
-        name: sessionID
-        required: true
-        type: integer
-      responses:
-        "204":
-          description: No Content
-      summary: Revoke your device runner's token
-      tags:
-      - connections
   /api/me/email:
     post:
       consumes:
@@ -4080,6 +3926,55 @@ paths:
       summary: Change password and sign out every other session
       tags:
       - me
+  /api/me/runner:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.RunnerStatusDTO'
+      summary: 'Your sync runner: its token, keys and connectors'
+      tags:
+      - connections
+  /api/me/runner/token:
+    post:
+      consumes:
+      - application/json
+      description: The runner it signs in reaches /api/runner/* and your connections
+        only. A person has one runner, so the token of the one linked before is revoked.
+      parameters:
+      - description: label and lifetime
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.CreateTokenDTO'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/routes.TokenCreatedDTO'
+      summary: 'Link your sync runner: a token for it (shown once)'
+      tags:
+      - connections
+  /api/me/runner/tokens/{sessionID}:
+    delete:
+      parameters:
+      - description: token id
+        in: path
+        name: sessionID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+      summary: Unlink your sync runner (revoke its token)
+      tags:
+      - connections
   /api/me/sessions:
     get:
       produces:

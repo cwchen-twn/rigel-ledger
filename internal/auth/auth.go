@@ -243,9 +243,12 @@ func (m *Manager) Authenticate(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if time.Since(row.Session.LastUsedAt) > touchEvery {
+		// A runner's first call is recorded at once: Settings shows a linked
+		// runner as waiting until its token has been used.
+		firstRunnerCall := row.Session.Kind == KindRunner && row.Session.LastUsedAt.Equal(row.Session.CreatedAt)
+		if firstRunnerCall || time.Since(row.Session.LastUsedAt) > touchEvery {
 			expires := time.Now().Add(m.sessionTTL(r.Context()))
-			if row.Session.Kind == KindToken || IsRunner(row.Session.Kind) {
+			if row.Session.Kind == KindToken || row.Session.Kind == KindRunner {
 				expires = row.Session.ExpiresAt // a token lives as long as it was made for, no longer
 			}
 			_ = m.store.TouchSession(r.Context(), db.TouchSessionParams{ID: row.Session.ID, ExpiresAt: expires})
@@ -342,20 +345,14 @@ func (m *Manager) RequireMFA(onError func(w http.ResponseWriter, status int, cod
 
 // Session kinds. A web session slides and rides a cookie; an api one is a
 // script's full login; a token is made in settings for a person's own
-// scripts and is confined by TokenScope; a runner token is the server's
-// sync runner, made by an admin; a personal runner token is a person's own
-// device runner, confined to that person. Both runner kinds reach
-// /api/runner/* only.
+// scripts and is confined by TokenScope; a runner token is that person's
+// sync runner, wherever it runs, and reaches /api/runner/* only.
 const (
-	KindWeb            = "web"
-	KindAPI            = "api"
-	KindToken          = "token"
-	KindRunner         = "runner"
-	KindPersonalRunner = "personal_runner"
+	KindWeb    = "web"
+	KindAPI    = "api"
+	KindToken  = "token"
+	KindRunner = "runner"
 )
-
-// IsRunner reports whether kind is either runner token.
-func IsRunner(kind string) bool { return kind == KindRunner || kind == KindPersonalRunner }
 
 // RunnerPath is the only part of the API a runner token reaches.
 const RunnerPath = "/api/runner/"
@@ -371,16 +368,13 @@ func (m *Manager) CreateToken(ctx context.Context, u db.User, label string, ttl 
 	return m.createToken(ctx, u, KindToken, label, ttl, c, "token_created")
 }
 
-// CreateRunnerToken makes the sync runner's token, owned by the admin who
-// made it (so the sessions table keeps one shape), shown once.
-func (m *Manager) CreateRunnerToken(ctx context.Context, admin db.User, label string, ttl time.Duration, c Client) (string, db.Session, error) {
-	return m.createToken(ctx, admin, KindRunner, label, ttl, c, "runner_token_created")
-}
-
-// CreatePersonalRunnerToken makes the token for a person's own device
-// runner, shown once.
-func (m *Manager) CreatePersonalRunnerToken(ctx context.Context, u db.User, label string, ttl time.Duration, c Client) (string, db.Session, error) {
-	return m.createToken(ctx, u, KindPersonalRunner, label, ttl, c, "device_token_created")
+// CreateRunnerToken links u's sync runner: a token shown once. A person has
+// one runner, so the token of the one linked before is revoked with it.
+func (m *Manager) CreateRunnerToken(ctx context.Context, u db.User, label string, ttl time.Duration, c Client) (string, db.Session, error) {
+	if err := m.store.DeleteUserRunnerSessions(ctx, u.ID); err != nil {
+		return "", db.Session{}, err
+	}
+	return m.createToken(ctx, u, KindRunner, label, ttl, c, "runner_token_created")
 }
 
 func (m *Manager) createToken(ctx context.Context, u db.User, kind, label string, ttl time.Duration, c Client, event string) (string, db.Session, error) {
@@ -413,7 +407,7 @@ func TokenScope(allowed func(method, path string) bool, onError func(w http.Resp
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			id, _ := FromContext(r.Context())
 			if (id.Kind == KindToken && !allowed(r.Method, r.URL.Path)) ||
-				(IsRunner(id.Kind) && !strings.HasPrefix(r.URL.Path, RunnerPath)) {
+				(id.Kind == KindRunner && !strings.HasPrefix(r.URL.Path, RunnerPath)) {
 				onError(w, http.StatusForbidden, "token_scope")
 				return
 			}
@@ -427,7 +421,7 @@ func TokenScope(allowed func(method, path string) bool, onError func(w http.Resp
 func RequireRunner(onError func(w http.ResponseWriter, status int, code string)) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if id, _ := FromContext(r.Context()); !IsRunner(id.Kind) {
+			if id, _ := FromContext(r.Context()); id.Kind != KindRunner {
 				onError(w, http.StatusNotFound, "not_found")
 				return
 			}

@@ -6,7 +6,6 @@ import (
 
 	"github.com/cwchen-twn/rigel-ledger/internal/auth"
 	"github.com/cwchen-twn/rigel-ledger/internal/connections"
-	"github.com/cwchen-twn/rigel-ledger/internal/ledger"
 	"github.com/cwchen-twn/rigel-ledger/internal/response"
 )
 
@@ -303,63 +302,67 @@ func (h *handlers) answerChallenge(w http.ResponseWriter, r *http.Request) {
 	response.NoContent(w)
 }
 
-// ---- Your device: a person's own runner (client sync mode) ----
+// ---- Settings -> Sync runner: the person's own runner, wherever it runs ----
 
-type DeviceTokenDTO struct {
-	ID         int64  `json:"id"`
-	Label      string `json:"label"`
-	CreatedAt  string `json:"created_at"`
-	LastUsedAt string `json:"last_used_at"`
-	ExpiresAt  string `json:"expires_at"`
+type RunnerTokenDTO struct {
+	ID        int64  `json:"id"`
+	Label     string `json:"label"`
+	CreatedAt string `json:"created_at"`
+	// null until the runner has used it.
+	LastUsedAt *string `json:"last_used_at"`
+	ExpiresAt  string  `json:"expires_at"`
 }
 
-type DeviceDTO struct {
-	// Where this person's connections sync; the device only matters for client.
-	SyncMode   string           `json:"sync_mode" enums:"server,client"`
-	Tokens     []DeviceTokenDTO `json:"tokens"`
+type RunnerStatusDTO struct {
+	// The linked runner's token: one at most.
+	Tokens     []RunnerTokenDTO `json:"tokens"`
 	Keys       []RunnerKeyDTO   `json:"keys"`
 	Connectors []ConnectorDTO   `json:"connectors"`
 }
 
-// myDevice
+// myRunner
 //
-//	@Summary	Your own sync runner: its tokens, keys and connectors
+//	@Summary	Your sync runner: its token, keys and connectors
 //	@Tags		connections
 //	@Produce	json
-//	@Success	200	{object}	DeviceDTO
-//	@Router		/api/me/device [get]
-func (h *handlers) myDevice(w http.ResponseWriter, r *http.Request) {
+//	@Success	200	{object}	RunnerStatusDTO
+//	@Router		/api/me/runner [get]
+func (h *handlers) myRunner(w http.ResponseWriter, r *http.Request) {
 	id, _ := auth.FromContext(r.Context())
-	d, err := h.conns.Device(r.Context(), id.User.ID)
+	st, err := h.conns.Status(r.Context(), id.User.ID)
 	if err != nil {
 		h.fail(w, r, err)
 		return
 	}
-	out := DeviceDTO{SyncMode: d.Mode, Tokens: []DeviceTokenDTO{}, Keys: []RunnerKeyDTO{}, Connectors: []ConnectorDTO{}}
-	for _, t := range d.Tokens {
-		out.Tokens = append(out.Tokens, DeviceTokenDTO{ID: t.ID, Label: t.Label, CreatedAt: timestamp(t.CreatedAt),
-			LastUsedAt: timestamp(t.LastUsedAt), ExpiresAt: timestamp(t.ExpiresAt)})
+	out := RunnerStatusDTO{Tokens: []RunnerTokenDTO{}, Keys: []RunnerKeyDTO{}, Connectors: []ConnectorDTO{}}
+	for _, t := range st.Tokens {
+		var used *string
+		if !t.LastUsedAt.Equal(t.CreatedAt) {
+			used = timestampPtr(&t.LastUsedAt)
+		}
+		out.Tokens = append(out.Tokens, RunnerTokenDTO{ID: t.ID, Label: t.Label, CreatedAt: timestamp(t.CreatedAt),
+			LastUsedAt: used, ExpiresAt: timestamp(t.ExpiresAt)})
 	}
-	for _, k := range d.Keys {
+	for _, k := range st.Keys {
 		out.Keys = append(out.Keys, RunnerKeyDTO{ID: k.ID, PublicKey: k.PublicKey, CreatedAt: timestamp(k.CreatedAt), RetiredAt: timestampPtr(k.RetiredAt)})
 	}
-	for _, c := range d.Connectors {
+	for _, c := range st.Connectors {
 		out.Connectors = append(out.Connectors, connectorDTO(c))
 	}
 	response.JSON(w, http.StatusOK, out)
 }
 
-// createDeviceToken
+// linkRunner
 //
-//	@Summary	Make a token for the sync runner on your own device (shown once)
-//	@Description	Only in client sync mode. The runner it signs in reaches your connections only.
+//	@Summary	Link your sync runner: a token for it (shown once)
+//	@Description	The runner it signs in reaches /api/runner/* and your connections only. A person has one runner, so the token of the one linked before is revoked.
 //	@Tags		connections
 //	@Accept		json
 //	@Produce	json
 //	@Param		body	body		CreateTokenDTO	true	"label and lifetime"
 //	@Success	201		{object}	TokenCreatedDTO
-//	@Router		/api/me/device/tokens [post]
-func (h *handlers) createDeviceToken(w http.ResponseWriter, r *http.Request) {
+//	@Router		/api/me/runner/token [post]
+func (h *handlers) linkRunner(w http.ResponseWriter, r *http.Request) {
 	var req CreateTokenDTO
 	if err := response.Decode(w, r, &req); err != nil {
 		h.fail(w, r, err)
@@ -371,11 +374,7 @@ func (h *handlers) createDeviceToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := auth.FromContext(r.Context())
-	if m, err := h.conns.Mode(r.Context(), id.User.ID); err != nil || m != connections.ModeClient {
-		h.fail(w, r, ledger.Invalid("sync_mode", "your connections sync on the server; no device runner is needed"))
-		return
-	}
-	token, s, err := h.auth.CreatePersonalRunnerToken(r.Context(), id.User, req.Label, time.Duration(days)*24*time.Hour, clientOf(r))
+	token, s, err := h.auth.CreateRunnerToken(r.Context(), id.User, req.Label, time.Duration(days)*24*time.Hour, clientOf(r))
 	if err != nil {
 		h.fail(w, r, err)
 		return
@@ -383,21 +382,21 @@ func (h *handlers) createDeviceToken(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusCreated, TokenCreatedDTO{Token: token, Session: sessionDTO(s)})
 }
 
-// revokeDeviceToken
+// unlinkRunner
 //
-//	@Summary	Revoke your device runner's token
+//	@Summary	Unlink your sync runner (revoke its token)
 //	@Tags		connections
 //	@Param		sessionID	path	int	true	"token id"
 //	@Success	204
-//	@Router		/api/me/device/tokens/{sessionID} [delete]
-func (h *handlers) revokeDeviceToken(w http.ResponseWriter, r *http.Request) {
+//	@Router		/api/me/runner/tokens/{sessionID} [delete]
+func (h *handlers) unlinkRunner(w http.ResponseWriter, r *http.Request) {
 	sid, ok := pathID(r, "sessionID")
 	if !ok {
 		badParam(w, "sessionID", "invalid")
 		return
 	}
 	id, _ := auth.FromContext(r.Context())
-	if err := h.conns.RevokeDeviceToken(r.Context(), id.User.ID, sid); err != nil {
+	if err := h.conns.Unlink(r.Context(), id.User.ID, sid); err != nil {
 		h.fail(w, r, err)
 		return
 	}

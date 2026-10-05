@@ -209,9 +209,9 @@ func New(d Deps) http.Handler {
 					r.Put("/me/connections/{connectionID}/credentials", h.replaceCredentials)
 					r.Post("/me/connections/{connectionID}/sync", h.syncConnection)
 					r.Post("/me/connections/{connectionID}/challenges/{challengeID}", h.answerChallenge)
-					r.Get("/me/device", h.myDevice)
-					r.Post("/me/device/tokens", h.createDeviceToken)
-					r.Delete("/me/device/tokens/{sessionID}", h.revokeDeviceToken)
+					r.Get("/me/runner", h.myRunner)
+					r.Post("/me/runner/token", h.linkRunner)
+					r.Delete("/me/runner/tokens/{sessionID}", h.unlinkRunner)
 
 					r.Route("/admin", func(r chi.Router) {
 						r.Use(auth.RequireAdmin(writeAuthError))
@@ -231,9 +231,6 @@ func New(d Deps) http.Handler {
 						r.Post("/users/{userID}/reset-mfa", h.resetMFA)
 						r.Get("/rates", h.rateFetches)
 						r.Post("/rates/refresh", h.refreshRates)
-						r.Get("/runner", h.runnerStatus)
-						r.Post("/runner/tokens", h.createRunnerToken)
-						r.Delete("/runner/tokens/{sessionID}", h.revokeRunnerToken)
 					})
 
 					r.Get("/books", h.listBooks)

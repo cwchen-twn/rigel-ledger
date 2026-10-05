@@ -1,8 +1,9 @@
 // Package connections is P4c-1: each person links their own institutions
-// (Settings -> Connections), and one sync runner works through them as a job
-// queue. The credentials are sealed in the browser to the runner's key
-// (internal/sealing): this package stores and hands out ciphertext and never
-// holds anything that opens it.
+// (Connections) and their own sync runner (Settings -> Sync runner), which
+// works through that person's connections as a job queue. The credentials
+// are sealed in the browser to the runner's key (internal/sealing): this
+// package stores and hands out ciphertext and never holds anything that
+// opens it.
 package connections
 
 import (
@@ -71,39 +72,12 @@ func connectorOf(c db.RunnerConnector) Connector {
 	return out
 }
 
-// Sync modes: where a person's connections are synced.
-const (
-	ModeServer = "server" // the cluster's runner
-	ModeClient = "client" // a runner on the person's own device
-)
+// Runner is who is calling the runner API: one person's runner, wherever
+// it runs. Every runner method is confined to its owner.
+type Runner struct{ Owner int64 }
 
-// Runner is who is calling the runner API: the server runner (Owner nil)
-// or one person's device runner (Owner = that person). Every runner method
-// is confined to it.
-type Runner struct{ Owner *int64 }
-
-// ServerRunner is the cluster's runner.
-var ServerRunner = Runner{}
-
-// DeviceRunner is userID's own runner.
-func DeviceRunner(userID int64) Runner { return Runner{Owner: &userID} }
-
-// Mode is the person's effective sync mode (their own, else the default).
-func (s *Service) Mode(ctx context.Context, userID int64) (string, error) {
-	return s.store.EffectiveSyncMode(ctx, userID)
-}
-
-// runnerFor is the runner a person's connections are sealed to and synced by.
-func (s *Service) runnerFor(ctx context.Context, userID int64) (Runner, error) {
-	m, err := s.Mode(ctx, userID)
-	if err != nil {
-		return Runner{}, err
-	}
-	if m == ModeServer {
-		return ServerRunner, nil
-	}
-	return DeviceRunner(userID), nil
-}
+// RunnerOf is userID's runner.
+func RunnerOf(userID int64) Runner { return Runner{Owner: userID} }
 
 // ---------------------------------------------------------------------------
 // Runner side
@@ -289,19 +263,10 @@ func (s *Service) TakeAnswer(ctx context.Context, r Runner, id, challengeID int6
 // User side
 // ---------------------------------------------------------------------------
 
-// Catalog is what a person can link, and the key to seal to (nil while no
-// runner has registered one): the server runner's in server mode, their own
-// device's in client mode.
+// Catalog is what a person can link, and the key to seal to (nil while their
+// runner has not registered one): both come from their own runner.
 func (s *Service) Catalog(ctx context.Context, userID int64) ([]Connector, *db.RunnerKey, error) {
-	r, err := s.runnerFor(ctx, userID)
-	if err != nil {
-		return nil, nil, err
-	}
-	return s.catalogOf(ctx, r)
-}
-
-func (s *Service) catalogOf(ctx context.Context, r Runner) ([]Connector, *db.RunnerKey, error) {
-	rows, err := s.store.ListConnectors(ctx, r.Owner)
+	rows, err := s.store.ListConnectors(ctx, userID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -309,7 +274,7 @@ func (s *Service) catalogOf(ctx context.Context, r Runner) ([]Connector, *db.Run
 	for i, r := range rows {
 		out[i] = connectorOf(r)
 	}
-	k, err := s.store.ActiveRunnerKey(ctx, r.Owner)
+	k, err := s.store.ActiveRunnerKey(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return out, nil, nil
 	}
@@ -344,20 +309,12 @@ func (s *Service) canFeed(ctx context.Context, userID, bookID int64) error {
 	return nil
 }
 
-// checkSealed accepts only a blob sealed to the current key of the runner
-// the person's mode uses. That is all the app can know about it: it cannot
-// open it.
+// checkSealed accepts only a blob sealed to the current key of the person's
+// runner. That is all the app can know about it: it cannot open it.
 func (s *Service) checkSealed(ctx context.Context, userID, keyID int64, blob []byte) error {
-	r, err := s.runnerFor(ctx, userID)
-	if err != nil {
-		return err
-	}
-	k, err := s.store.ActiveRunnerKey(ctx, r.Owner)
+	k, err := s.store.ActiveRunnerKey(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		if r.Owner != nil {
-			return ledger.Invalid("no_device", "set up the sync runner on your device first")
-		}
-		return ledger.Invalid("no_runner", "no sync runner has registered yet")
+		return ledger.Invalid("no_runner", "link your sync runner first (Settings -> Sync runner)")
 	}
 	if err != nil {
 		return err
@@ -382,6 +339,9 @@ func interval(h int) (int16, error) {
 }
 
 func (s *Service) Create(ctx context.Context, userID int64, in Input) (int64, error) {
+	if err := s.canFeed(ctx, userID, in.BookID); err != nil {
+		return 0, err
+	}
 	cs, _, err := s.Catalog(ctx, userID)
 	if err != nil {
 		return 0, err
@@ -391,10 +351,7 @@ func (s *Service) Create(ctx context.Context, userID int64, in Input) (int64, er
 		known = known || c.ID == in.Connector
 	}
 	if !known {
-		return 0, ledger.FieldError("connector", "unknown", "the runner does not offer this connector")
-	}
-	if err := s.canFeed(ctx, userID, in.BookID); err != nil {
-		return 0, err
+		return 0, ledger.FieldError("connector", "unknown", "your runner does not offer this connector")
 	}
 	if err := s.checkSealed(ctx, userID, in.KeyID, in.Sealed); err != nil {
 		return 0, err
@@ -521,74 +478,34 @@ func (s *Service) AnswerChallenge(ctx context.Context, userID, id, challengeID i
 }
 
 // ---------------------------------------------------------------------------
-// Administration
+// A person's runner
 // ---------------------------------------------------------------------------
 
-func (s *Service) RunnerTokens(ctx context.Context) ([]db.ListRunnerSessionsRow, error) {
-	return s.store.ListRunnerSessions(ctx)
-}
-
-// RunnerKeys are the server runner's keys.
-func (s *Service) RunnerKeys(ctx context.Context) ([]db.RunnerKey, error) {
-	return s.store.ListRunnerKeys(ctx, nil)
-}
-
-// ServerConnectors is what the server runner offers (Administration).
-func (s *Service) ServerConnectors(ctx context.Context) ([]Connector, error) {
-	cs, _, err := s.catalogOf(ctx, ServerRunner)
-	return cs, err
-}
-
-// Device is a person's own runner: its tokens, keys and connectors.
-type Device struct {
-	Mode       string
-	Tokens     []db.ListPersonalRunnerSessionsRow
+// Status is a person's runner as Settings shows it: its token (one at most),
+// the keys it registered and the connectors it offers.
+type Status struct {
+	Tokens     []db.ListRunnerSessionsRow
 	Keys       []db.RunnerKey
 	Connectors []Connector
 }
 
-func (s *Service) Device(ctx context.Context, userID int64) (Device, error) {
-	m, err := s.Mode(ctx, userID)
-	if err != nil {
-		return Device{}, err
+func (s *Service) Status(ctx context.Context, userID int64) (Status, error) {
+	var st Status
+	var err error
+	if st.Tokens, err = s.store.ListRunnerSessions(ctx, userID); err != nil {
+		return st, err
 	}
-	d := Device{Mode: m}
-	if d.Tokens, err = s.store.ListPersonalRunnerSessions(ctx, userID); err != nil {
-		return d, err
+	if st.Keys, err = s.store.ListRunnerKeys(ctx, userID); err != nil {
+		return st, err
 	}
-	if d.Keys, err = s.store.ListRunnerKeys(ctx, &userID); err != nil {
-		return d, err
-	}
-	d.Connectors, _, err = s.catalogOf(ctx, DeviceRunner(userID))
-	return d, err
+	st.Connectors, _, err = s.Catalog(ctx, userID)
+	return st, err
 }
 
-func (s *Service) RevokeDeviceToken(ctx context.Context, userID, sessionID int64) error {
-	n, err := s.store.DeletePersonalRunnerSession(ctx, db.DeletePersonalRunnerSessionParams{ID: sessionID, UserID: userID})
-	if err == nil && n == 0 {
-		return ledger.NotFound("token")
-	}
-	return err
-}
-
-// SetMode is an admin's call: "" follows the instance default. Connections
-// sealed to the other runner then ask their owner to re-enter.
-func (s *Service) SetMode(ctx context.Context, adminID, userID int64, mode string) error {
-	var m *string
-	switch mode {
-	case "":
-	case ModeServer, ModeClient:
-		m = &mode
-	default:
-		return ledger.FieldError("sync_mode", "invalid", "server, client or empty for the default")
-	}
-	return s.store.WithTx(ctx, adminID, func(q *db.Queries) error {
-		return q.SetUserSyncMode(ctx, db.SetUserSyncModeParams{ID: userID, SyncMode: m})
-	})
-}
-
-func (s *Service) RevokeRunnerToken(ctx context.Context, sessionID int64) error {
-	n, err := s.store.DeleteRunnerSession(ctx, sessionID)
+// Unlink revokes the runner's token. Its keys stay, so linking the same
+// runner again (same volume, new token) keeps the connections sealed to it.
+func (s *Service) Unlink(ctx context.Context, userID, sessionID int64) error {
+	n, err := s.store.DeleteRunnerSession(ctx, db.DeleteRunnerSessionParams{ID: sessionID, UserID: userID})
 	if err == nil && n == 0 {
 		return ledger.NotFound("token")
 	}

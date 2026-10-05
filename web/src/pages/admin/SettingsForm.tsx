@@ -1,11 +1,11 @@
 import { createSignal, For, Show } from 'solid-js';
 import { createStore, unwrap } from 'solid-js/store';
 import { api } from '~/api/client';
-import type { MfaMethod, Profile, Registration, SyncMode, SystemSettings, SystemSettingsInput } from '~/api/types';
+import type { MfaMethod, Profile, Registration, SystemSettings, SystemSettingsInput } from '~/api/types';
 import { ProfileFields } from '~/components/ProfileFields';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
-import { Checkbox, Field, Input, Select } from '~/components/ui/input';
+import { Checkbox, Field, Input } from '~/components/ui/input';
 import { toast } from '~/components/ui/toast';
 import { useI18n } from '~/i18n';
 
@@ -18,7 +18,6 @@ function input(s: SystemSettings): SystemSettingsInput {
     registration: s.registration, mfa_required: s.mfa_required, mfa_methods: [...s.mfa_methods],
     default_language: s.default_language, default_display_currency: s.default_display_currency,
     default_timezone: s.default_timezone, default_date_format: s.default_date_format, default_theme: s.default_theme,
-    default_sync_mode: s.default_sync_mode,
     session_ttl_seconds: s.session_ttl_seconds, invite_ttl_seconds: s.invite_ttl_seconds,
     login_max_failures: s.login_max_failures, login_ip_max_failures: s.login_ip_max_failures,
     login_user_max_failures: s.login_user_max_failures, login_window_seconds: s.login_window_seconds,
@@ -161,12 +160,6 @@ export function SettingsForm(props: { settings: SystemSettings; section: 'access
               errors={defaultErrors()}
               only={['language', 'display_currency', 'timezone', 'date_format', 'theme']}
             />
-            <Field label={t('sync.default_mode')} hint={t('sync.default_mode_hint')} error={errors().default_sync_mode} class="mt-4 max-w-sm">
-              <Select value={form.default_sync_mode} onChange={(e) => setForm('default_sync_mode', e.currentTarget.value as SyncMode)}>
-                <option value="client">{t('sync.mode_client')}</option>
-                <option value="server">{t('sync.mode_server')}</option>
-              </Select>
-            </Field>
           </CardContent>
         </Card>
       </Show>

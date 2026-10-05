@@ -30,12 +30,7 @@ export interface User {
   session_aal?: number;
   mfa_required?: boolean;
   mfa_enrolled?: boolean;
-  /** GET /api/me only: where this person's connections sync. An admin sets it. */
-  sync_mode?: SyncMode;
 }
-
-/** server: the cluster's sync runner; client: a runner on the person's own device. */
-export type SyncMode = 'server' | 'client';
 
 export type SignInMethod = 'totp' | 'email' | 'passkey' | 'recovery';
 
@@ -133,7 +128,6 @@ export interface SystemSettingsInput {
   default_timezone: string;
   default_date_format: string;
   default_theme: Theme;
-  default_sync_mode: SyncMode;
   /** null: SESSION_TTL from the environment. */
   session_ttl_seconds: number | null;
   invite_ttl_seconds: number;
@@ -179,8 +173,6 @@ export interface AdminUser {
   invited: boolean;
   last_login_at: string | null;
   created_at: string;
-  /** null follows the instance default. */
-  sync_mode: SyncMode | null;
 }
 
 export interface AccessRequest {
@@ -589,7 +581,7 @@ export interface Connector {
 
 export interface Catalog {
   connectors: Connector[];
-  /** What to seal to; null while no runner has registered. */
+  /** What to seal to; null while the person's runner has not registered a key. */
   key: { id: number; public_key: string } | null;
 }
 
@@ -614,7 +606,7 @@ export interface Connection {
   last_error: string;
   last_run_at: string | null;
   run_requested: boolean;
-  /** Sealed to a key this person's sync no longer uses (the runner's key, or their sync mode, changed). */
+  /** Sealed to a key the person's runner no longer holds: enter the credentials again. */
   needs_reentry: boolean;
   challenge: ConnectionChallenge | null;
 }
@@ -626,16 +618,10 @@ export interface RunnerKey {
   retired_at: string | null;
 }
 
+/** A person's own sync runner (Settings -> Sync runner), wherever it runs. */
 export interface RunnerStatus {
-  tokens: { id: number; label: string; created_by: string; created_at: string; last_used_at: string; expires_at: string }[];
-  keys: RunnerKey[];
-  connectors: Connector[];
-}
-
-/** A person's own sync runner (client sync mode). */
-export interface Device {
-  sync_mode: SyncMode;
-  tokens: { id: number; label: string; created_at: string; last_used_at: string; expires_at: string }[];
+  /** The linked runner's token: one at most. */
+  tokens: { id: number; label: string; created_at: string; /** null until the runner has used it */ last_used_at: string | null; expires_at: string }[];
   keys: RunnerKey[];
   connectors: Connector[];
 }

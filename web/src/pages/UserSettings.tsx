@@ -1,4 +1,3 @@
-import { A } from '@solidjs/router';
 import { LogOut } from 'lucide-solid';
 import { createEffect, createResource, createSignal, For, on, Show } from 'solid-js';
 import { api } from '~/api/client';
@@ -8,6 +7,7 @@ import { APITokens } from '~/components/APITokens';
 import { EmailVerification } from '~/components/EmailVerification';
 import { EventList } from '~/components/EventList';
 import { MFASettings } from '~/components/MFASettings';
+import { SyncRunner } from '~/components/SyncRunner';
 import { DATE_FORMATS, LANGUAGES, THEMES, timeZones } from '~/components/ProfileFields';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
@@ -228,7 +228,7 @@ export default function UserSettings() {
                 </tr>
               </thead>
               <tbody>
-                <For each={(sessions() ?? []).filter((s) => s.kind !== 'token')}>
+                <For each={(sessions() ?? []).filter((s) => s.kind !== 'token' && s.kind !== 'runner')}>
                   {(s) => (
                     <tr class={trClass}>
                       <td class={`${tdClass} max-w-sm`}>
@@ -250,17 +250,7 @@ export default function UserSettings() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('sync.settings_title')}</CardTitle>
-            <CardDescription>{t('sync.settings_hint')}</CardDescription>
-          </CardHeader>
-          <CardContent class="grid gap-1 text-sm" data-testid="settings-sync-mode">
-            <p class="font-medium">{t('sync.mode_line', { mode: t(`sync.mode_${user()?.sync_mode ?? 'client'}`) })}</p>
-            <p class="text-muted-foreground">{t(`sync.mode_${user()?.sync_mode ?? 'client'}_hint`)}</p>
-            <A href="/connections" class="mt-1 w-fit text-sm underline underline-offset-4">{t('sync.go_connections')}</A>
-          </CardContent>
-        </Card>
+        <SyncRunner />
 
         <APITokens tokens={(sessions() ?? []).filter((s) => s.kind === 'token')} onChange={refetchSessions} />
 

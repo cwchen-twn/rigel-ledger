@@ -10,11 +10,10 @@ import { Activity } from './Activity';
 import { AccessRequests } from './AccessRequests';
 import { MailSettings } from './MailSettings';
 import { Rates } from './Rates';
-import { Runner } from './Runner';
 import { SettingsForm } from './SettingsForm';
 import { Users } from './Users';
 
-const TABS = ['users', 'requests', 'access', 'defaults', 'mail', 'rates', 'runner', 'activity'] as const;
+const TABS = ['users', 'requests', 'access', 'defaults', 'mail', 'rates', 'activity'] as const;
 type Tab = (typeof TABS)[number];
 
 /** /admin/:tab -- the instance's users, invitations, sign-in rules, defaults and mail. */
@@ -50,7 +49,6 @@ export default function Admin() {
         <Match when={tab() === 'requests'}><AccessRequests registration={settings()?.registration} /></Match>
         <Match when={tab() === 'activity'}><Activity /></Match>
         <Match when={tab() === 'rates'}><Rates /></Match>
-        <Match when={tab() === 'runner'}><Runner /></Match>
         <Match when={settings()}>
           {(s) => (
             <Switch>

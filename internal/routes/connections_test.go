@@ -22,15 +22,10 @@ func TestConnectionsAndTheRunnerProtocol(t *testing.T) {
 	var me UserDTO
 	alice.json("GET", "/api/me", nil, 200, &me)
 
-	// A runner token, from the admin page; bob is no admin.
-	if res, _ := bob.do("POST", "/api/admin/runner/tokens", map[string]any{"label": "x"}); res.StatusCode != 404 {
-		t.Fatalf("non-admin runner token = %d", res.StatusCode)
-	}
+	// Alice links her runner (Settings -> Sync runner).
 	var made TokenCreatedDTO
-	alice.json("POST", "/api/admin/runner/tokens", map[string]any{"label": "fake runner"}, 201, &made)
+	alice.json("POST", "/api/me/runner/token", map[string]any{"label": "fake runner"}, 201, &made)
 	runner := &client{f: f, bearer: made.Token}
-	// The owner syncs on the server; everyone else defaults to their device.
-	alice.json("PATCH", fmt.Sprintf("/api/admin/users/%d", me.ID), map[string]any{"sync_mode": "server"}, 200, nil)
 
 	// Its scope is /api/runner/* and nothing else; nobody else reaches that.
 	for _, p := range []string{"/api/me", "/api/books", "/api/connectors"} {
@@ -210,86 +205,71 @@ func TestConnectionsAndTheRunnerProtocol(t *testing.T) {
 		t.Fatalf("after delete = %+v", list)
 	}
 
-	// Revoked, the runner token is gone.
+	// Unlinked, the runner token is gone.
 	var st RunnerStatusDTO
-	alice.json("GET", "/api/admin/runner", nil, 200, &st)
+	alice.json("GET", "/api/me/runner", nil, 200, &st)
 	if len(st.Tokens) != 1 || len(st.Keys) != 2 || st.Keys[1].RetiredAt == nil {
 		t.Fatalf("runner status = %+v", st)
 	}
-	alice.json("DELETE", fmt.Sprintf("/api/admin/runner/tokens/%d", st.Tokens[0].ID), nil, 204, nil)
+	if res, _ := bob.do("DELETE", fmt.Sprintf("/api/me/runner/tokens/%d", st.Tokens[0].ID), nil); res.StatusCode != 404 {
+		t.Fatalf("bob unlinked alice's runner: %d", res.StatusCode)
+	}
+	alice.json("DELETE", fmt.Sprintf("/api/me/runner/tokens/%d", st.Tokens[0].ID), nil, 204, nil)
 	if res, _ := runner.do("POST", "/api/runner/jobs/claim", map[string]any{}); res.StatusCode != 401 {
 		t.Fatalf("revoked runner token = %d", res.StatusCode)
 	}
 }
 
-// Server sync and client sync never cross: each runner sees, claims and
-// works on only its own people's connections, and cannot change what the
-// other offers.
-func TestSyncModesKeepRunnersApart(t *testing.T) {
+// Every person's runner is their own: each sees, claims and works on only its
+// owner's connections, cannot change what another offers, and linking a new
+// runner unlinks the last.
+func TestRunnersStayWithTheirOwner(t *testing.T) {
 	f := newAPI(t)
 	alice, bob := f.browser("alice"), f.browser("bob")
 	var am, bm UserDTO
 	alice.json("GET", "/api/me", nil, 200, &am)
 	bob.json("GET", "/api/me", nil, 200, &bm)
-	if am.SyncMode != "client" || bm.SyncMode != "client" {
-		t.Fatalf("default modes = %s %s", am.SyncMode, bm.SyncMode)
-	}
-	if res, _ := bob.do("PATCH", fmt.Sprintf("/api/admin/users/%d", bm.ID), map[string]any{"sync_mode": "server"}); res.StatusCode != 404 {
-		t.Fatalf("a non-admin changed a sync mode: %d", res.StatusCode)
-	}
-	alice.json("PATCH", fmt.Sprintf("/api/admin/users/%d", am.ID), map[string]any{"sync_mode": "server"}, 200, nil)
-	alice.json("GET", "/api/me", nil, 200, &am)
-	if am.SyncMode != "server" {
-		t.Fatalf("alice mode = %s", am.SyncMode)
-	}
 	fields := []map[string]any{{"name": "username", "label": "Username", "kind": "text"}, {"name": "password", "label": "Password", "kind": "secret"}}
 
-	// The server runner, and bob's own device runner.
-	var st TokenCreatedDTO
-	alice.json("POST", "/api/admin/runner/tokens", map[string]any{"label": "server"}, 201, &st)
-	server := &client{f: f, bearer: st.Token}
-	if res, _ := alice.do("POST", "/api/me/device/tokens", map[string]any{"label": "laptop"}); res.StatusCode != 422 {
-		t.Fatalf("a server-mode person made a device token: %d", res.StatusCode)
+	// Admin or not, each links their own; the admin pages offer none.
+	if res, _ := alice.do("POST", "/api/admin/runner/tokens", map[string]any{"label": "server"}); res.StatusCode != 404 && res.StatusCode != 405 {
+		t.Fatalf("the admin runner token still exists: %d", res.StatusCode)
 	}
-	var dt TokenCreatedDTO
-	bob.json("POST", "/api/me/device/tokens", map[string]any{"label": "bob's laptop"}, 201, &dt)
-	device := &client{f: f, bearer: dt.Token}
-	for _, c := range []*client{device, server} {
+	var at, bt TokenCreatedDTO
+	alice.json("POST", "/api/me/runner/token", map[string]any{"label": "next to the app"}, 201, &at)
+	bob.json("POST", "/api/me/runner/token", map[string]any{"label": "bob's laptop"}, 201, &bt)
+	ar, br := &client{f: f, bearer: at.Token}, &client{f: f, bearer: bt.Token}
+	for _, c := range []*client{ar, br} {
 		if res, b := c.do("GET", "/api/me", nil); res.StatusCode != 403 || errorCode(t, b) != "token_scope" {
 			t.Fatalf("runner token reached /api/me: %d %s", res.StatusCode, b)
 		}
 	}
 
-	_, spub, _ := sealing.NewKey()
-	_, dpub, _ := sealing.NewKey()
-	server.json("POST", "/api/runner/keys", map[string]any{"public_keys": [][]byte{spub}}, 200, nil)
-	server.json("PUT", "/api/runner/connectors", map[string]any{"connectors": []map[string]any{{"id": "fake", "name": "Fake Bank", "fields": fields}}}, 204, nil)
-	if res, _ := device.do("POST", "/api/runner/keys", map[string]any{"public_keys": [][]byte{spub}}); res.StatusCode != 422 {
-		t.Fatalf("a device took over the server's key: %d", res.StatusCode)
+	_, apub, _ := sealing.NewKey()
+	_, bpub, _ := sealing.NewKey()
+	ar.json("POST", "/api/runner/keys", map[string]any{"public_keys": [][]byte{apub}}, 200, nil)
+	ar.json("PUT", "/api/runner/connectors", map[string]any{"connectors": []map[string]any{{"id": "fake", "name": "Fake Bank", "fields": fields}}}, 204, nil)
+	if res, _ := br.do("POST", "/api/runner/keys", map[string]any{"public_keys": [][]byte{apub}}); res.StatusCode != 422 {
+		t.Fatalf("bob's runner took over alice's key: %d", res.StatusCode)
 	}
-	device.json("POST", "/api/runner/keys", map[string]any{"public_keys": [][]byte{dpub}}, 200, nil)
-	device.json("PUT", "/api/runner/connectors", map[string]any{"connectors": []map[string]any{
+	br.json("POST", "/api/runner/keys", map[string]any{"public_keys": [][]byte{bpub}}, 200, nil)
+	br.json("PUT", "/api/runner/connectors", map[string]any{"connectors": []map[string]any{
 		{"id": "fake", "name": "Fake Bank (bob's copy)", "fields": fields}, {"id": "evil", "name": "Evil", "fields": fields}}}, 204, nil)
 
 	// Each person sees their own runner's key and connectors.
 	var ac, bc CatalogDTO
 	alice.json("GET", "/api/connectors", nil, 200, &ac)
 	bob.json("GET", "/api/connectors", nil, 200, &bc)
-	if ac.Key == nil || !bytes.Equal(ac.Key.PublicKey, spub) || len(ac.Connectors) != 1 || ac.Connectors[0].Name != "Fake Bank" {
+	if ac.Key == nil || !bytes.Equal(ac.Key.PublicKey, apub) || len(ac.Connectors) != 1 || ac.Connectors[0].Name != "Fake Bank" {
 		t.Fatalf("alice catalog = %+v", ac)
 	}
-	if bc.Key == nil || !bytes.Equal(bc.Key.PublicKey, dpub) || len(bc.Connectors) != 2 {
+	if bc.Key == nil || !bytes.Equal(bc.Key.PublicKey, bpub) || len(bc.Connectors) != 2 {
 		t.Fatalf("bob catalog = %+v", bc)
 	}
-	var dev DeviceDTO
-	bob.json("GET", "/api/me/device", nil, 200, &dev)
-	if dev.SyncMode != "client" || len(dev.Tokens) != 1 || len(dev.Keys) != 1 || len(dev.Connectors) != 2 {
-		t.Fatalf("bob device = %+v", dev)
-	}
-	var adminView RunnerStatusDTO
-	alice.json("GET", "/api/admin/runner", nil, 200, &adminView)
-	if len(adminView.Tokens) != 1 || len(adminView.Keys) != 1 || len(adminView.Connectors) != 1 {
-		t.Fatalf("admin sees device runners: %+v", adminView)
+	var bs RunnerStatusDTO
+	bob.json("GET", "/api/me/runner", nil, 200, &bs)
+	if len(bs.Tokens) != 1 || bs.Tokens[0].LastUsedAt == nil || len(bs.Keys) != 1 || len(bs.Connectors) != 2 {
+		t.Fatalf("bob's runner = %+v", bs) // used at once: Settings shows it linked
 	}
 
 	connect := func(c *client, userID int64, cat CatalogDTO, pub []byte) int64 {
@@ -301,60 +281,53 @@ func TestSyncModesKeepRunnersApart(t *testing.T) {
 		c.json("POST", "/api/me/connections", map[string]any{"book_id": b.ID, "connector": "fake", "key_id": cat.Key.ID, "sealed": blob}, 201, &cr)
 		return cr.ID
 	}
-	// Sealed to the wrong runner's key is refused.
+	// Sealed to someone else's runner is refused.
 	var bb BookDTO
 	bob.json("POST", "/api/books", map[string]string{"name": "Scratch", "base_currency": "TWD"}, 201, &bb)
-	wrong, _ := sealing.Seal(spub, []byte(`{}`), connections.CredentialsAAD(bm.ID, "fake"))
+	wrong, _ := sealing.Seal(apub, []byte(`{}`), connections.CredentialsAAD(bm.ID, "fake"))
 	if res, _ := bob.do("POST", "/api/me/connections", map[string]any{"book_id": bb.ID, "connector": "fake", "key_id": ac.Key.ID, "sealed": wrong}); res.StatusCode != 422 {
-		t.Fatalf("bob sealed to the server's key: %d", res.StatusCode)
+		t.Fatalf("bob sealed to alice's runner: %d", res.StatusCode)
 	}
-	aliceConn := connect(alice, am.ID, ac, spub)
-	bobConn := connect(bob, bm.ID, bc, dpub)
+	aliceConn := connect(alice, am.ID, ac, apub)
+	bobConn := connect(bob, bm.ID, bc, bpub)
 
-	var sj, dj []JobDTO
-	server.json("POST", "/api/runner/jobs/claim", map[string]any{}, 200, &sj)
-	device.json("POST", "/api/runner/jobs/claim", map[string]any{}, 200, &dj)
-	if len(sj) != 1 || sj[0].ID != aliceConn || len(dj) != 1 || dj[0].ID != bobConn {
-		t.Fatalf("server claimed %+v, device claimed %+v", sj, dj)
+	var aj, bj []JobDTO
+	ar.json("POST", "/api/runner/jobs/claim", map[string]any{}, 200, &aj)
+	br.json("POST", "/api/runner/jobs/claim", map[string]any{}, 200, &bj)
+	if len(aj) != 1 || aj[0].ID != aliceConn || len(bj) != 1 || bj[0].ID != bobConn {
+		t.Fatalf("alice's runner claimed %+v, bob's claimed %+v", aj, bj)
 	}
 	// Neither can work on the other's claimed connection.
-	if res, _ := device.do("POST", fmt.Sprintf("/api/runner/connections/%d/finish", aliceConn), map[string]any{"status": "ok"}); res.StatusCode != 409 {
-		t.Fatalf("device finished alice's connection: %d", res.StatusCode)
+	if res, _ := br.do("POST", fmt.Sprintf("/api/runner/connections/%d/finish", aliceConn), map[string]any{"status": "ok"}); res.StatusCode != 409 {
+		t.Fatalf("bob's runner finished alice's connection: %d", res.StatusCode)
 	}
-	if res, _ := server.do("POST", fmt.Sprintf("/api/runner/connections/%d/imports", bobConn), map[string]any{"connector": "fake", "rows": []any{}}); res.StatusCode != 409 {
-		t.Fatalf("server imported into bob's connection: %d", res.StatusCode)
+	if res, _ := ar.do("POST", fmt.Sprintf("/api/runner/connections/%d/imports", bobConn), map[string]any{"connector": "fake", "rows": []any{}}); res.StatusCode != 409 {
+		t.Fatalf("alice's runner imported into bob's connection: %d", res.StatusCode)
 	}
-	server.json("POST", fmt.Sprintf("/api/runner/connections/%d/finish", aliceConn), map[string]any{"status": "ok"}, 204, nil)
-	device.json("POST", fmt.Sprintf("/api/runner/connections/%d/finish", bobConn), map[string]any{"status": "ok"}, 204, nil)
+	ar.json("POST", fmt.Sprintf("/api/runner/connections/%d/finish", aliceConn), map[string]any{"status": "ok"}, 204, nil)
+	br.json("POST", fmt.Sprintf("/api/runner/connections/%d/finish", bobConn), map[string]any{"status": "ok"}, 204, nil)
 
-	// Bob moves to server sync: his device-sealed connection needs new
-	// credentials, and neither runner claims it meanwhile.
-	alice.json("PATCH", fmt.Sprintf("/api/admin/users/%d", bm.ID), map[string]any{"sync_mode": "server"}, 200, nil)
-	var bl []ConnectionDTO
-	bob.json("GET", "/api/me/connections", nil, 200, &bl)
-	if len(bl) != 1 || !bl[0].NeedsReentry {
-		t.Fatalf("bob after the switch = %+v", bl)
+	// Bob links his runner again (same volume, new token): the old token
+	// stops working, the key and his connection carry on.
+	var bt2 TokenCreatedDTO
+	bob.json("POST", "/api/me/runner/token", map[string]any{"label": "bob's laptop"}, 201, &bt2)
+	if res, _ := br.do("POST", "/api/runner/jobs/claim", map[string]any{}); res.StatusCode != 401 {
+		t.Fatalf("the replaced token = %d", res.StatusCode)
+	}
+	br2 := &client{f: f, bearer: bt2.Token}
+	bob.json("GET", "/api/me/runner", nil, 200, &bs)
+	if len(bs.Tokens) != 1 || bs.Tokens[0].ID != bt2.Session.ID || bs.Tokens[0].LastUsedAt != nil {
+		t.Fatalf("bob's tokens after relinking = %+v", bs.Tokens)
 	}
 	bob.json("POST", fmt.Sprintf("/api/me/connections/%d/sync", bobConn), nil, 204, nil)
-	server.json("POST", "/api/runner/jobs/claim", map[string]any{}, 200, &sj)
-	device.json("POST", "/api/runner/jobs/claim", map[string]any{}, 200, &dj)
-	if len(sj) != 0 || len(dj) != 0 {
-		t.Fatalf("claimed a connection sealed for the other mode: %+v %+v", sj, dj)
+	br2.json("POST", "/api/runner/jobs/claim", map[string]any{}, 200, &bj)
+	if len(bj) != 1 || bj[0].ID != bobConn {
+		t.Fatalf("after relinking, bob's runner claimed %+v", bj)
 	}
-	bob.json("GET", "/api/connectors", nil, 200, &bc)
-	if !bytes.Equal(bc.Key.PublicKey, spub) {
-		t.Fatal("bob in server mode is not offered the server key")
-	}
-	// Back to the default (client): the connection is usable again.
-	alice.json("PATCH", fmt.Sprintf("/api/admin/users/%d", bm.ID), map[string]any{"sync_mode": ""}, 200, nil)
-	bob.json("GET", "/api/me/connections", nil, 200, &bl)
-	if bl[0].NeedsReentry {
-		t.Fatal("back on the device, the connection still asks for re-entry")
-	}
-	var dtl DeviceDTO
-	bob.json("GET", "/api/me/device", nil, 200, &dtl)
-	bob.json("DELETE", fmt.Sprintf("/api/me/device/tokens/%d", dtl.Tokens[0].ID), nil, 204, nil)
-	if res, _ := device.do("POST", "/api/runner/jobs/claim", map[string]any{}); res.StatusCode != 401 {
-		t.Fatalf("revoked device token = %d", res.StatusCode)
+	// Alice's runner is untouched by any of it.
+	var as RunnerStatusDTO
+	alice.json("GET", "/api/me/runner", nil, 200, &as)
+	if len(as.Tokens) != 1 || len(as.Keys) != 1 {
+		t.Fatalf("alice's runner = %+v", as)
 	}
 }

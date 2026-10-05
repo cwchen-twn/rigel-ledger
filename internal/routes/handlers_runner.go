@@ -9,14 +9,11 @@ import (
 	"github.com/cwchen-twn/rigel-ledger/internal/response"
 )
 
-// runnerOf is the caller of the runner API: the server runner, or the device
-// runner of the person who made the token.
+// runnerOf is the caller of the runner API: the runner of the person who
+// linked it.
 func runnerOf(r *http.Request) connections.Runner {
 	id, _ := auth.FromContext(r.Context())
-	if id.Kind == auth.KindPersonalRunner {
-		return connections.DeviceRunner(id.User.ID)
-	}
-	return connections.ServerRunner
+	return connections.RunnerOf(id.User.ID)
 }
 
 // The sync runner's API (/api/runner/*, a runner token only). The runner
@@ -292,115 +289,10 @@ func (h *handlers) finishRun(w http.ResponseWriter, r *http.Request) {
 	response.NoContent(w)
 }
 
-// ---- Administration -> Sync runner ----
-
-type RunnerTokenDTO struct {
-	ID         int64  `json:"id"`
-	Label      string `json:"label"`
-	CreatedBy  string `json:"created_by"`
-	CreatedAt  string `json:"created_at"`
-	LastUsedAt string `json:"last_used_at"`
-	ExpiresAt  string `json:"expires_at"`
-}
-
-type RunnerStatusDTO struct {
-	Tokens     []RunnerTokenDTO `json:"tokens"`
-	Keys       []RunnerKeyDTO   `json:"keys"`
-	Connectors []ConnectorDTO   `json:"connectors"`
-}
-
 func connectorDTO(c connections.Connector) ConnectorDTO {
 	out := ConnectorDTO{ID: c.ID, Name: c.Name, Country: c.Country, Fields: []ConnectorFieldDTO{}}
 	for _, f := range c.Fields {
 		out.Fields = append(out.Fields, ConnectorFieldDTO{Name: f.Name, Label: f.Label, Kind: f.Kind, Optional: f.Optional})
 	}
 	return out
-}
-
-// runnerStatus
-//
-//	@Summary	The sync runner: its tokens, keys and connectors
-//	@Tags		admin
-//	@Produce	json
-//	@Success	200	{object}	RunnerStatusDTO
-//	@Router		/api/admin/runner [get]
-func (h *handlers) runnerStatus(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	tokens, err := h.conns.RunnerTokens(ctx)
-	if err != nil {
-		h.fail(w, r, err)
-		return
-	}
-	keys, err := h.conns.RunnerKeys(ctx)
-	if err != nil {
-		h.fail(w, r, err)
-		return
-	}
-	cs, err := h.conns.ServerConnectors(ctx)
-	if err != nil {
-		h.fail(w, r, err)
-		return
-	}
-	out := RunnerStatusDTO{Tokens: []RunnerTokenDTO{}, Keys: []RunnerKeyDTO{}, Connectors: []ConnectorDTO{}}
-	for _, t := range tokens {
-		out.Tokens = append(out.Tokens, RunnerTokenDTO{ID: t.ID, Label: t.Label, CreatedBy: t.Username, CreatedAt: timestamp(t.CreatedAt),
-			LastUsedAt: timestamp(t.LastUsedAt), ExpiresAt: timestamp(t.ExpiresAt)})
-	}
-	for _, k := range keys {
-		out.Keys = append(out.Keys, RunnerKeyDTO{ID: k.ID, PublicKey: k.PublicKey, CreatedAt: timestamp(k.CreatedAt), RetiredAt: timestampPtr(k.RetiredAt)})
-	}
-	for _, c := range cs {
-		out.Connectors = append(out.Connectors, connectorDTO(c))
-	}
-	response.JSON(w, http.StatusOK, out)
-}
-
-// createRunnerToken
-//
-//	@Summary	Make a token for the sync runner (shown once)
-//	@Tags		admin
-//	@Accept		json
-//	@Produce	json
-//	@Param		body	body		CreateTokenDTO	true	"label and lifetime"
-//	@Success	201		{object}	TokenCreatedDTO
-//	@Router		/api/admin/runner/tokens [post]
-func (h *handlers) createRunnerToken(w http.ResponseWriter, r *http.Request) {
-	var req CreateTokenDTO
-	if err := response.Decode(w, r, &req); err != nil {
-		h.fail(w, r, err)
-		return
-	}
-	days, err := tokenDays(req)
-	if err != nil {
-		h.fail(w, r, err)
-		return
-	}
-	id, _ := auth.FromContext(r.Context())
-	token, s, err := h.auth.CreateRunnerToken(r.Context(), id.User, req.Label, time.Duration(days)*24*time.Hour, clientOf(r))
-	if err != nil {
-		h.fail(w, r, err)
-		return
-	}
-	response.JSON(w, http.StatusCreated, TokenCreatedDTO{Token: token, Session: sessionDTO(s)})
-}
-
-// revokeRunnerToken
-//
-//	@Summary	Revoke a sync runner token
-//	@Tags		admin
-//	@Param		sessionID	path	int	true	"token id"
-//	@Success	204
-//	@Router		/api/admin/runner/tokens/{sessionID} [delete]
-func (h *handlers) revokeRunnerToken(w http.ResponseWriter, r *http.Request) {
-	sid, ok := pathID(r, "sessionID")
-	if !ok {
-		badParam(w, "sessionID", "invalid")
-		return
-	}
-	if err := h.conns.RevokeRunnerToken(r.Context(), sid); err != nil {
-		h.fail(w, r, err)
-		return
-	}
-	h.auditAdmin(r, "runner_token_revoked")
-	response.NoContent(w)
 }

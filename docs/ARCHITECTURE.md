@@ -29,7 +29,7 @@ Go binary  -- chi JSON API, embedded SolidJS SPA, migrations on start,
         |     in-process scheduler (exchange rates, prices)
         |
    +----+-----------------+----------------------+
-SolidJS PWA (web)   Flutter (later)     sync runners (CronJobs):
+SolidJS PWA (web)   Flutter (later)     sync runners (one per person):
                                           tw-sync (Node, all-set-tw connectors)
                                           py-sync (Python: Shioaji, Firstrade)
 ```
@@ -514,11 +514,13 @@ What is known about the sources, and what is not:
 
 ### Runners
 
-Both run in the cluster next to the app. Since P4c-1 they **do not hold anyone's
-institution login in their own config**: each person links their institutions under
-Connections, the browser seals the credentials to the runner's key, and the runner
-works through the connections as a job queue (see "Connections" below). The only
-secrets a runner is deployed with are its runner token and its X25519 private key.
+Each person runs their own (see "One runner per person" below): the owner's next to
+the app, anyone else's on a computer they leave on. Since P4c-1 a runner **does not
+hold any institution login in its own config**: its person links their institutions
+under Connections, the browser seals the credentials to that runner's key, and the
+runner works through that person's connections as a job queue (see "Connections"
+below). The only secrets a runner holds are its runner token and its X25519 private
+key.
 
 - **`integrations/tw-sync/` (Node).**
   - It pins all-set-tw's `@taiwan-fin-hub/connectors` and `core`. The connectors
@@ -532,8 +534,8 @@ secrets a runner is deployed with are its runner token and its X25519 private ke
     deposits) follow all-set-tw's connector contract, so they could be upstreamed.
 - **`integrations/py-sync/` (Python, uv).** Shioaji and Firstrade, both Python SDKs.
 
-Both speak the runner protocol (`/api/runner/*`, a `runner` token in the cluster or a
-person's `personal_runner` token on their own computer -- see Sync modes): claim due
+Both speak the runner protocol (`/api/runner/*`, with the `runner` token its person
+made in Settings -> Sync runner): claim due
 connections, open their sealed credentials, raise challenges, and post batches to
 `/api/runner/connections/{id}/imports`, which lands them in that connection's book's
 review queue. `integrations/fake-runner` (Go, not shipped) is the reference
@@ -651,9 +653,9 @@ logins into the runner's SOPS secret. Migration `000006`; `internal/connections`
 - **Never shown again.** No response carries the blob back to a person, and the audit
   trigger (`audit_connection`) stores the row without it. Changing credentials means
   entering all of them again.
-- **The runner.** An admin makes a `runner` token (Administration -> Sync runner, or
-  `rigel-ledger-cli create-runner-token`); it reaches `/api/runner/*` only, and nobody
-  else reaches that (404). The runner registers the keys it holds (the newest is what
+- **The runner.** A person links theirs with a `runner` token (Settings -> Sync runner,
+  or `rigel-ledger-cli create-runner-token -u USER`); it reaches `/api/runner/*` only,
+  and nobody else reaches that (404). The runner registers the keys it holds (the newest is what
   browsers seal to; keys it stops listing are retired, and connections sealed to them
   ask their owner to re-enter), publishes its connectors with a field schema (the UI
   renders the form from it), claims due connections (a claim lapses after 30 minutes),
@@ -663,41 +665,45 @@ logins into the runner's SOPS secret. Migration `000006`; `internal/connections`
   every 1-168 hours (24 by default), or at once on "Sync now".
 - **The consent panel** says it plainly: an unofficial login that can break, may end
   the person's other sessions, may be against the institution's terms, and only reads.
-- **Scale, stated plainly.** Server sync sends every login from one cluster address,
-  and for many people at one bank that trips fraud checks sooner than one household
-  does -- hence sync modes, below. Syncing bank data for people outside the family
+- **Scale, stated plainly.** One runner for everyone would send every login from one
+  cluster address, and for many people at one bank that trips fraud checks sooner than
+  one household does -- hence one runner per person, below. Syncing bank data for people outside the family
   comes close to account aggregation in Taiwan (個資法, and the FSC's open-banking
   rules): fine for invited family and friends, a legal question before any public
   sign-up.
 
-#### Sync modes: server or client (P4c-1.5, implemented)
+#### One runner per person (P4c-1.6, implemented)
 
-Decided 2026-09-30. Migration `000007`.
+Decided 2026-10-05, replacing P4c-1.5's sync modes (2026-09-30: an admin-set `server`
+mode for the cluster's runner, `client` for a runner on the person's computer, two
+token kinds). Migration `000008`.
 
-- **Server** -- the cluster's runner signs in (the owner's own mode). **Client** -- a
-  runner on the person's own computer signs in, from their own address, while that
-  computer is on. `users.sync_mode` (NULL follows `system_settings.default_sync_mode`,
-  `client` by default); only an admin changes it (Administration -> Users, and the
-  default under Defaults). Settings and Connections show it read-only.
-- **A web page cannot be the client.** The browser's same-origin rules keep
+- **Like a self-hosted CI runner.** Every person, admin or not, links their own runner
+  under Settings -> Sync runner with a token the app makes for them. Where it runs is
+  their business: the owner's happens to run on the same server as the app, anyone
+  else's on a computer they leave on. There is no mode and no server runner: one
+  `runner` session kind, and every key and connector has an owner.
+- **Confined to its owner.** A runner registers keys and publishes connectors for its
+  owner only, claims only its owner's connections sealed to one of its keys, and gets
+  `not_claimed` for anyone else's. A person's Connections offers their own runner's
+  connectors and seals to its newest key; without one, nothing can be linked
+  (`no_runner`). `connections.Runner` is that scope, passed to every runner method.
+- **Whoever hosts a runner can open its credentials.** Hosting someone else's runner
+  (they hand the admin their token) is their explicit choice of trust, not a server
+  default.
+- **One per person.** Keys a runner stops listing are retired, so two runners of one
+  person would retire each other's. Linking again revokes the token before; the same
+  runner relinked keeps its key (it lives in the runner's volume), so its connections
+  carry on. Several runners per person would need keys scoped per runner: not now.
+- **The browser cannot be the runner.** The browser's same-origin rules keep
   ledger.chenantunez.com from calling a bank's site with its cookies, and several
-  all-set-tw connectors drive a real Chromium. The client is the same runner program
-  on the person's device; a native mobile app could host it later, a PWA cannot.
-- **Two runner kinds, never crossing.** The admin's `runner` token is the server runner;
-  a client-mode person makes a `personal_runner` token on Connections -> Your device.
-  Keys and connectors carry an owner (NULL = server): a device runner registers keys
-  and publishes connectors for its owner only, claims only its owner's connections,
-  and gets `not_claimed` for anyone else's. The server runner claims only server-mode
-  people's connections. `connections.Runner` is that scope, passed to every runner
-  method.
-- **Sealed to the runner of the person's mode.** In client mode the credentials are
-  sealed to the person's own device key: not even the cluster's runner can open them.
-  Changing someone's mode leaves their connections sealed to the other runner, so they
-  show "enter the credentials again" (`needs_reentry`) and are claimed by neither.
-- **Packaged as a container, for both places.** tw-sync (P4c-2) ships as one image
-  with Node and Chromium inside, so a client-mode person installs Docker and nothing
-  else -- no Node to install or keep up to date. The same image runs as the cluster's
-  CronJob and on a laptop; the documented client setup is a compose file:
+  all-set-tw connectors drive a real Chromium. A native mobile app could host a runner
+  later, a PWA cannot.
+- **Packaged as a container, for every place.** tw-sync (P4c-2) ships as one image
+  with Node and Chromium inside, so a person installs Docker and nothing
+  else -- no Node to install or keep up to date. The same image runs next to the app
+  and on a laptop; the documented setup (Settings -> Sync runner shows it) is a
+  compose file:
 
   ```yaml
   services:
@@ -706,19 +712,19 @@ Decided 2026-09-30. Migration `000007`.
       restart: unless-stopped
       environment:
         RIGEL_URL: https://ledger.chenantunez.com
-        RUNNER_TOKEN: ${RUNNER_TOKEN}   # Connections -> Your device -> New device token
+        RUNNER_TOKEN: ${RUNNER_TOKEN}   # Settings -> Sync runner -> Link a runner
       volumes:
-        - rigel-sync:/data              # the device's private key; never leaves this volume
+        - rigel-sync:/data              # the runner's private key; never leaves this volume
   volumes:
     rigel-sync:
   ```
 
-  The key is generated inside the volume on first start, so it stays on that computer.
+  The key is generated inside the volume on first start, so it stays on that machine.
   The image must be multi-arch (linux/amd64 and linux/arm64, for Apple silicon);
   today's `image` workflow builds amd64 only, so tw-sync's gets both.
-- **Also for server sync:** the cluster is in a data centre abroad, and some Taiwanese
-  banks flag or block foreign data-centre addresses. The server runner may need to
-  leave through a Taiwan exit node (Tailscale); decided when tw-sync is built.
+- **For a runner next to the app:** the cluster is in a data centre abroad, and some
+  Taiwanese banks flag or block foreign data-centre addresses. The owner's runner may
+  need to leave through a Taiwan exit node (Tailscale); decided when tw-sync is built.
 
 ### Receipts
 
@@ -989,9 +995,9 @@ builds images.
   `ghcr.io/cwchen-twn/rigel-ledger`.
 
 **hcloud owns** `k3s/helm/rigel-ledger/`, modelled on `k3s/helm/navidrome/`:
-- A stateless Deployment (RollingUpdate, no PVC), plus the sync-runner CronJobs
-  (`tw-sync`, `py-sync`), each mounting only its own SOPS secret of institution
-  credentials.
+- A stateless Deployment (RollingUpdate, no PVC), plus the owner's own sync runners
+  (`tw-sync`, `py-sync`), each with only its runner token in a SOPS secret and its
+  private key in a small volume; institution logins live sealed in the app.
 - A SOPS secret `k3s/secrets/rigel-ledger-secrets.enc.yaml` that holds `DATABASE_URL`,
   pointing at `10.0.1.1:5432`.
 - A Postgres role and database, following `k3s/postgres/README.md`.
@@ -1010,7 +1016,7 @@ builds images.
 | P2 | ~~Dockerfile, Gitea/GitHub CI and release; probes and the hcloud chart (tailnet-only ipAllowList, own Postgres role, nightly backup); release `v0.1.0` and deploy~~ (done, 2026-09-24) |
 | P2.5 | **Accounts and sign-in security.** a: first-login wizard, verified email, invitations, registration modes, bootstrap admin, the Administration page (users, requests, sign-in rules, defaults, SMTP), throttling and the sign-in audit, sessions (migration `000002`). b: ~~two-factor sign-in -- email codes, TOTP, passkeys, recovery codes, enforcement (`000003`)~~ (done). Both before any public exposure |
 | P3 | ~~Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency)~~ (P3a, done); ~~the three statements bound to closing rates with `rates_used`, display-currency translation~~ (P3b, done); ~~book rebase, tag (trip) report~~ (P3c, done) |
-| P4 | **Sync and review**: ~~import API, runner tokens, `source_accounts`, review queue, rules, matching (duplicates, pending/posted, transfers), balance assertions and drift, CSV import~~ (P4a, done); ~~per-user Connections with credentials sealed to the runner, the runner protocol, challenges, the fake runner~~ (P4c-1, done); ~~server or client sync mode per person, device runners~~ (P4c-1.5, done); tw-sync built once, one multi-arch container image for the cluster and for people's computers (P4c-2); `import_rows` kinds for invoices, holdings and trades, order emails, challenges; receipt attachments (upload, camera, optional local OCR); the tw-sync runner (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
+| P4 | **Sync and review**: ~~import API, runner tokens, `source_accounts`, review queue, rules, matching (duplicates, pending/posted, transfers), balance assertions and drift, CSV import~~ (P4a, done); ~~per-user Connections with credentials sealed to the runner, the runner protocol, challenges, the fake runner~~ (P4c-1, done); ~~server or client sync mode per person, device runners~~ (P4c-1.5, done); ~~one runner kind, every person links their own~~ (P4c-1.6, done); tw-sync built once, one multi-arch container image for the cluster and for people's computers (P4c-2); `import_rows` kinds for invoices, holdings and trades, order emails, challenges; receipt attachments (upload, camera, optional local OCR); the tw-sync runner (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
 | P5 | Securities and futures: py-sync (Shioaji daily, Firstrade), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, 永豐 deposits, Banco Continental (if its export is not enough). Recurring list and subscription templates. (Points, average cost and the security commodity itself are done.) |
 | P6 | PWA polish, then Flutter if a native feature is needed |
 | P7 | **Tax workbooks (TW, PY)**: `person` tags and `tax_profiles`; tax categories and account mappings per jurisdiction; `tax_withheld` accounts and foreign-tax-paid records; per-year rule files; workbook export (income by category, deductions with evidence, withholding, capital gains in the country's currency and rate). Needs P3 reports, P4 attachments and P5 lots. Prepares and cross-checks; does not file. |

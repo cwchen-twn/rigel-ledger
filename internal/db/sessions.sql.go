@@ -161,6 +161,16 @@ func (q *Queries) DeleteSessionByTokenHash(ctx context.Context, tokenHash []byte
 	return err
 }
 
+const deleteUserRunnerSessions = `-- name: DeleteUserRunnerSessions :exec
+DELETE FROM sessions WHERE user_id = $1 AND kind = 'runner'
+`
+
+// A person has one runner: linking another unlinks the last.
+func (q *Queries) DeleteUserRunnerSessions(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, deleteUserRunnerSessions, userID)
+	return err
+}
+
 const deleteUserSession = `-- name: DeleteUserSession :execrows
 DELETE FROM sessions WHERE id = $1 AND user_id = $2
 `
@@ -203,7 +213,7 @@ func (q *Queries) DeleteUserSessionsExcept(ctx context.Context, arg DeleteUserSe
 }
 
 const getSessionUser = `-- name: GetSessionUser :one
-SELECT s.id, s.user_id, s.token_hash, s.kind, s.label, s.user_agent, s.created_at, s.last_used_at, s.expires_at, s.ip, s.aal, u.id, u.username, u.email, u.password_hash, u.display_name, u.is_admin, u.is_active, u.language, u.display_currency, u.timezone, u.date_format, u.theme, u.default_book_id, u.last_login_at, u.created_at, u.updated_at, u.email_verified_at, u.initialized_at, u.password_must_change, u.invited_by, u.webauthn_id, u.signin_alerts, u.sync_mode
+SELECT s.id, s.user_id, s.token_hash, s.kind, s.label, s.user_agent, s.created_at, s.last_used_at, s.expires_at, s.ip, s.aal, u.id, u.username, u.email, u.password_hash, u.display_name, u.is_admin, u.is_active, u.language, u.display_currency, u.timezone, u.date_format, u.theme, u.default_book_id, u.last_login_at, u.created_at, u.updated_at, u.email_verified_at, u.initialized_at, u.password_must_change, u.invited_by, u.webauthn_id, u.signin_alerts
 FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.token_hash = $1
@@ -254,7 +264,6 @@ func (q *Queries) GetSessionUser(ctx context.Context, tokenHash []byte) (GetSess
 		&i.User.InvitedBy,
 		&i.User.WebauthnID,
 		&i.User.SigninAlerts,
-		&i.User.SyncMode,
 	)
 	return i, err
 }

@@ -1,11 +1,11 @@
 import { MailPlus, MoreHorizontal } from 'lucide-solid';
 import { createResource, createSignal, For, Show } from 'solid-js';
 import { api } from '~/api/client';
-import type { AdminUser, SyncMode } from '~/api/types';
+import type { AdminUser } from '~/api/types';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { DropdownMenu, type MenuItem } from '~/components/ui/dropdown-menu';
-import { Field, Input, Select } from '~/components/ui/input';
+import { Field, Input } from '~/components/ui/input';
 import { Badge, Table, tdClass, thClass, trClass } from '~/components/ui/misc';
 import { toast } from '~/components/ui/toast';
 import { useI18n } from '~/i18n';
@@ -14,10 +14,8 @@ import { useSession } from '~/stores/session';
 
 export function Users() {
   const { t, te, fieldErrors } = useI18n();
-  const { user, refresh } = useSession();
+  const { user } = useSession();
   const [users, { refetch }] = createResource(() => api.admin.users());
-  const [settings] = createResource(() => api.admin.settings());
-  const defaultMode = (): SyncMode => settings()?.default_sync_mode ?? 'client';
   const [username, setUsername] = createSignal('');
   const [email, setEmail] = createSignal('');
   const [errors, setErrors] = createSignal<Record<string, string>>({});
@@ -98,7 +96,6 @@ export function Users() {
                 <th class={thClass}>{t('auth.username')}</th>
                 <th class={thClass}>{t('settings.email')}</th>
                 <th class={thClass}>{t('admin.status')}</th>
-                <th class={thClass}>{t('sync.column')}</th>
                 <th class={thClass}>{t('admin.last_login')}</th>
                 <th class={thClass}><span class="sr-only">{t('common.actions')}</span></th>
               </tr>
@@ -124,17 +121,6 @@ export function Users() {
                         <Show when={!u.invited && !u.initialized}><Badge variant="outline">{t('admin.setting_up')}</Badge></Show>
                         <Show when={!u.is_active}><Badge variant="destructive">{t('admin.inactive')}</Badge></Show>
                       </div>
-                    </td>
-                    <td class={tdClass}>
-                      <Select class="h-8 w-auto" aria-label={t('sync.column_for', { user: u.username })} value={u.sync_mode ?? ''}
-                        onChange={(e) => act(async () => {
-                          await api.admin.updateUser(u.id, { sync_mode: e.currentTarget.value as SyncMode | '' });
-                          if (u.id === user()?.id) await refresh(); // their own Connections page follows
-                        }, t('common.saved'))}>
-                        <option value="">{t('sync.mode_default', { mode: t(`sync.mode_${defaultMode()}`) })}</option>
-                        <option value="server">{t('sync.mode_server')}</option>
-                        <option value="client">{t('sync.mode_client')}</option>
-                      </Select>
                     </td>
                     <td class={tdClass}>{u.last_login_at ? formatDateTime(u.last_login_at) : '—'}</td>
                     <td class={`${tdClass} text-right`}>

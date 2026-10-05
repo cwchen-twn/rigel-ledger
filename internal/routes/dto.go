@@ -82,10 +82,6 @@ type UserDTO struct {
 	// The system requires a second factor / this user has one enrolled.
 	MFARequired bool `json:"mfa_required,omitempty"`
 	MFAEnrolled bool `json:"mfa_enrolled,omitempty"`
-	// Only on GET /api/me: where this person's connections sync -- server
-	// (the cluster's runner) or client (a runner on their own device). An
-	// admin sets it.
-	SyncMode string `json:"sync_mode,omitempty" enums:"server,client"`
 }
 
 func userDTO(u db.User) UserDTO {
