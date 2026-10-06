@@ -12,6 +12,7 @@ import { formatDateTime } from '~/lib/dates';
 const compose = (origin: string) => `services:
   rigel-sync:
     image: ghcr.io/cwchen-twn/rigel-ledger-sync:latest
+    platform: linux/amd64
     restart: unless-stopped
     environment:
       RIGEL_URL: ${origin}

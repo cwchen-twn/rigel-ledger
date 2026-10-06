@@ -1,4 +1,6 @@
-# Build the container image and push it to Gitea's registry. Mirrors
+# Build the container images -- the app (Dockerfile) and the sync runner
+# (integrations/rigel-sync/Dockerfile, as rigel-ledger-sync) -- and push them
+# to Gitea's registry, with the same tags. Mirrors
 # .github/workflows/image.yml (which pushes the same tags to ghcr.io) --
 # change both together.
 #
@@ -90,3 +92,14 @@ jobs:
 
           for t in $TAGS; do docker push "$IMG:$t"; done
           echo "pushed $IMG: $TAGS"
+
+          # The sync runner. linux/amd64 only on both forges, the owner's call
+          # (2026-10-06): arm64 here would mean registering QEMU in the k3s
+          # node's kernel; Apple silicon runs it under Rosetta.
+          SYNC="$IMG-sync"
+          ARGS=""
+          for t in $TAGS; do ARGS="$ARGS -t $SYNC:$t"; done
+          # shellcheck disable=SC2086
+          docker build --platform linux/amd64 $ARGS integrations/rigel-sync
+          for t in $TAGS; do docker push "$SYNC:$t"; done
+          echo "pushed $SYNC: $TAGS"

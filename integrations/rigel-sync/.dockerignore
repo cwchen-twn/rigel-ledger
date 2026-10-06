@@ -1,0 +1,8 @@
+# Only what the image copies: the runner, its vendored bundles and the lockfile.
+*
+!package.json
+!bun.lock
+!src/
+!vendor/all-set-tw/*.js
+!vendor/all-set-tw/LICENSE
+!vendor/all-set-tw/UPSTREAM

@@ -1,4 +1,6 @@
-# Build the container image and push it to ghcr.io. Mirrors
+# Build the container images -- the app (Dockerfile) and the sync runner
+# (integrations/rigel-sync/Dockerfile, as rigel-ledger-sync) -- and push them
+# to ghcr.io, with the same tags. Mirrors
 # .gitea/workflows/image.yaml (which pushes the same tags to
 # git.chenantunez.com) -- change both together.
 #
@@ -37,10 +39,12 @@ jobs:
             refs/tags/v*)
               VERSION="${GITHUB_REF#refs/tags/v}"
               TAGS="$IMAGE:v$VERSION,$IMAGE:$SHA_TAG"
+              SYNC_TAGS="$IMAGE-sync:v$VERSION,$IMAGE-sync:$SHA_TAG"
               ;;
             *)
               VERSION="$SHA_TAG"
               TAGS="$IMAGE:$SHA_TAG,$IMAGE:latest"
+              SYNC_TAGS="$IMAGE-sync:$SHA_TAG,$IMAGE-sync:latest"
               ;;
           esac
           {
@@ -48,6 +52,7 @@ jobs:
             echo "commit=$SHORT"
             echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo "tags=$TAGS"
+            echo "sync_tags=$SYNC_TAGS"
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up Buildx
@@ -75,3 +80,19 @@ jobs:
             org.opencontainers.image.source=https://github.com/cwchen-twn/rigel-ledger
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+
+      - name: Build and push the sync runner
+        # linux/amd64 only on both forges, the owner's call (2026-10-06):
+        # arm64 on Gitea would mean registering QEMU in the k3s node's kernel;
+        # Apple silicon runs it under Rosetta.
+        uses: docker/build-push-action@v7.4.0
+        with:
+          context: integrations/rigel-sync
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.sync_tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/cwchen-twn/rigel-ledger
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.description=RigelLedger's sync runner (integrations/rigel-sync)

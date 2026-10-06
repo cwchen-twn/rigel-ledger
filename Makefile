@@ -85,11 +85,11 @@ upgrade/bun:
 	# CI reads the version from packageManager (setup-bun bun-version-file);
 	# the image from the Dockerfile. Renovate moves both together too.
 	sed -i -E 's|"packageManager": "bun@[0-9.]+"|"packageManager": "bun@$(version)"|' web/package.json integrations/rigel-sync/package.json
-	sed -i -E 's|^FROM oven/bun:[0-9.]+|FROM oven/bun:$(version)|' Dockerfile
+	sed -i -E 's|^FROM oven/bun:[0-9.]+|FROM oven/bun:$(version)|' Dockerfile integrations/rigel-sync/Dockerfile
 	cd web && bun install
 	cd web && bun run build:prod
 	cd integrations/rigel-sync && bun install
-	@grep -n '"packageManager"' web/package.json integrations/rigel-sync/package.json; grep -n '^FROM oven/bun:' Dockerfile
+	@grep -n '"packageManager"' web/package.json integrations/rigel-sync/package.json; grep -n '^FROM oven/bun:' Dockerfile integrations/rigel-sync/Dockerfile
 
 ##upgrade/bun/list: Show the pinned Bun (package.json, Dockerfile) and the newest releases
 .PHONY: upgrade/bun/list

@@ -17,7 +17,21 @@ code. Credentials and answers exist in the clear only in this process.
 
 ## Running it
 
-Node 22.18 or later runs the TypeScript in `src/` directly (type stripping);
+With Docker: Settings -> Sync runner -> Link a runner shows the compose file
+(image `ghcr.io/cwchen-twn/rigel-ledger-sync`, also on
+`git.chenantunez.com/cwchen-twn/rigel-ledger-sync`; linux/amd64, which Apple
+silicon runs under Rosetta). The image carries Node, Chromium and the CAPTCHA
+model; its key and state live in the `/data` volume. A connector can be tried
+in it too:
+
+```bash
+docker run --rm -it --platform linux/amd64 -v rigel-sync:/data ghcr.io/cwchen-twn/rigel-ledger-sync try tw-cathaybk
+```
+
+`Dockerfile` here builds it (`docker build -t rigel-ledger-sync .`); the `image`
+workflows push it on `main` and on tags, with the app's tags.
+
+Without Docker, Node 22.18 or later runs the TypeScript in `src/` directly (type stripping);
 there is no build step. The bank connectors drive a real browser, so Chrome or
 Chromium must be installed (`puppeteer-core` does not download one).
 
@@ -35,6 +49,7 @@ RIGEL_URL=https://ledger.chenantunez.com RUNNER_TOKEN=... DATA_DIR=./data node s
 | `CHROME_PATH` | the browser; by default the first Chrome or Chromium found in the usual places |
 | `CHROME_ARGS` | more Chrome flags, space-separated, `"quoted"` when one holds a space; e.g. `--proxy-server=socks5://...` to sign in to the banks from a Taiwan address |
 | `RIGEL_SYNC_HEADFUL=1` | show the browser window, to watch a connector at work |
+| `RIGEL_SYNC_NO_SANDBOX=1` | start Chrome without its sandbox (always as root). The image sets it: a container's default seccomp profile denies the user namespaces the sandbox needs |
 | `RIGEL_SYNC_OCR_MODEL` | a copy of the CAPTCHA model already on disk (an offline install); by default it is downloaded once into `DATA_DIR/models` |
 | `RIGEL_SYNC_FAKE=1` | also offer the pretend institution `fake` (development only) |
 

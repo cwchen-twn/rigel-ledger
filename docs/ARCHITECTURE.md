@@ -763,6 +763,7 @@ token kinds). Migration `000008`.
   services:
     rigel-sync:
       image: ghcr.io/cwchen-twn/rigel-ledger-sync:latest
+      platform: linux/amd64             # the only build; Apple silicon runs it under Rosetta
       restart: unless-stopped
       environment:
         RIGEL_URL: https://ledger.chenantunez.com
@@ -774,8 +775,18 @@ token kinds). Migration `000008`.
   ```
 
   The key is generated inside the volume on first start, so it stays on that machine.
-  The image must be multi-arch (linux/amd64 and linux/arm64, for Apple silicon);
-  today's `image` workflow builds amd64 only, so rigel-sync's gets both.
+  The image (`integrations/rigel-sync/Dockerfile`, P4c-2d) is Node 22 on Debian
+  bookworm-slim with Debian's Chromium, tini as PID 1 (Chrome leaves renderer
+  processes to reap), the CAPTCHA model baked in at its sha256, and the runner as
+  the unprivileged `node` user. Chrome's sandbox is off (`RIGEL_SYNC_NO_SANDBOX=1`):
+  it needs user namespaces, which Docker's and Kubernetes' default seccomp profiles
+  do not give a container, so the container is the boundary. About 960 MB, 680 of
+  them Chromium and its libraries.
+  **linux/amd64 only, on both forges** (the owner's call, 2026-10-06): arm64 on
+  Gitea would mean registering QEMU in the k3s node's kernel from a CI job, and
+  building it on GitHub alone would make the registries differ. Docker Desktop on
+  Apple silicon runs the amd64 image under Rosetta (`platform: linux/amd64` in the
+  compose file says so). Revisit if Chrome under Rosetta proves unreliable.
 - **For a runner next to the app:** the cluster is in a data centre abroad, and some
   Taiwanese banks flag or block foreign data-centre addresses. The owner's runner may
   need to leave through a Taiwan exit node (Tailscale): `rigel-sync try tw-cathaybk` from
@@ -1072,7 +1083,7 @@ builds images.
 | P2 | ~~Dockerfile, Gitea/GitHub CI and release; probes and the hcloud chart (tailnet-only ipAllowList, own Postgres role, nightly backup); release `v0.1.0` and deploy~~ (done, 2026-09-24) |
 | P2.5 | **Accounts and sign-in security.** a: first-login wizard, verified email, invitations, registration modes, bootstrap admin, the Administration page (users, requests, sign-in rules, defaults, SMTP), throttling and the sign-in audit, sessions (migration `000002`). b: ~~two-factor sign-in -- email codes, TOTP, passkeys, recovery codes, enforcement (`000003`)~~ (done). Both before any public exposure |
 | P3 | ~~Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency)~~ (P3a, done); ~~the three statements bound to closing rates with `rates_used`, display-currency translation~~ (P3b, done); ~~book rebase, tag (trip) report~~ (P3c, done) |
-| P4 | **Sync and review**: ~~import API, runner tokens, `source_accounts`, review queue, rules, matching (duplicates, pending/posted, transfers), balance assertions and drift, CSV import~~ (P4a, done); ~~per-user Connections with credentials sealed to the runner, the runner protocol, challenges, the fake runner~~ (P4c-1, done); ~~server or client sync mode per person, device runners~~ (P4c-1.5, done); ~~one runner kind, every person links their own~~ (P4c-1.6, done); ~~the sync runner (then tw-sync, now rigel-sync): protocol, sealing, `try`~~ (P4c-2a, done); ~~vendored all-set-tw, the Chrome stand-in, 國泰世華~~ (P4c-2b, done); ~~永豐銀行 deposits and card, CAPTCHAs read in the runner~~ (P4c-2c, done); rigel-sync built once, one container image for the cluster and for people's computers (P4c-2); `import_rows` kinds for invoices, holdings and trades, order emails, challenges; receipt attachments (upload, camera, optional local OCR); rigel-sync connectors (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
+| P4 | **Sync and review**: ~~import API, runner tokens, `source_accounts`, review queue, rules, matching (duplicates, pending/posted, transfers), balance assertions and drift, CSV import~~ (P4a, done); ~~per-user Connections with credentials sealed to the runner, the runner protocol, challenges, the fake runner~~ (P4c-1, done); ~~server or client sync mode per person, device runners~~ (P4c-1.5, done); ~~one runner kind, every person links their own~~ (P4c-1.6, done); ~~the sync runner (then tw-sync, now rigel-sync): protocol, sealing, `try`~~ (P4c-2a, done); ~~vendored all-set-tw, the Chrome stand-in, 國泰世華~~ (P4c-2b, done); ~~永豐銀行 deposits and card, CAPTCHAs read in the runner~~ (P4c-2c, done); ~~rigel-sync, one container image for the cluster and for people's computers~~ (P4c-2d, done); `import_rows` kinds for invoices, holdings and trades, order emails, challenges; receipt attachments (upload, camera, optional local OCR); rigel-sync connectors (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
 | P5 | Securities and futures: Shioaji (daily) and Firstrade in rigel-sync (their Python SDKs as subprocesses), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, Banco Continental (if its export is not enough). Recurring list and subscription templates. (Points, average cost and the security commodity itself are done.) |
 | P6 | PWA polish, then Flutter if a native feature is needed |
 | P7 | **Tax workbooks (TW, PY)**: `person` tags and `tax_profiles`; tax categories and account mappings per jurisdiction; `tax_withheld` accounts and foreign-tax-paid records; per-year rule files; workbook export (income by category, deductions with evidence, withholding, capital gains in the country's currency and rate). Needs P3 reports, P4 attachments and P5 lots. Prepares and cross-checks; does not file. |

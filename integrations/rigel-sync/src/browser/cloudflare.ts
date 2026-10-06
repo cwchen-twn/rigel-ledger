@@ -65,8 +65,9 @@ async function prepare(browser: Browser, id: string): Promise<Session> {
 
 async function launch(_binding: unknown, _options?: { keep_alive?: number }): Promise<Session> {
   const args = ['--lang=zh-TW', '--disable-dev-shm-usage'];
-  // A container usually runs as root, where Chrome's sandbox cannot start.
-  if (process.getuid?.() === 0) args.push('--no-sandbox');
+  // Chrome's sandbox cannot start as root, nor in a container without user
+  // namespaces (the image sets RIGEL_SYNC_NO_SANDBOX=1; the container is the boundary).
+  if (process.getuid?.() === 0 || process.env.RIGEL_SYNC_NO_SANDBOX === '1') args.push('--no-sandbox');
   // More flags, space-separated, "quoted" when one holds a space:
   // --proxy-server=socks5://... to sign in from a Taiwan address.
   args.push(...(process.env.CHROME_ARGS?.match(/(?:[^\s"]+|"[^"]*")+/g) ?? []).map((a) => a.replaceAll('"', '')));
