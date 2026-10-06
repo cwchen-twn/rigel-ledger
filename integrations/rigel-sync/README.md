@@ -66,7 +66,7 @@ each connector lives in `src/connectors/<country>/`.
 | `tw-sinopac` | 永豐銀行 | 身分證字號, 使用者代碼, password | deposits in every currency (90 days) and the credit card (posted, and pending authorisations). Sign-in asks for a six-digit image CAPTCHA, which the runner reads itself (below); the session is kept and reused while the bank accepts it. When three images in a row are not read, the image goes to Connections ("Needs you") |
 | `tw-tdcc` | 集保 e存摺 | 身分證字號, e存摺 password | every broker account's holdings (shares, ETFs, funds), its movements (paged back over runs), and the settlement (交割) bank accounts with their balances and movements. The app's API, no browser. The first sign-in sends a code by email (sometimes then by SMS); the runner is then a trusted device. A trade's direction comes from its name (買進, 賣出, 配股, ...); a kind not recognised is logged (`集保 movements of a kind not recognised`) and left out. 集保 sends no cash for a trade: the queue asks for it |
 | `tw-einvoice` | 電子發票 | mobile number, carrier password (載具驗證碼) | the mobile barcode carrier's invoices for the last two periods (four months) and their lines, as `invoice` rows: each adds its lines to the payment it matches, and only one nothing paid for is booked, as a cash purchase. The e-invoice app's API, no browser and no code; its session is kept and reused. An invoice whose lines cannot be read still comes, as one line of its total |
-| `xx-mail` | Email | address, app password, label or folder (default `rigel`), IMAP server (default `imap.gmail.com`) | one folder, read-only. An order or receipt is an `invoice` row whose lines join the payment it matches, with the email printed to PDF as its evidence; a card alert (刷卡通知) is a pending card row. Parsed locally: schema.org Order and Invoice markup now, per-sender parsers as samples arrive. Each run rereads 14 days (120 the first time) |
+| `xx-mail` | Email | address, app password, label or folder (default `rigel`), IMAP server (default `imap.gmail.com`), optional 身分證字號 (opens encrypted statements) and read-back day (restores history once) | one folder, read-only. An order or receipt is an `invoice` row that joins the payment it matches, with the PDF it attaches (or the email printed to PDF) as evidence; one stating no amount is evidence matched by seller or by the 電子發票 number it names; a card alert (刷卡通知) is a pending card row; a 國泰期貨 月對帳單 becomes the month's rows on the margin account. Parsed locally (`src/mail/senders.ts`, schema.org). Each run rereads 14 days (120 the first time) |
 
 ## Trying a connector without the app
 
@@ -132,6 +132,12 @@ connector never marks, moves or deletes anything.
 many were read and recognised, never their content). An order's PDF is printed
 by the runner's Chrome with script off and every request refused but inline
 `data:`, so a tracking pixel is never loaded (`src/mail/pdf.ts`).
+
+Statements (`src/statements/`): a 國泰期貨 國內月對帳單 is a PDF encrypted with the
+holder's 身分證字號. pdf.js (`pdfjs-dist`, Apache-2.0, pure JS) opens it in the
+runner's process with the `id_number` credential -- no temporary file, no
+password on another program's command line -- and `cathayfut.ts` books the
+month from its 保證金及權利金專戶餘額 table (docs/ARCHITECTURE.md, "Futures").
 
 ### CAPTCHAs
 

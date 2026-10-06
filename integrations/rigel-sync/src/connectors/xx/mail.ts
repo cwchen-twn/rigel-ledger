@@ -23,8 +23,10 @@ import { simpleParser } from 'mailparser';
 import { type Mailbox, MailboxError, type MailboxLogin, openImap } from '../../mail/imap.ts';
 import { type Mail, mailDay, type Parsed, type Parser, parseMail, parsers } from '../../mail/parse.ts';
 import { MailPrinter } from '../../mail/pdf.ts';
+import { isCathayFutMonthly, monthRows, readMonth } from '../../statements/cathayfut.ts';
+import { PdfPasswordError, pdfLines } from '../../statements/pdf.ts';
 import { short, taipeiDay } from '../rows.ts';
-import type { Account, Batch, BatchFile, Connector, Row } from '../types.ts';
+import type { Account, Batch, BatchFile, Connector, Row, State } from '../types.ts';
 import { SyncError } from '../types.ts';
 
 const FIRST_DAYS = 120;
@@ -37,6 +39,7 @@ interface MailState {
   uidValidity?: string;
   lastUid?: number;
   lastDay?: string; // the last run, YYYY-MM-DD
+  readBack?: string; // the "read back from" day already read
 }
 
 export function makeMail(opts: { open?: (l: MailboxLogin) => Promise<Mailbox>; parsers?: Parser[]; now?: () => Date } = {}): Connector {
@@ -51,6 +54,8 @@ export function makeMail(opts: { open?: (l: MailboxLogin) => Promise<Mailbox>; p
       { name: 'password', label: 'App password', kind: 'secret' },
       { name: 'folder', label: 'Label or folder (default: rigel)', kind: 'text', optional: true },
       { name: 'host', label: 'IMAP server (default: imap.gmail.com)', kind: 'text', optional: true },
+      { name: 'id_number', label: '身分證字號 (opens encrypted statements, e.g. 國泰期貨)', kind: 'secret', optional: true },
+      { name: 'read_back', label: 'Read back from (YYYY-MM-DD), to restore history once', kind: 'text', optional: true },
     ],
     async sync(ctx) {
       const user = ctx.credentials.address?.trim();
@@ -76,10 +81,17 @@ export function makeMail(opts: { open?: (l: MailboxLogin) => Promise<Mailbox>; p
 
       const today = now();
       const sameBox = state.uidValidity === box.uidValidity;
-      const since = new Date(today.getTime() - (state.lastDay && sameBox ? OVERLAP_DAYS : FIRST_DAYS) * 86_400_000);
-      const lastUid = sameBox ? (state.lastUid ?? 0) : 0;
+      let since = new Date(today.getTime() - (state.lastDay && sameBox ? OVERLAP_DAYS : FIRST_DAYS) * 86_400_000);
+      let lastUid = sameBox ? (state.lastUid ?? 0) : 0;
+      // History, once: from the day the person asked for, every email new again.
+      const readBack = /^\d{4}-\d{2}-\d{2}$/.test(ctx.credentials.read_back?.trim() ?? '') ? ctx.credentials.read_back!.trim() : undefined;
+      if (readBack && readBack !== state.readBack && new Date(`${readBack}T00:00:00Z`) < since) {
+        since = new Date(`${readBack}T00:00:00Z`);
+        lastUid = 0;
+      }
       const printer = new MailPrinter(ctx.log);
       const found: Array<{ uid: number; mail: Mail; raw: { from: string; date: string }; parsed: Parsed[]; attached?: Attached }> = [];
+      const statements: Array<{ uid: number; filename: string; content: Buffer }> = [];
       let read = 0;
       let maxUid = lastUid;
       try {
@@ -98,6 +110,12 @@ export function makeMail(opts: { open?: (l: MailboxLogin) => Promise<Mailbox>; p
             html: typeof p.html === 'string' ? p.html : undefined,
             text: p.text,
           };
+          // A statement: its PDF is the data (#42).
+          if (isCathayFutMonthly(mail)) {
+            const pdf = evidenceOf(p.attachments);
+            if (pdf?.content) statements.push({ uid: m.uid, filename: pdf.filename, content: pdf.content });
+            continue;
+          }
           const parsed = parseMail(mail, opts.parsers ?? parsers);
           if (parsed.length) {
             found.push({
@@ -122,9 +140,26 @@ export function makeMail(opts: { open?: (l: MailboxLogin) => Promise<Mailbox>; p
           files.push({ ref, filename: file.filename, data: file.content.toString('base64') });
           fileOf.set(f.uid, ref);
         }
+        const extra = await readStatements(statements, ctx.credentials.id_number?.trim().toUpperCase() ?? '', ctx.log);
+        // A statement's PDF goes with it once, when its email is new; within the budget.
+        for (const st of extra.files) {
+          const size = Math.ceil((st.data.length * 3) / 4);
+          if (Number(st.ref.split('-')[1]) <= lastUid || used + size > FILE_BUDGET) continue;
+          used += size;
+          files.push(st);
+        }
         ctx.log.info('mail read', { read, recognised: found.length, files: files.length, attached: found.filter((f) => f.attached).length });
-        await ctx.saveState({ uidValidity: box.uidValidity, lastUid: maxUid, lastDay: taipeiDay(today) } satisfies MailState);
-        return toBatch(found.map((f) => ({ mail: f.mail, parsed: f.parsed, file: fileOf.get(f.uid) })), files, taipeiDay(today));
+        const next: MailState & State = { uidValidity: box.uidValidity, lastUid: maxUid, lastDay: taipeiDay(today) };
+        if (readBack ?? state.readBack) next.readBack = readBack ?? state.readBack;
+        await ctx.saveState(next);
+        const batch = toBatch(found.map((f) => ({ mail: f.mail, parsed: f.parsed, file: fileOf.get(f.uid) })), files, taipeiDay(today));
+        for (const a of extra.accounts) if (!batch.accounts.some((x) => x.id === a.id)) batch.accounts.push(a);
+        batch.rows.push(...extra.rows);
+        const sent = new Set(files.map((f) => f.ref));
+        for (const r of extra.rows) if (r.file && !sent.has(r.file)) delete r.file;
+        const used2 = new Set(batch.rows.map((r) => r.file).filter(Boolean));
+        batch.files = files.filter((f) => used2.has(f.ref));
+        return batch;
       } finally {
         await printer.close();
         await box.close();
@@ -134,6 +169,42 @@ export function makeMail(opts: { open?: (l: MailboxLogin) => Promise<Mailbox>; p
 }
 
 export const mail = makeMail();
+
+/**
+ * Statements as rows: each PDF opened with the holder's 身分證字號 in this
+ * process. One that does not open, or does not add up, is left out with a
+ * warning that names no figure.
+ */
+export async function readStatements(
+  statements: Array<{ uid: number; filename: string; content: Buffer }>,
+  password: string,
+  log: { warn(msg: string, data?: Record<string, unknown>): void },
+): Promise<{ accounts: Account[]; rows: Row[]; files: BatchFile[] }> {
+  const out = { accounts: [] as Account[], rows: [] as Row[], files: [] as BatchFile[] };
+  if (statements.length && !password) {
+    log.warn('statements need the 身分證字號 field', { statements: statements.length });
+    return out;
+  }
+  for (const st of statements) {
+    try {
+      const month = readMonth(await pdfLines(st.content, password));
+      if (!month) {
+        log.warn('a statement was not recognised', { uid: st.uid });
+        continue;
+      }
+      const ref = `statement-${st.uid}`;
+      const { account, rows } = monthRows(month, ref);
+      if (!out.accounts.some((a) => a.id === account.id)) out.accounts.push(account);
+      out.rows.push(...rows);
+      out.files.push({ ref, filename: st.filename, data: st.content.toString('base64') });
+    } catch (err) {
+      log.warn(err instanceof PdfPasswordError ? 'a statement did not open with the 身分證字號' : 'a statement was left out', {
+        uid: st.uid, reason: err instanceof PdfPasswordError ? 'password' : 'unreadable',
+      });
+    }
+  }
+  return out;
+}
 
 interface Attached {
   filename: string;

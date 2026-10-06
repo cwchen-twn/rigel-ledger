@@ -187,6 +187,24 @@ describe('xx-mail against a mailbox in memory', () => {
     assert.deepEqual(batch.files?.map((f) => f.filename), ['Hetzner_000099990000.pdf', 'notice.pdf'], 'their own PDFs, nothing printed');
   });
 
+  test('read back from a day restores history once, then the usual overlap', async () => {
+    const asked: string[] = [];
+    const box: Mailbox = { uidValidity: '1', async *since(day) { asked.push(day.toISOString().slice(0, 10)); }, close: async () => {} };
+    const sync = async (state: State) => {
+      let saved: State = {};
+      const ctx: SyncContext = {
+        credentials: { address: 'me@example.com', password: 'x', read_back: '2023-01-01' }, state, saveState: async (s) => void (saved = s),
+        ask: async () => { throw new Error('no'); }, log: { info() {}, warn() {} }, signal: AbortSignal.timeout(10_000),
+      };
+      await makeMail({ open: async () => box, now: () => new Date('2026-09-10T00:00:00Z') }).sync(ctx);
+      return saved;
+    };
+    const first = await sync({ uidValidity: '1', lastUid: 50, lastDay: '2026-09-09' });
+    assert.equal(first.readBack, '2023-01-01');
+    await sync(first);
+    assert.deepEqual(asked, ['2023-01-01', '2026-08-27']);
+  });
+
   test('a refused login is bad_credentials, a missing label verification_failed', async () => {
     await assert.rejects(run({}, async () => { throw new MailboxError('auth', 'Invalid credentials'); }).batch,
       (e) => e instanceof SyncError && e.code === 'bad_credentials');

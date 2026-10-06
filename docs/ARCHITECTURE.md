@@ -482,7 +482,7 @@ Taiwan finance hub whose connectors this design reuses.
 | 3 | 永豐期貨 | futures positions, margin, P&L | **Shioaji** futures account | new (Python) |
 | 4 | 國泰世華 | deposits, balances, transactions; card bills and spend | all-set-tw `cathaybk` (browser per sync; extra verification is manual) | reuse |
 | 5 | 國泰證券 | holdings and trades | via 集保 e存摺; retires when brokerage consolidates into 永豐 | via 集保 |
-| 6 | 國泰期貨 | futures trades | statement PDF until consolidated into 永豐 | PDF |
+| 6 | 國泰期貨 | futures history | the emailed 月對帳單 PDF, read by `xx-mail` (#42); history only, since futures move to 永豐 Shioaji | PDF |
 | 7, 10 | 國泰人壽, 南山人壽 | policies | **out of the ledger** (see Insurance); premiums arrive through bank and card | not synced |
 | 8 | 將來銀行 | deposits, balances, transactions; 信貸 | new connector (app API) or export; the loan is a liability with principal/interest split | new |
 | 9 | 兆豐銀行 | deposits, balances, transactions | new connector or export | new |
@@ -706,6 +706,18 @@ implementation against one pretend institution, for development and end-to-end t
     - Daily settle P&L from `margin()` becomes margin-account ↔ futures P&L postings.
     - Equity is an assertion.
     - Contract value stays exposure (see Holdings).
+    - 國泰期貨 history (#42, the owner's call 2026-10-06: Cathay is for history only,
+      Shioaji takes over) is booked a month at a time the way Shioaji will book a day,
+      from the 月對帳單's 保證金及權利金專戶餘額 table alone, on the margin account
+      (`tw-cathayfut-<account>`): realised P&L (權利金 + 平倉 + 到期履約), 手續費 and
+      期交稅 as rows of their own (rules give them categories), 存提, unrealised P&L
+      (權益總值 - 本月餘額: open futures and option market values) on the last day,
+      reversed the next, and an assertion of 權益總值. 原始/維持保證金 are thresholds the
+      broker requires, not balances: never booked. The table must add up or nothing is
+      sent. The PDF is encrypted with the holder's 身分證字號: `xx-mail`'s optional
+      `id_number` field opens it in the runner's process (pdf.js; no file, no other
+      program). The daily 買賣報告書 are left alone (the month has the same fills). The
+      first month needs an opening balance entered by hand, or it shows as drift.
 - **Assertions.** `balance_assertions(account_id, date, amount, source)` hold bank
   balances, card outstanding, and units per security.
   - A mismatch shows as drift on the account, with the date it began.
@@ -958,6 +970,9 @@ Email is **evidence**, like e-invoices: it enriches and proposes, it does not po
     due, 應繳金額, last period's unpaid amount included), 電子發票 notices (關貿), Trip.com;
     then schema.org Order and Invoice. Card alerts (國泰世華, 永豐), Taiwan shops (momo,
     PChome, Shopee, Uber Eats, foodpanda) and Google Play, Netflix follow, from samples.
+  - `read_back` (optional, a day): the first run after it is set reads the label from
+    that day, every email new again, to restore history (國泰期貨 statements, old
+    invoices); afterwards the usual overlap.
   - Known gap: a bill paid by auto-debit (遠傳) is charged days after its email, maybe
     outside the 5-day window; it then waits like any invoice, and becomes a cash
     purchase only if a person says so.
@@ -1213,7 +1228,7 @@ builds images.
 | P2 | ~~Dockerfile, Gitea/GitHub CI and release; probes and the hcloud chart (tailnet-only ipAllowList, own Postgres role, nightly backup); release `v0.1.0` and deploy~~ (done, 2026-09-24) |
 | P2.5 | **Accounts and sign-in security.** a: first-login wizard, verified email, invitations, registration modes, bootstrap admin, the Administration page (users, requests, sign-in rules, defaults, SMTP), throttling and the sign-in audit, sessions (migration `000002`). b: ~~two-factor sign-in -- email codes, TOTP, passkeys, recovery codes, enforcement (`000003`)~~ (done). Both before any public exposure |
 | P3 | ~~Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency)~~ (P3a, done); ~~the three statements bound to closing rates with `rates_used`, display-currency translation~~ (P3b, done); ~~book rebase, tag (trip) report~~ (P3c, done) |
-| P4 | **Sync and review**: ~~import API, runner tokens, `source_accounts`, review queue, rules, matching (duplicates, pending/posted, transfers), balance assertions and drift, CSV import~~ (P4a, done); ~~per-user Connections with credentials sealed to the runner, the runner protocol, challenges, the fake runner~~ (P4c-1, done); ~~server or client sync mode per person, device runners~~ (P4c-1.5, done); ~~one runner kind, every person links their own~~ (P4c-1.6, done); ~~the sync runner (then tw-sync, now rigel-sync): protocol, sealing, `try`~~ (P4c-2a, done); ~~vendored all-set-tw, the Chrome stand-in, 國泰世華~~ (P4c-2b, done); ~~永豐銀行 deposits and card, CAPTCHAs read in the runner~~ (P4c-2c, done); ~~rigel-sync, one container image for the cluster and for people's computers~~ (P4c-2d, done); `import_rows` kinds for invoices, holdings and trades, order emails, challenges; ~~receipt attachments (upload, camera) and synced evidence~~ (#36, done); ~~`holding` and `trade` rows, securities from a broker account~~ (#37, done); ~~`invoice` rows with items, matched to what paid, split by item category~~ (#38, done); ~~`tw-tdcc`, 集保 e存摺~~ (#39, done); ~~`tw-einvoice`, 電子發票 on a mobile barcode~~ (#40, done); ~~`xx-mail`, email over IMAP, schema.org orders~~ (#41 part 1, done); ~~email evidence: the attached PDF, emails without an amount, invoice numbers, parsers for Hetzner, DigitalOcean, Apple, Gotogate, 遠傳, 電子發票 notices, Trip.com~~ (#57, done; card alerts and shops next, #41); ~~one purchase from several sources: waiting rows matched to each other, a second invoice, invoices that wait~~ (#53-#55, done); ~~foreign-currency invoices matched to the card charge~~ (#56, done); optional local OCR for receipts (#44); rigel-sync connectors (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
+| P4 | **Sync and review**: ~~import API, runner tokens, `source_accounts`, review queue, rules, matching (duplicates, pending/posted, transfers), balance assertions and drift, CSV import~~ (P4a, done); ~~per-user Connections with credentials sealed to the runner, the runner protocol, challenges, the fake runner~~ (P4c-1, done); ~~server or client sync mode per person, device runners~~ (P4c-1.5, done); ~~one runner kind, every person links their own~~ (P4c-1.6, done); ~~the sync runner (then tw-sync, now rigel-sync): protocol, sealing, `try`~~ (P4c-2a, done); ~~vendored all-set-tw, the Chrome stand-in, 國泰世華~~ (P4c-2b, done); ~~永豐銀行 deposits and card, CAPTCHAs read in the runner~~ (P4c-2c, done); ~~rigel-sync, one container image for the cluster and for people's computers~~ (P4c-2d, done); `import_rows` kinds for invoices, holdings and trades, order emails, challenges; ~~receipt attachments (upload, camera) and synced evidence~~ (#36, done); ~~`holding` and `trade` rows, securities from a broker account~~ (#37, done); ~~`invoice` rows with items, matched to what paid, split by item category~~ (#38, done); ~~`tw-tdcc`, 集保 e存摺~~ (#39, done); ~~`tw-einvoice`, 電子發票 on a mobile barcode~~ (#40, done); ~~`xx-mail`, email over IMAP, schema.org orders~~ (#41 part 1, done); ~~國泰期貨 月對帳單 history over email~~ (#42 part 1, done); ~~email evidence: the attached PDF, emails without an amount, invoice numbers, parsers for Hetzner, DigitalOcean, Apple, Gotogate, 遠傳, 電子發票 notices, Trip.com~~ (#57, done; card alerts and shops next, #41); ~~one purchase from several sources: waiting rows matched to each other, a second invoice, invoices that wait~~ (#53-#55, done); ~~foreign-currency invoices matched to the card charge~~ (#56, done); optional local OCR for receipts (#44); rigel-sync connectors (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
 | P5 | Securities and futures: Shioaji (daily) and Firstrade in rigel-sync (their Python SDKs as subprocesses), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, Banco Continental (if its export is not enough). Recurring list and subscription templates. (Points, average cost and the security commodity itself are done.) |
 | P6 | PWA polish, then Flutter if a native feature is needed |
 | P7 | **Tax workbooks (TW, PY)**: `person` tags and `tax_profiles`; tax categories and account mappings per jurisdiction; `tax_withheld` accounts and foreign-tax-paid records; per-year rule files; workbook export (income by category, deductions with evidence, withholding, capital gains in the country's currency and rate). Needs P3 reports, P4 attachments and P5 lots. Prepares and cross-checks; does not file. |
