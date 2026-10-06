@@ -19,19 +19,30 @@ export interface Account {
   id: string; // the institution's own id (masked account or card number), stable across runs
   label: string;
   currency: string;
+  /** brokerage: holds securities (holding and trade rows); cash is the default. */
+  kind?: 'cash' | 'brokerage';
 }
 
 /** A row of the import queue; amounts are decimal strings (see money.ts). */
 export interface Row {
-  kind: 'transaction' | 'balance';
+  kind: 'transaction' | 'balance' | 'holding' | 'trade';
   account: string; // Account.id
   id: string; // stable across runs: with the connector, the duplicate key
   date: string; // YYYY-MM-DD
-  amount: string; // debit > 0 on the account: money in, a card payment
+  /** debit > 0 on the account: money in, a card payment; omitted for holdings and trades. */
+  amount?: string;
   currency?: string;
   description?: string;
   counterparty?: string;
   pending?: boolean;
+
+  // holding and trade rows (the app's import core, #37)
+  security?: string; // NAMESPACE:SYMBOL, e.g. XTAI:2330
+  security_name?: string;
+  quote_currency?: string;
+  units?: string; // held (holding), or moved: > 0 in, < 0 out (trade)
+  price?: string; // per unit, in the quote currency, when known
+  cash?: string; // what a trade settled for, signed on the settlement account, when known
 }
 
 export interface Batch {

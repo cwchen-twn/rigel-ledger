@@ -986,6 +986,13 @@
         "user_code": "User code",
         "password": "Password"
       }
+    },
+    "tw-tdcc": {
+      "name": "TDCC ePassbook (集保 e存摺)",
+      "field": {
+        "id_number": "ID number",
+        "password": "e存摺 password"
+      }
     }
   },
   "runner": {

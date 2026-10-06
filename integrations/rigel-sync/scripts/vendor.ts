@@ -36,12 +36,15 @@ const FILES = [
   'apps/worker/src/sources/sinopac/protocol.ts',
   'apps/worker/src/sources/sinopac/deposit-protocol.ts',
   'apps/worker/src/sources/sinopac/connector.ts',
+  'apps/worker/src/sources/tdcc/epassbook-client.ts',
+  'apps/worker/src/sources/tdcc/protocol.ts',
 ];
 
 // One bundle per connector: what our wrapper imports from it.
 const BUNDLES: Record<string, string> = {
   cathaybk: 'apps/worker/src/sources/cathaybk/connector.ts',
   sinopac: 'apps/worker/src/sources/sinopac/connector.ts',
+  tdcc: 'apps/worker/src/sources/tdcc/protocol.ts',
 };
 
 async function fetchUpstream(commit: string) {

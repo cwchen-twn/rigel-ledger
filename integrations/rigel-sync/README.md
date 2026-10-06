@@ -64,6 +64,7 @@ each connector lives in `src/connectors/<country>/`.
 |---|---|---|---|
 | `tw-cathaybk` | 國泰世華 | 身分證字號, 用戶代號, password, codes by SMS or email | deposits (90 days) and the credit card (3 statements). The first run asks for a one-time code; the bank then trusts this runner's browser, and later runs ask nothing. Account ids keep the last four digits only |
 | `tw-sinopac` | 永豐銀行 | 身分證字號, 使用者代碼, password | deposits in every currency (90 days) and the credit card (posted, and pending authorisations). Sign-in asks for a six-digit image CAPTCHA, which the runner reads itself (below); the session is kept and reused while the bank accepts it. When three images in a row are not read, the image goes to Connections ("Needs you") |
+| `tw-tdcc` | 集保 e存摺 | 身分證字號, e存摺 password | every broker account's holdings (shares, ETFs, funds), its movements (paged back over runs), and the settlement (交割) bank accounts with their balances and movements. The app's API, no browser. The first sign-in sends a code by email (sometimes then by SMS); the runner is then a trusted device. A trade's direction comes from its name (買進, 賣出, 配股, ...); a kind not recognised is logged (`集保 movements of a kind not recognised`) and left out. 集保 sends no cash for a trade: the queue asks for it |
 
 ## Trying a connector without the app
 

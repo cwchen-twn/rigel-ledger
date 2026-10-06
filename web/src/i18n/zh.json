@@ -986,6 +986,13 @@
         "user_code": "使用者代碼",
         "password": "網路銀行密碼"
       }
+    },
+    "tw-tdcc": {
+      "name": "集保 e存摺",
+      "field": {
+        "id_number": "身分證字號",
+        "password": "e存摺 密碼"
+      }
     }
   },
   "runner": {
