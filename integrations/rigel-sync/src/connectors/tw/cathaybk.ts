@@ -121,7 +121,7 @@ export function toBatch(r: CathaybkResult, day: string): Batch {
 
   for (const a of r.bankAccounts ?? []) {
     // One number can hold several currencies (外幣活存): a foreign one carries its own.
-    const cur = a.currency && a.currency !== 'TWD' ? `-${a.currency.toLowerCase()}` : '';
+    const cur = a.currency && a.currency !== 'TWD' ? `-${a.currency}` : '';
     let id = a.accountType === 'credit' ? 'card' : `deposit-${last4(a.sourceId)}${cur}`;
     if (accounts.some((x) => x.id === id)) id = `deposit-${a.sourceId.replace(/\D/g, '')}${cur}`; // two numbers ending alike
     const label = a.accountType === 'credit'

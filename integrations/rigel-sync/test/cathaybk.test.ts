@@ -109,14 +109,14 @@ describe('cathaybk against a pretend bank, in Chrome', { skip, timeout: 180_000 
 
     assert.deepEqual(batch.accounts.map((a) => [a.id, a.label, a.currency]), [
       ['deposit-8901', '臺幣活存 ***8901', 'TWD'],
-      ['deposit-2109-usd', '國泰外幣活存 ***2109 USD', 'USD'],
+      ['deposit-2109-USD', '國泰外幣活存 ***2109 USD', 'USD'],
       ['card', '國泰信用卡 末四碼 4321', 'TWD'],
     ]);
     const rows = batch.rows.map(({ kind, account, date, amount, description }) => `${kind} ${account} ${date} ${amount} ${description ?? ''}`.trim());
     const day = taipeiDay(new Date());
     assert.deepEqual(rows, [
       `balance deposit-8901 ${day} 40300`,
-      `balance deposit-2109-usd ${day} 1234.5`,
+      `balance deposit-2109-USD ${day} 1234.5`,
       'transaction deposit-8901 2026-09-30 42000 薪資',
       'transaction deposit-8901 2026-09-30 -120 7-ELEVEN',
       'transaction deposit-8901 2026-09-30 -120 7-ELEVEN',
