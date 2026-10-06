@@ -88,6 +88,16 @@
         "github.com/sqlc-dev/sqlc"
       ],
       "groupName": "sqlc"
+    },
+    {
+      "description": "requires-python is the floor the project supports, not a dependency to pin: rangeStrategy pin made it ==3.14.8 while .python-version says 3.13, and uv sync refused in the hooks job. The interpreter is chosen by .python-version.",
+      "matchManagers": [
+        "pep621"
+      ],
+      "matchDepTypes": [
+        "requires-python"
+      ],
+      "enabled": false
     }
   ],
   "customManagers": [
