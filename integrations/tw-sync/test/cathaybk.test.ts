@@ -65,12 +65,14 @@ const skip = !hasChrome() && process.env.TW_SYNC_REQUIRE_CHROME !== '1' && 'no C
 
 describe('cathaybk against a pretend bank, in Chrome', { skip, timeout: 180_000 }, () => {
   let bank: FakeCathay;
+  const given = process.env.CHROME_ARGS; // CI's --no-sandbox, kept
   before(async () => {
     bank = await startFakeCathay();
-    process.env.CHROME_ARGS = bank.chromeArgs;
+    process.env.CHROME_ARGS = [given, bank.chromeArgs].filter(Boolean).join(' ');
   });
   after(async () => {
-    delete process.env.CHROME_ARGS;
+    if (given === undefined) delete process.env.CHROME_ARGS;
+    else process.env.CHROME_ARGS = given;
     await bank?.close();
   });
 

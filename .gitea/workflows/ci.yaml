@@ -118,6 +118,11 @@ jobs:
         env:
           CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
           TW_SYNC_REQUIRE_CHROME: "1"
+          # GitHub's Ubuntu 24.04 runner forbids the user namespaces Chrome's
+          # sandbox needs for a Chrome outside /opt/google ("No usable sandbox");
+          # Gitea's runs as root, where the shim already drops it. The pretend
+          # bank is all it opens here.
+          CHROME_ARGS: --no-sandbox
         run: cd integrations/tw-sync && bun install --frozen-lockfile && bun run check
 
   hooks:
