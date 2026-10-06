@@ -1,0 +1,10 @@
+# gitleaks (pre-commit and CI): every default rule, and one narrow exception.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Vendored upstream code (all-set-tw, unedited): the 兆豐 Android app's public client token and public key, which the app ships to every phone and upstream publishes"
+paths = [
+  '''^integrations/rigel-sync/vendor/all-set-tw/apps/worker/src/sources/megabank/app-settings\.ts$''',
+  '''^integrations/rigel-sync/vendor/all-set-tw/megabank\.js$''',
+]

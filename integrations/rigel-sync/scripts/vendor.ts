@@ -41,6 +41,9 @@ const FILES = [
   'apps/worker/src/sources/einvoice/invoice-data.ts',
   'apps/worker/src/sources/einvoice/v2-client.ts',
   'apps/worker/src/sources/einvoice/protocol.ts',
+  'apps/worker/src/sources/megabank/app-settings.ts',
+  'apps/worker/src/sources/megabank/protocol.ts',
+  'apps/worker/src/sources/megabank/mobile-api.ts',
 ];
 
 // One bundle per connector: what our wrapper imports from it.
@@ -49,6 +52,7 @@ const BUNDLES: Record<string, string> = {
   sinopac: 'apps/worker/src/sources/sinopac/connector.ts',
   tdcc: 'apps/worker/src/sources/tdcc/protocol.ts',
   einvoice: 'apps/worker/src/sources/einvoice/protocol.ts',
+  megabank: 'apps/worker/src/sources/megabank/mobile-api.ts',
 };
 
 async function fetchUpstream(commit: string) {
