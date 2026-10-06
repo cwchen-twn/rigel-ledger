@@ -1,10 +1,11 @@
-import { Check, FileUp, Inbox, Paperclip, Trash2, WandSparkles, X } from 'lucide-solid';
+import { Check, FileText, FileUp, Inbox, Paperclip, Trash2, WandSparkles, X } from 'lucide-solid';
 import { createEffect, createMemo, createResource, createSignal, For, on, Show } from 'solid-js';
 import { api } from '~/api/client';
 import type { ImportRow, Proposal } from '~/api/types';
 import { AccountCombobox } from '~/components/AccountCombobox';
 import { PageHeader } from '~/components/AppShell';
 import { CsvImportDialog } from '~/components/CsvImportDialog';
+import { PdfImportDialog } from '~/components/PdfImportDialog';
 import { Money, MoneyInput } from '~/components/Money';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
@@ -55,6 +56,7 @@ export default function Imports() {
   const [selected, setSelected] = createSignal<Set<number>>(new Set());
   const [busy, setBusy] = createSignal(false);
   const [csvOpen, setCsvOpen] = createSignal(false);
+  const [pdfOpen, setPdfOpen] = createSignal(false);
   const [ruleFor, setRuleFor] = createSignal<ImportRow | null>(null);
 
   const reload = () => {
@@ -245,9 +247,14 @@ export default function Imports() {
         title={t('imports.title')}
         actions={
           <Show when={book.canEdit()}>
-            <Button onClick={() => setCsvOpen(true)}>
-              <FileUp /> {t('imports.csv_open')}
-            </Button>
+            <div class="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => setPdfOpen(true)}>
+                <FileText /> {t('imports.pdf_open_dialog')}
+              </Button>
+              <Button onClick={() => setCsvOpen(true)}>
+                <FileUp /> {t('imports.csv_open')}
+              </Button>
+            </div>
           </Show>
         }
       />
@@ -555,6 +562,7 @@ export default function Imports() {
       </div>
 
       <CsvImportDialog open={csvOpen()} onOpenChange={setCsvOpen} onImported={reload} />
+      <PdfImportDialog open={pdfOpen()} onOpenChange={setPdfOpen} onImported={reload} />
       <RuleDialog
         row={ruleFor()}
         category={ruleFor() ? category(ruleFor()!) : null}

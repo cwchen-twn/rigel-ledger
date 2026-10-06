@@ -565,6 +565,8 @@ export interface ImportRowInput {
   counterparty?: string;
   pending?: boolean;
   raw?: unknown;
+  /** The ref of a batch file that is this row's evidence. */
+  file?: string;
 }
 
 export interface ImportBatch {
@@ -572,6 +574,8 @@ export interface ImportBatch {
   label: string;
   accounts: { id: string; label: string; currency: string }[];
   rows: ImportRowInput[];
+  /** Evidence: data is base64. */
+  files?: { ref: string; filename: string; data: string }[];
 }
 
 export interface ImportResult {

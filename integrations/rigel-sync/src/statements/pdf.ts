@@ -4,6 +4,7 @@
  * Taiwan statement is encrypted with the holder's 身分證字號).
  */
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { toLines } from './lines.ts';
 
 export class PdfPasswordError extends Error {}
 
@@ -24,15 +25,7 @@ export async function pdfLines(data: Buffer, password = ''): Promise<string[][]>
     const out: string[][] = [];
     for (let n = 1; n <= doc.numPages; n++) {
       const page = await doc.getPage(n);
-      const rows = new Map<number, Array<{ x: number; s: string }>>();
-      for (const it of (await page.getTextContent()).items) {
-        if (!('str' in it) || !it.str.trim()) continue;
-        const y = Math.round(it.transform[5]);
-        const row = rows.get(y) ?? [];
-        row.push({ x: it.transform[4], s: it.str.trim() });
-        rows.set(y, row);
-      }
-      for (const [, row] of [...rows].sort((a, b) => b[0] - a[0])) out.push(row.sort((a, b) => a.x - b.x).map((w) => w.s));
+      out.push(...toLines((await page.getTextContent()).items));
     }
     return out;
   } finally {

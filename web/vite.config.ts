@@ -13,7 +13,9 @@ export default defineConfig(({ mode }) => ({
   base: '/static/dist/',
   plugins: [solidPlugin(), tailwindcss()],
   resolve: {
-    alias: { '~': resolve(__dirname, 'src') },
+    // '@sync': the sync runner's statement parsers, shared so a PDF uploaded
+    // here is read exactly as the runner reads one from email.
+    alias: { '~': resolve(__dirname, 'src'), '@sync': resolve(__dirname, '../integrations/rigel-sync/src') },
   },
   build: {
     outDir: resolve(__dirname, 'static/dist'),

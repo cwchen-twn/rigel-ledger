@@ -14,8 +14,11 @@
  *
  * The table must add up (月初 + movements = 本月餘額) or nothing is sent.
  * The daily 買賣報告書 are left alone: the month has the same fills.
+ *
+ * Shared with the web app's PDF import (web/src/lib/statements.ts): no
+ * imports but src/decimal.ts and types, so it runs in a browser too.
  */
-import { addDecimal, plainDecimal } from '../connectors/rows.ts';
+import { addDecimal, plainDecimal } from '../decimal.ts';
 import type { Account, Row } from '../connectors/types.ts';
 
 export interface FuturesMonth {

@@ -5,15 +5,16 @@
 # distroless. The same file is built by .gitea/workflows/image.yaml and
 # .github/workflows/image.yml, so both registries carry identical images.
 #
-# The runtime stage is distroless static today. PDF statement import (roadmap
-# P4, docs/ARCHITECTURE.md) needs poppler's pdftotext, and at that point this
-# stage becomes debian:bookworm-slim with poppler-utils.
+# The runtime stage stays distroless: statement PDFs are read in the browser
+# with pdf.js (#42), not by poppler on the server.
 
 FROM oven/bun:1.4.2 AS web
 WORKDIR /src/web
 COPY web/package.json web/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY web/ ./
+# The sync runner's statement parsers, which the PDF import shares (@sync).
+COPY integrations/rigel-sync/src/ /src/integrations/rigel-sync/src/
 RUN bun run build:prod
 
 FROM golang:1.27.1-bookworm AS build

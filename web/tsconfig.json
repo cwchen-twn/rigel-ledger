@@ -18,8 +18,13 @@
     "paths": {
       "~/*": [
         "./src/*"
+      ],
+      "@sync/*": [
+        "../integrations/rigel-sync/src/*"
       ]
-    }
+    },
+    "allowImportingTsExtensions": true,
+    "noEmit": true
   },
   "include": [
     "src/**/*",

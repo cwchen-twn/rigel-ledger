@@ -19,6 +19,7 @@
     "dayjs": "1.11.23",
     "js-big-decimal": "2.2.0",
     "lucide-solid": "1.52.0",
+    "pdfjs-dist": "6.4.299",
     "solid-js": "1.9.15",
     "tailwind-merge": "3.7.0"
   },
