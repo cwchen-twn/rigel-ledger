@@ -879,7 +879,9 @@
     "explain_same_invoice_waiting": "與上方另一張發票是同一筆消費；請先接受那一張",
     "explain_waiting": "尚無對應的信用卡或銀行付款，可能還會出現（至 {date}）。若是現金支付，選擇類別即可立即入帳",
     "explain_duplicate_row": "與 {source} 是同一筆消費；接受那一筆時這筆會一併處理",
-    "proposal_same_charge": "同一筆款項"
+    "proposal_same_charge": "同一筆款項",
+    "charged_as": "實際扣款",
+    "charged_as_hint": "信用卡或銀行以其幣別實際扣款的金額"
   },
   "tokens": {
     "title": "API token",

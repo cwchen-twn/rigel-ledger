@@ -44,9 +44,17 @@ RETURNING id;
 SELECT r.id, r.kind, r.external_id, r.date, r.amount, r.currency, r.description, r.counterparty, r.pending,
        r.proposal, r.proposed_account_id, r.match_transaction_id, r.match_row_id, r.rule_id, r.attachment_id,
        r.security, c.name AS security_name, r.units, r.price, r.cash, r.items,
-       s.id AS source_account_id, s.connector, s.label AS source_label, s.account_id, s.settlement_account_id
+       s.id AS source_account_id, s.connector, s.label AS source_label, s.account_id, s.settlement_account_id,
+       mp.amount AS match_posting_amount, mp.commodity AS match_posting_currency,
+       mr.amount AS match_row_amount, mr.currency AS match_row_currency
 FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
 LEFT JOIN commodities c ON c.code = r.security
+-- What a row matched, for the queue to show beside it (an invoice in EUR
+-- beside the TWD charge it enriches): the payment's line, or the other row.
+LEFT JOIN postings mp ON mp.id = (SELECT p.id FROM postings p JOIN accounts pa ON pa.id = p.account_id
+                                  WHERE p.transaction_id = r.match_transaction_id AND pa.class IN ('asset', 'liability')
+                                  ORDER BY p.position LIMIT 1)
+LEFT JOIN import_rows mr ON mr.id = r.match_row_id
 WHERE r.book_id = @book_id AND r.status = 'pending'
 ORDER BY r.date DESC, r.id DESC
 LIMIT @lim;
@@ -233,3 +241,32 @@ WHERE o.book_id = @book_id AND o.status = 'pending' AND o.kind = 'invoice' AND o
   AND o.date BETWEEN @from_date AND @to_date AND o.proposal IN ('enrich', 'new', 'waiting')
 ORDER BY abs(o.date - @on_date::DATE), o.id
 LIMIT 1;
+
+-- name: FindForeignPayments :many
+-- Payments in another currency than an invoice, in its window, the same
+-- way (out or in): candidates for an invoice billed in EUR and charged in
+-- TWD. The caller checks the amount at the day's rate and the payee.
+SELECT t.id, t.payee, t.memo, p.amount, p.commodity FROM postings p
+JOIN transactions t ON t.id = p.transaction_id
+JOIN accounts a ON a.id = p.account_id
+JOIN commodities c ON c.code = p.commodity AND c.kind = 'currency'
+WHERE t.book_id = @book_id AND a.class IN ('asset', 'liability')
+  AND p.commodity <> @currency AND sign(p.amount) = sign(@amount::NUMERIC)
+  AND t.date BETWEEN @from_date AND @to_date
+  AND NOT EXISTS (SELECT 1 FROM transaction_items i WHERE i.transaction_id = t.id)
+  AND NOT EXISTS (SELECT 1 FROM import_rows o WHERE o.book_id = @book_id AND o.kind = 'invoice' AND o.status = 'pending'
+                  AND o.match_transaction_id = t.id AND o.id <> @row_id)
+ORDER BY abs(t.date - @on_date::DATE), t.id
+LIMIT 50;
+
+-- name: FindForeignPaymentRows :many
+-- The same, among card and bank rows still waiting.
+SELECT r.id, r.description, r.counterparty, r.amount, r.currency FROM import_rows r
+JOIN commodities c ON c.code = r.currency AND c.kind = 'currency'
+WHERE r.book_id = @book_id AND r.status = 'pending' AND r.kind = 'transaction'
+  AND r.currency <> @currency AND sign(r.amount) = sign(@amount::NUMERIC)
+  AND r.date BETWEEN @from_date AND @to_date
+  AND NOT EXISTS (SELECT 1 FROM import_rows o WHERE o.book_id = @book_id AND o.kind = 'invoice' AND o.status = 'pending'
+                  AND o.match_row_id = r.id AND o.id <> @row_id)
+ORDER BY abs(r.date - @on_date::DATE), r.id
+LIMIT 50;

@@ -673,6 +673,7 @@ type TransactionItem struct {
 	Amount        decimal.Decimal
 	AccountID     *int64
 	Source        string
+	Currency      *string
 }
 
 type TransactionTag struct {

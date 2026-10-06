@@ -879,7 +879,9 @@
     "explain_same_invoice_waiting": "the same purchase as another invoice above; accept that one first",
     "explain_waiting": "no card or bank payment for it yet; one may still come (until {date}). Choose a category to book it as cash now",
     "explain_duplicate_row": "the same charge as {source}; accepting that one settles this",
-    "proposal_same_charge": "Same charge"
+    "proposal_same_charge": "Same charge",
+    "charged_as": "charged as",
+    "charged_as_hint": "what the card or bank charged, in its own currency"
   },
   "tokens": {
     "title": "API tokens",

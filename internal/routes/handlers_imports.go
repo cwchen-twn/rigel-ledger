@@ -333,6 +333,10 @@ type ImportRowDTO struct {
 	SettlementAccountID *int64 `json:"settlement_account_id"`
 	// invoice rows: the lines, each with the category a rule gives it.
 	Items []InvoiceItemDTO `json:"items"`
+	// What the row matched, in its own currency: an invoice in EUR beside
+	// the TWD charge it enriches.
+	MatchAmount   *decimal.Decimal `json:"match_amount" swaggertype:"string"`
+	MatchCurrency *string          `json:"match_currency"`
 }
 
 // importQueue
@@ -358,6 +362,11 @@ func (h *handlers) importQueue(w http.ResponseWriter, r *http.Request) {
 			Connector: q.Connector, AccountID: q.AccountID, AttachmentID: q.AttachmentID,
 			Security: q.Security, SecurityName: q.SecurityName, Units: decPtr(q.Units), Price: decPtr(q.Price), Cash: decPtr(q.Cash),
 			SettlementAccountID: q.SettlementAccountID, Items: queueItems(q.Items)}
+		if q.MatchPostingAmount.Valid {
+			out[i].MatchAmount, out[i].MatchCurrency = &q.MatchPostingAmount.Decimal, q.MatchPostingCurrency
+		} else if q.MatchRowAmount.Valid {
+			out[i].MatchAmount, out[i].MatchCurrency = &q.MatchRowAmount.Decimal, q.MatchRowCurrency
+		}
 	}
 	response.JSON(w, http.StatusOK, out)
 }

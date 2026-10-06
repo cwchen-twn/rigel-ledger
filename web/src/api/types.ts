@@ -513,7 +513,8 @@ export interface InvoiceItem {
   unit_price?: string | null;
   amount: string;
   /** In the queue: the category a rule gives it; on a transaction: where it was split to. */
-  account_id?: number | null;
+  account_id?: number | null;  /** On a transaction: the invoice's currency (null: the book's base). */
+  currency?: string | null;
 }
 
 export interface ImportRow {
@@ -548,7 +549,9 @@ export interface ImportRow {
   cash: string | null;
   settlement_account_id: number | null;
   /** invoice rows: its lines, each with the category a rule gives it. */
-  items: InvoiceItem[] | null;
+  items: InvoiceItem[] | null;  /** What the row matched, in that payment's currency (a EUR invoice beside its TWD charge). */
+  match_amount: string | null;
+  match_currency: string | null;
 }
 
 export interface ImportRowInput {

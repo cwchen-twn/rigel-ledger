@@ -583,7 +583,7 @@ export function TransactionSheet(props: {
                         {(acct) => <span class="text-muted-foreground"> → {book.byId().get(acct()) ? book.name(book.byId().get(acct())!) : ''}</span>}
                       </Show>
                     </span>
-                    <Money class="shrink-0 tabular-nums" amount={it.amount} currency={base()} />
+                    <Money class="shrink-0 tabular-nums" amount={it.amount} currency={it.currency ?? base()} />
                   </li>
                 )}
               </For>

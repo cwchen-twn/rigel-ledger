@@ -12,9 +12,9 @@ import (
 )
 
 const insertTransactionItem = `-- name: InsertTransactionItem :exec
-INSERT INTO transaction_items (book_id, transaction_id, position, description, quantity, unit_price, amount, account_id, source)
+INSERT INTO transaction_items (book_id, transaction_id, position, description, quantity, unit_price, amount, account_id, source, currency)
 VALUES ($1, $2, $3, $4, $5, $6, $7,
-        $8, $9)
+        $8, $9, $10)
 `
 
 type InsertTransactionItemParams struct {
@@ -27,6 +27,7 @@ type InsertTransactionItemParams struct {
 	Amount        decimal.Decimal
 	AccountID     *int64
 	Source        string
+	Currency      *string
 }
 
 func (q *Queries) InsertTransactionItem(ctx context.Context, arg InsertTransactionItemParams) error {
@@ -40,12 +41,13 @@ func (q *Queries) InsertTransactionItem(ctx context.Context, arg InsertTransacti
 		arg.Amount,
 		arg.AccountID,
 		arg.Source,
+		arg.Currency,
 	)
 	return err
 }
 
 const listTransactionItems = `-- name: ListTransactionItems :many
-SELECT id, book_id, transaction_id, position, description, quantity, unit_price, amount, account_id, source FROM transaction_items WHERE transaction_id = ANY($1::BIGINT[]) ORDER BY transaction_id, position
+SELECT id, book_id, transaction_id, position, description, quantity, unit_price, amount, account_id, source, currency FROM transaction_items WHERE transaction_id = ANY($1::BIGINT[]) ORDER BY transaction_id, position
 `
 
 func (q *Queries) ListTransactionItems(ctx context.Context, transactionIds []int64) ([]TransactionItem, error) {
@@ -68,6 +70,7 @@ func (q *Queries) ListTransactionItems(ctx context.Context, transactionIds []int
 			&i.Amount,
 			&i.AccountID,
 			&i.Source,
+			&i.Currency,
 		); err != nil {
 			return nil, err
 		}

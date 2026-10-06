@@ -301,6 +301,141 @@ func (q *Queries) FindEstimate(ctx context.Context, arg FindEstimateParams) (int
 	return id, err
 }
 
+const findForeignPaymentRows = `-- name: FindForeignPaymentRows :many
+SELECT r.id, r.description, r.counterparty, r.amount, r.currency FROM import_rows r
+JOIN commodities c ON c.code = r.currency AND c.kind = 'currency'
+WHERE r.book_id = $1 AND r.status = 'pending' AND r.kind = 'transaction'
+  AND r.currency <> $2 AND sign(r.amount) = sign($3::NUMERIC)
+  AND r.date BETWEEN $4 AND $5
+  AND NOT EXISTS (SELECT 1 FROM import_rows o WHERE o.book_id = $1 AND o.kind = 'invoice' AND o.status = 'pending'
+                  AND o.match_row_id = r.id AND o.id <> $6)
+ORDER BY abs(r.date - $7::DATE), r.id
+LIMIT 50
+`
+
+type FindForeignPaymentRowsParams struct {
+	BookID   int64
+	Currency string
+	Amount   decimal.Decimal
+	FromDate time.Time
+	ToDate   time.Time
+	RowID    int64
+	OnDate   time.Time
+}
+
+type FindForeignPaymentRowsRow struct {
+	ID           int64
+	Description  string
+	Counterparty string
+	Amount       decimal.Decimal
+	Currency     string
+}
+
+// The same, among card and bank rows still waiting.
+func (q *Queries) FindForeignPaymentRows(ctx context.Context, arg FindForeignPaymentRowsParams) ([]FindForeignPaymentRowsRow, error) {
+	rows, err := q.db.Query(ctx, findForeignPaymentRows,
+		arg.BookID,
+		arg.Currency,
+		arg.Amount,
+		arg.FromDate,
+		arg.ToDate,
+		arg.RowID,
+		arg.OnDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FindForeignPaymentRowsRow{}
+	for rows.Next() {
+		var i FindForeignPaymentRowsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Description,
+			&i.Counterparty,
+			&i.Amount,
+			&i.Currency,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const findForeignPayments = `-- name: FindForeignPayments :many
+SELECT t.id, t.payee, t.memo, p.amount, p.commodity FROM postings p
+JOIN transactions t ON t.id = p.transaction_id
+JOIN accounts a ON a.id = p.account_id
+JOIN commodities c ON c.code = p.commodity AND c.kind = 'currency'
+WHERE t.book_id = $1 AND a.class IN ('asset', 'liability')
+  AND p.commodity <> $2 AND sign(p.amount) = sign($3::NUMERIC)
+  AND t.date BETWEEN $4 AND $5
+  AND NOT EXISTS (SELECT 1 FROM transaction_items i WHERE i.transaction_id = t.id)
+  AND NOT EXISTS (SELECT 1 FROM import_rows o WHERE o.book_id = $1 AND o.kind = 'invoice' AND o.status = 'pending'
+                  AND o.match_transaction_id = t.id AND o.id <> $6)
+ORDER BY abs(t.date - $7::DATE), t.id
+LIMIT 50
+`
+
+type FindForeignPaymentsParams struct {
+	BookID   int64
+	Currency string
+	Amount   decimal.Decimal
+	FromDate time.Time
+	ToDate   time.Time
+	RowID    int64
+	OnDate   time.Time
+}
+
+type FindForeignPaymentsRow struct {
+	ID        int64
+	Payee     string
+	Memo      string
+	Amount    decimal.Decimal
+	Commodity string
+}
+
+// Payments in another currency than an invoice, in its window, the same
+// way (out or in): candidates for an invoice billed in EUR and charged in
+// TWD. The caller checks the amount at the day's rate and the payee.
+func (q *Queries) FindForeignPayments(ctx context.Context, arg FindForeignPaymentsParams) ([]FindForeignPaymentsRow, error) {
+	rows, err := q.db.Query(ctx, findForeignPayments,
+		arg.BookID,
+		arg.Currency,
+		arg.Amount,
+		arg.FromDate,
+		arg.ToDate,
+		arg.RowID,
+		arg.OnDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FindForeignPaymentsRow{}
+	for rows.Next() {
+		var i FindForeignPaymentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Payee,
+			&i.Memo,
+			&i.Amount,
+			&i.Commodity,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const findInvoiceMatch = `-- name: FindInvoiceMatch :one
 SELECT t.id FROM postings p
 JOIN transactions t ON t.id = p.transaction_id
@@ -694,9 +829,15 @@ const listQueue = `-- name: ListQueue :many
 SELECT r.id, r.kind, r.external_id, r.date, r.amount, r.currency, r.description, r.counterparty, r.pending,
        r.proposal, r.proposed_account_id, r.match_transaction_id, r.match_row_id, r.rule_id, r.attachment_id,
        r.security, c.name AS security_name, r.units, r.price, r.cash, r.items,
-       s.id AS source_account_id, s.connector, s.label AS source_label, s.account_id, s.settlement_account_id
+       s.id AS source_account_id, s.connector, s.label AS source_label, s.account_id, s.settlement_account_id,
+       mp.amount AS match_posting_amount, mp.commodity AS match_posting_currency,
+       mr.amount AS match_row_amount, mr.currency AS match_row_currency
 FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
 LEFT JOIN commodities c ON c.code = r.security
+LEFT JOIN postings mp ON mp.id = (SELECT p.id FROM postings p JOIN accounts pa ON pa.id = p.account_id
+                                  WHERE p.transaction_id = r.match_transaction_id AND pa.class IN ('asset', 'liability')
+                                  ORDER BY p.position LIMIT 1)
+LEFT JOIN import_rows mr ON mr.id = r.match_row_id
 WHERE r.book_id = $1 AND r.status = 'pending'
 ORDER BY r.date DESC, r.id DESC
 LIMIT $2
@@ -708,35 +849,41 @@ type ListQueueParams struct {
 }
 
 type ListQueueRow struct {
-	ID                  int64
-	Kind                string
-	ExternalID          string
-	Date                time.Time
-	Amount              decimal.Decimal
-	Currency            string
-	Description         string
-	Counterparty        string
-	Pending             bool
-	Proposal            string
-	ProposedAccountID   *int64
-	MatchTransactionID  *int64
-	MatchRowID          *int64
-	RuleID              *int64
-	AttachmentID        *int64
-	Security            *string
-	SecurityName        *string
-	Units               decimal.NullDecimal
-	Price               decimal.NullDecimal
-	Cash                decimal.NullDecimal
-	Items               []byte
-	SourceAccountID     int64
-	Connector           string
-	SourceLabel         string
-	AccountID           *int64
-	SettlementAccountID *int64
+	ID                   int64
+	Kind                 string
+	ExternalID           string
+	Date                 time.Time
+	Amount               decimal.Decimal
+	Currency             string
+	Description          string
+	Counterparty         string
+	Pending              bool
+	Proposal             string
+	ProposedAccountID    *int64
+	MatchTransactionID   *int64
+	MatchRowID           *int64
+	RuleID               *int64
+	AttachmentID         *int64
+	Security             *string
+	SecurityName         *string
+	Units                decimal.NullDecimal
+	Price                decimal.NullDecimal
+	Cash                 decimal.NullDecimal
+	Items                []byte
+	SourceAccountID      int64
+	Connector            string
+	SourceLabel          string
+	AccountID            *int64
+	SettlementAccountID  *int64
+	MatchPostingAmount   decimal.NullDecimal
+	MatchPostingCurrency *string
+	MatchRowAmount       decimal.NullDecimal
+	MatchRowCurrency     *string
 }
 
 // The review queue: pending rows with their source account's mapping.
+// What a row matched, for the queue to show beside it (an invoice in EUR
+// beside the TWD charge it enriches): the payment's line, or the other row.
 func (q *Queries) ListQueue(ctx context.Context, arg ListQueueParams) ([]ListQueueRow, error) {
 	rows, err := q.db.Query(ctx, listQueue, arg.BookID, arg.Lim)
 	if err != nil {
@@ -773,6 +920,10 @@ func (q *Queries) ListQueue(ctx context.Context, arg ListQueueParams) ([]ListQue
 			&i.SourceLabel,
 			&i.AccountID,
 			&i.SettlementAccountID,
+			&i.MatchPostingAmount,
+			&i.MatchPostingCurrency,
+			&i.MatchRowAmount,
+			&i.MatchRowCurrency,
 		); err != nil {
 			return nil, err
 		}

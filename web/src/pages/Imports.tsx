@@ -92,8 +92,14 @@ export default function Imports() {
   const units = (r: ImportRow) => new Intl.NumberFormat(intl(), { maximumFractionDigits: 8 }).format(abs(r.units ?? '0') as unknown as number);
 
   // ---- invoices (#38) ----
-  /** Lines a rule gives another category: what a split would move. */
-  const splittable = (r: ImportRow) => (r.items ?? []).some((it) => it.account_id && it.account_id !== category(r));
+  /** An invoice matched to a payment in another currency (#56): what was charged. */
+  const foreignMatch = (r: ImportRow) =>
+    r.kind === 'invoice' && r.match_amount !== null && r.match_currency !== null && r.match_currency !== r.currency
+      ? { amount: r.match_amount, currency: r.match_currency }
+      : undefined;
+  /** Lines a rule gives another category: what a split would move (in the payment's currency only). */
+  const splittable = (r: ImportRow) =>
+    !foreignMatch(r) && (r.items ?? []).some((it) => it.account_id && it.account_id !== category(r));
   const splitting = (r: ImportRow) => splittable(r) && !noSplit().has(r.id);
 
   const acceptable = (r: ImportRow) =>
@@ -467,7 +473,18 @@ export default function Imports() {
                           fallback={
                             <Show
                               when={r.kind === 'holding'}
-                              fallback={<Money class="text-sm font-medium" amount={r.amount} currency={r.currency} signed />}
+                              fallback={
+                                <span class="flex flex-col items-end">
+                                  <Money class="text-sm font-medium" amount={r.amount} currency={r.currency} signed />
+                                  <Show when={foreignMatch(r)}>
+                                    {(m) => (
+                                      <span class="text-xs text-muted-foreground" title={t('imports.charged_as_hint')}>
+                                        {t('imports.charged_as')} <Money amount={m().amount} currency={m().currency} signed />
+                                      </span>
+                                    )}
+                                  </Show>
+                                </span>
+                              }
                             >
                               <span class="text-sm font-medium tabular-nums">{t('imports.trade_units', { units: units(r) })}</span>
                             </Show>

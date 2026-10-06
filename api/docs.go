@@ -5064,6 +5064,13 @@ const docTemplate = `{
                 "kind": {
                     "type": "string"
                 },
+                "match_amount": {
+                    "description": "What the row matched, in its own currency: an invoice in EUR beside\nthe TWD charge it enriches.",
+                    "type": "string"
+                },
+                "match_currency": {
+                    "type": "string"
+                },
                 "match_row_id": {
                     "type": "integer"
                 },
@@ -6060,6 +6067,10 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "amount": {
+                    "type": "string"
+                },
+                "currency": {
+                    "description": "The invoice's currency; null for lines kept before 000013 (the book's base).",
                     "type": "string"
                 },
                 "description": {

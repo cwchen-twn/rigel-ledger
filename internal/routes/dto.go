@@ -328,12 +328,14 @@ type TransactionItemDTO struct {
 	Amount      decimal.Decimal  `json:"amount" swaggertype:"string"`
 	// The category it was booked to when the expense was split.
 	AccountID *int64 `json:"account_id"`
+	// The invoice's currency; null for lines kept before 000013 (the book's base).
+	Currency *string `json:"currency"`
 }
 
 func itemDTOs(items []ledger.TransactionItem) []TransactionItemDTO {
 	out := make([]TransactionItemDTO, len(items))
 	for i, it := range items {
-		out[i] = TransactionItemDTO{Description: it.Description, Amount: it.Amount, AccountID: it.AccountID}
+		out[i] = TransactionItemDTO{Description: it.Description, Amount: it.Amount, AccountID: it.AccountID, Currency: it.Currency}
 		if it.Quantity.Valid {
 			out[i].Quantity = &it.Quantity.Decimal
 		}

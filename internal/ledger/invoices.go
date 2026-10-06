@@ -6,6 +6,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
@@ -122,6 +124,15 @@ func (s *Service) proposeInvoice(ctx context.Context, a Access, r db.GetImportRo
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}
+	// An invoice in another currency than what paid it (a EUR invoice on
+	// a TWD card, #56): the same way, the amount at the day's rate.
+	if m, err := s.findForeignPayment(ctx, a, r, from, to); err != nil {
+		return err
+	} else if m.txn != 0 {
+		return set(db.SetRowProposalParams{Proposal: "enrich", MatchTransactionID: &m.txn})
+	} else if m.row != 0 {
+		return set(db.SetRowProposalParams{Proposal: "enrich", MatchRowID: &m.row})
+	}
 	// Another source's invoice for the same purchase (an order email and
 	// its 電子發票) already added its lines, or waits to (#54).
 	if tx, err := s.store.FindSameInvoiceTx(ctx, db.FindSameInvoiceTxParams{BookID: a.Book.ID, Currency: r.Currency, Amount: r.Amount,
@@ -146,6 +157,117 @@ func (s *Service) proposeInvoice(ctx context.Context, a Access, r db.GetImportRo
 		p.Proposal = "waiting"
 	}
 	return set(p)
+}
+
+// fxTolerance is how far a charge may be from an invoice converted at the
+// day's rate: a card's own rate and its foreign-transaction fee (1.5% in
+// Taiwan) sit within it.
+var fxTolerance = decimal.RequireFromString("0.05")
+
+// sellerNoise are words too common in company names to tell two apart.
+var sellerNoise = map[string]bool{
+	"gmbh": true, "corp": true, "company": true, "limited": true, "online": true, "services": true,
+	"service": true, "store": true, "shop": true, "international": true, "group": true, "holdings": true, "technologies": true,
+	"payments": true,
+}
+
+// sellerTokens are the words of a seller's name that tell it apart
+// ("Hetzner Online GmbH" -> hetzner).
+func sellerTokens(seller string) []string {
+	var out []string
+	for _, w := range strings.FieldsFunc(strings.ToLower(seller), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	}) {
+		if utf8.RuneCountInString(w) >= 4 && !sellerNoise[w] {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// namesSeller says a payment's text names the seller. With no name to go
+// by, an amount in another currency is too weak to match on.
+func namesSeller(tokens []string, text ...string) bool {
+	hay := strings.ToLower(strings.Join(text, " "))
+	for _, t := range tokens {
+		if strings.Contains(hay, t) {
+			return true
+		}
+	}
+	return false
+}
+
+type foreignMatch struct{ txn, row int64 }
+
+// findForeignPayment looks for what paid an invoice in another currency:
+// a booked payment first, then a row still waiting, the one closest to the
+// invoice at the day's rate, within fxTolerance and naming the seller.
+func (s *Service) findForeignPayment(ctx context.Context, a Access, r db.GetImportRowRow, from, to time.Time) (foreignMatch, error) {
+	tokens := sellerTokens(r.Counterparty)
+	if len(tokens) == 0 || r.Amount.IsZero() {
+		return foreignMatch{}, nil
+	}
+	rates := map[string]decimal.Decimal{}
+	off := func(amount decimal.Decimal, currency string) (decimal.Decimal, bool, error) {
+		rate, seen := rates[currency]
+		if !seen {
+			v, ok, err := RateOn(ctx, s.store.Queries, r.Currency, currency, r.Date)
+			if err != nil {
+				return decimal.Zero, false, err
+			}
+			if ok {
+				rate = v
+			}
+			rates[currency] = rate
+		}
+		if rate.IsZero() {
+			return decimal.Zero, false, nil
+		}
+		want := r.Amount.Mul(rate)
+		d := amount.Sub(want).Abs().Div(want.Abs())
+		return d, d.LessThanOrEqual(fxTolerance), nil
+	}
+	var best foreignMatch
+	var bestOff decimal.Decimal
+	pick := func(m foreignMatch, d decimal.Decimal) {
+		if best == (foreignMatch{}) || d.LessThan(bestOff) {
+			best, bestOff = m, d
+		}
+	}
+	txns, err := s.store.FindForeignPayments(ctx, db.FindForeignPaymentsParams{BookID: a.Book.ID, Currency: r.Currency, Amount: r.Amount,
+		FromDate: from, ToDate: to, RowID: r.ID, OnDate: r.Date})
+	if err != nil {
+		return best, err
+	}
+	for _, t := range txns {
+		if !namesSeller(tokens, t.Payee, t.Memo) {
+			continue
+		}
+		if d, ok, err := off(t.Amount, t.Commodity); err != nil {
+			return best, err
+		} else if ok {
+			pick(foreignMatch{txn: t.ID}, d)
+		}
+	}
+	if best != (foreignMatch{}) {
+		return best, nil
+	}
+	rows, err := s.store.FindForeignPaymentRows(ctx, db.FindForeignPaymentRowsParams{BookID: a.Book.ID, Currency: r.Currency, Amount: r.Amount,
+		FromDate: from, ToDate: to, RowID: r.ID, OnDate: r.Date})
+	if err != nil {
+		return best, err
+	}
+	for _, o := range rows {
+		if !namesSeller(tokens, o.Description, o.Counterparty) {
+			continue
+		}
+		if d, ok, err := off(o.Amount, o.Currency); err != nil {
+			return best, err
+		} else if ok {
+			pick(foreignMatch{row: o.ID}, d)
+		}
+	}
+	return best, nil
 }
 
 // now is the clock invoices wait by; a test moves it.
@@ -305,7 +427,7 @@ func (s *Service) acceptInvoice(ctx context.Context, a Access, r db.GetImportRow
 				return err
 			}
 		}
-		if err := writeItems(ctx, q, a, txnID, items, split != nil, r.ExternalID); err != nil {
+		if err := writeItems(ctx, q, a, txnID, items, split != nil, r.ExternalID, r.Currency); err != nil {
 			return err
 		}
 		if r.AttachmentID != nil {
@@ -405,7 +527,7 @@ func splitLines(cur TransactionView, classes map[int64]db.AccountClass, r db.Get
 }
 
 // writeItems keeps an invoice's lines on the transaction it was added to.
-func writeItems(ctx context.Context, q *db.Queries, a Access, txnID int64, items []InvoiceItem, split bool, source string) error {
+func writeItems(ctx context.Context, q *db.Queries, a Access, txnID int64, items []InvoiceItem, split bool, source, currency string) error {
 	for i, it := range items {
 		var acct *int64
 		if split {
@@ -413,7 +535,7 @@ func writeItems(ctx context.Context, q *db.Queries, a Access, txnID int64, items
 		}
 		if err := q.InsertTransactionItem(ctx, db.InsertTransactionItemParams{
 			BookID: a.Book.ID, TransactionID: txnID, Position: int16(i), Description: strings.TrimSpace(it.Description),
-			Quantity: nullDecimal(it.Quantity), UnitPrice: nullDecimal(it.UnitPrice), Amount: it.Amount, AccountID: acct, Source: source,
+			Quantity: nullDecimal(it.Quantity), UnitPrice: nullDecimal(it.UnitPrice), Amount: it.Amount, AccountID: acct, Source: source, Currency: &currency,
 		}); err != nil {
 			return err
 		}

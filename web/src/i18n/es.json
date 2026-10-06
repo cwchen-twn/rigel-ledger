@@ -879,7 +879,9 @@
     "explain_same_invoice_waiting": "la misma compra que otra factura de arriba; acepta esa primero",
     "explain_waiting": "aún no hay un pago con tarjeta o banco; puede llegar todavía (hasta {date}). Elige una categoría para registrarla en efectivo ahora",
     "explain_duplicate_row": "el mismo cargo que {source}; al aceptar ese se resuelve este",
-    "proposal_same_charge": "Mismo cargo"
+    "proposal_same_charge": "Mismo cargo",
+    "charged_as": "cobrado como",
+    "charged_as_hint": "lo que cobró la tarjeta o el banco, en su propia moneda"
   },
   "tokens": {
     "title": "Tokens de API",
