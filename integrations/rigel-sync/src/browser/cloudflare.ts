@@ -72,7 +72,7 @@ async function launch(_binding: unknown, _options?: { keep_alive?: number }): Pr
   args.push(...(process.env.CHROME_ARGS?.match(/(?:[^\s"]+|"[^"]*")+/g) ?? []).map((a) => a.replaceAll('"', '')));
   const launched = await puppeteerCore.launch({
     executablePath: chromePath(),
-    headless: process.env.TW_SYNC_HEADFUL !== '1',
+    headless: process.env.RIGEL_SYNC_HEADFUL !== '1',
     args,
     defaultViewport: null,
   });

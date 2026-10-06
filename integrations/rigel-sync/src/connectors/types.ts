@@ -1,8 +1,8 @@
 /*
- * What a connector is to tw-sync. A connector signs in to one institution
+ * What a connector is to rigel-sync. A connector signs in to one institution
  * and returns one batch for the import queue; everything about the app
  * (claims, sealing, challenges over HTTP) stays in the runner, so the same
- * connector runs under `tw-sync run` and `tw-sync try`.
+ * connector runs under `rigel-sync run` and `rigel-sync try`.
  */
 
 /** One input on the connect form; the app renders the form from these. */

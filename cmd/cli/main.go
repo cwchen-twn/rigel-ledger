@@ -6,7 +6,7 @@
 //	rigel-ledger-cli reset-password -u alice
 //	rigel-ledger-cli set-admin -u alice --admin=true
 //	rigel-ledger-cli reset-mfa -u alice       # lost every second factor
-//	rigel-ledger-cli create-runner-token -u alice -l tw-sync   # links alice's sync runner
+//	rigel-ledger-cli create-runner-token -u alice -l rigel-sync   # links alice's sync runner
 //
 // A password not given with -p is read from stdin, so it stays out of the
 // shell history and the process list. A created user still walks the

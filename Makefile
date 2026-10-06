@@ -34,7 +34,7 @@ updatedep:
 	# built-in npm-check-updates; a bare `ncu` may be NVIDIA Nsight Compute).
 	cd web && bun update --latest
 	cd web && bun run build:prod
-	cd integrations/tw-sync && bun update --latest && bun run check
+	cd integrations/rigel-sync && bun update --latest && bun run check
 	uv sync --upgrade-package pre-commit
 	.venv/bin/pre-commit autoupdate
 	.venv/bin/pre-commit install
@@ -84,12 +84,12 @@ upgrade/bun:
 	@test "$$(bun --version)" = "$(version)" || { echo "bun on PATH is $$(bun --version), not $(version): is ~/.bun/bin first in PATH?"; exit 1; }
 	# CI reads the version from packageManager (setup-bun bun-version-file);
 	# the image from the Dockerfile. Renovate moves both together too.
-	sed -i -E 's|"packageManager": "bun@[0-9.]+"|"packageManager": "bun@$(version)"|' web/package.json integrations/tw-sync/package.json
+	sed -i -E 's|"packageManager": "bun@[0-9.]+"|"packageManager": "bun@$(version)"|' web/package.json integrations/rigel-sync/package.json
 	sed -i -E 's|^FROM oven/bun:[0-9.]+|FROM oven/bun:$(version)|' Dockerfile
 	cd web && bun install
 	cd web && bun run build:prod
-	cd integrations/tw-sync && bun install
-	@grep -n '"packageManager"' web/package.json integrations/tw-sync/package.json; grep -n '^FROM oven/bun:' Dockerfile
+	cd integrations/rigel-sync && bun install
+	@grep -n '"packageManager"' web/package.json integrations/rigel-sync/package.json; grep -n '^FROM oven/bun:' Dockerfile
 
 ##upgrade/bun/list: Show the pinned Bun (package.json, Dockerfile) and the newest releases
 .PHONY: upgrade/bun/list
@@ -113,10 +113,10 @@ tidy:
 	go mod tidy -v
 	go fmt ./...
 
-##tw-sync/check: Typecheck and test the tw-sync runner (Node 22.18+ runs its TypeScript directly)
-.PHONY: tw-sync/check
-tw-sync/check:
-	cd integrations/tw-sync && bun install --frozen-lockfile && bun run check
+##rigel-sync/check: Typecheck and test the rigel-sync runner (Node 22.18+ runs its TypeScript directly)
+.PHONY: rigel-sync/check
+rigel-sync/check:
+	cd integrations/rigel-sync && bun install --frozen-lockfile && bun run check
 
 ##frontend/install: Install frontend dependencies using bun
 .PHONY: frontend/install

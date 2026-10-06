@@ -85,8 +85,8 @@ jobs:
         run: make audit
 
 
-  tw-sync:
-    # The Node sync runner (integrations/tw-sync): typecheck, node:test, and
+  rigel-sync:
+    # The Node sync runner (integrations/rigel-sync): typecheck, node:test, and
     # that vendor/ bundles are what their vendored all-set-tw source gives.
     # Node runs our TypeScript directly (type stripping, 22.18+), so there is
     # no build; Bun installs the dependencies and bundles vendor/.
@@ -105,7 +105,7 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2.2.0
         with:
-          bun-version-file: integrations/tw-sync/package.json
+          bun-version-file: integrations/rigel-sync/package.json
 
       - name: Set up Chrome
         # The connector tests drive a pretend bank in a real browser.
@@ -117,13 +117,13 @@ jobs:
       - name: Check
         env:
           CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
-          TW_SYNC_REQUIRE_CHROME: "1"
+          RIGEL_SYNC_REQUIRE_CHROME: "1"
           # GitHub's Ubuntu 24.04 runner forbids the user namespaces Chrome's
           # sandbox needs for a Chrome outside /opt/google ("No usable sandbox");
           # Gitea's runs as root, where the shim already drops it. The pretend
           # bank is all it opens here.
           CHROME_ARGS: --no-sandbox
-        run: cd integrations/tw-sync && bun install --frozen-lockfile && bun run check
+        run: cd integrations/rigel-sync && bun install --frozen-lockfile && bun run check
 
   hooks:
     # The pre-commit hooks, server-side, so a commit made with --no-verify or

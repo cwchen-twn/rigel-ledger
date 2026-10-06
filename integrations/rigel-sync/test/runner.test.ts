@@ -77,7 +77,7 @@ const server = createServer((req, res) => void app.handle(req, res));
 before(async () => {
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  dir = await mkdtemp(join(tmpdir(), 'tw-sync-'));
+  dir = await mkdtemp(join(tmpdir(), 'rigel-sync-'));
 });
 after(async () => {
   server.close();

@@ -1,6 +1,6 @@
-import { cathaybk } from './cathaybk.ts';
+import { cathaybk } from './tw/cathaybk.ts';
 import { fake } from './fake.ts';
-import { sinopac } from './sinopac.ts';
+import { sinopac } from './tw/sinopac.ts';
 import type { Connector } from './types.ts';
 
 /** The connectors this runner offers; the fake one only when asked for. */

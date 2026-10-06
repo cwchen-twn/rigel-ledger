@@ -6,14 +6,14 @@ import { join } from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import { chromePath, liveSessions } from '../src/browser/cloudflare.ts';
 import { taipeiDay } from '../src/connectors/rows.ts';
-import { makeSinopac, toBatch } from '../src/connectors/sinopac.ts';
+import { makeSinopac, toBatch } from '../src/connectors/tw/sinopac.ts';
 import { type Ask, type State, type SyncContext, SyncError } from '../src/connectors/types.ts';
 import { MODEL, readDigits } from '../src/ocr/captcha.ts';
 import type { SinopacResult } from '../vendor/all-set-tw/sinopac.js';
 import { ACCOUNT, type FakeSinopac, startFakeSinopac } from './fake-sinopac.ts';
 
 // The model is downloaded once (pinned, sha256 checked) and kept here between runs.
-process.env.TW_SYNC_OCR_MODEL ||= join(tmpdir(), 'tw-sync-test-models', MODEL.file);
+process.env.RIGEL_SYNC_OCR_MODEL ||= join(tmpdir(), 'rigel-sync-test-models', MODEL.file);
 
 const CAPTCHAS = join(import.meta.dirname, 'captcha');
 
@@ -79,8 +79,8 @@ function hasChrome() {
   }
 }
 
-// CI sets TW_SYNC_REQUIRE_CHROME=1, so a missing browser fails there instead of skipping.
-const skip = !hasChrome() && process.env.TW_SYNC_REQUIRE_CHROME !== '1' && 'no Chrome or openssl here';
+// CI sets RIGEL_SYNC_REQUIRE_CHROME=1, so a missing browser fails there instead of skipping.
+const skip = !hasChrome() && process.env.RIGEL_SYNC_REQUIRE_CHROME !== '1' && 'no Chrome or openssl here';
 
 describe('sinopac against a pretend bank, in Chrome', { skip, timeout: 240_000 }, () => {
   let bank: FakeSinopac;

@@ -18,8 +18,8 @@ func TestRunnerTokenSendsABatchAndNothingElse(t *testing.T) {
 		t.Fatalf("token without a label = %d %s", res.StatusCode, b)
 	}
 	var made TokenCreatedDTO
-	alice.json("POST", "/api/me/tokens", map[string]any{"label": "tw-sync", "days": 30}, 201, &made)
-	if made.Token == "" || made.Session.Kind != "token" || made.Session.Label != "tw-sync" {
+	alice.json("POST", "/api/me/tokens", map[string]any{"label": "rigel-sync", "days": 30}, 201, &made)
+	if made.Token == "" || made.Session.Kind != "token" || made.Session.Label != "rigel-sync" {
 		t.Fatalf("token = %+v", made)
 	}
 	runner := &client{f: f, bearer: made.Token}

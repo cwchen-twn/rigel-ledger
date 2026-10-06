@@ -846,7 +846,7 @@
     "new": "Nuevo token",
     "new_hint": "Nómbralo según dónde se ejecutará, para saber cuál revocar.",
     "label": "Nombre",
-    "label_hint": "p. ej. tw-sync en el clúster",
+    "label_hint": "p. ej. rigel-sync en el clúster",
     "days": "Válido durante (días)",
     "expires": "Caduca",
     "never_used": "Nunca",
@@ -930,7 +930,7 @@
     "how_csv": "¿Prefieres no compartir un acceso? Un CSV del extracto en la página de Importaciones hace lo mismo a mano."
   },
   "connector": {
-    "cathaybk": {
+    "tw-cathaybk": {
       "name": "Cathay United Bank (國泰世華)",
       "field": {
         "id_number": "Número de identidad",
@@ -945,7 +945,7 @@
         }
       }
     },
-    "sinopac": {
+    "tw-sinopac": {
       "name": "Bank SinoPac (永豐銀行)",
       "field": {
         "id_number": "Número de identidad",

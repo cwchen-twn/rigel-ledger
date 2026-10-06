@@ -41,7 +41,7 @@ export class RigelClient {
   private async call<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
     const res = await fetch(this.url + path, {
       method,
-      headers: { Authorization: `Bearer ${this.token}`, 'Content-Type': 'application/json', 'User-Agent': 'rigel-tw-sync' },
+      headers: { Authorization: `Bearer ${this.token}`, 'Content-Type': 'application/json', 'User-Agent': 'rigel-sync' },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: signal ?? AbortSignal.timeout(60_000),
     });

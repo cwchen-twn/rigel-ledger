@@ -1,5 +1,5 @@
 /*
- * `tw-sync run`: the daemon. It registers its key and connectors, then
+ * `rigel-sync run`: the daemon. It registers its key and connectors, then
  * claims its person's due connections one at a time, opens their sealed
  * credentials, runs the connector, and reports back: rows, challenges, the
  * end of the run. Credentials and answers exist in the clear only in this
@@ -31,7 +31,7 @@ export async function runDaemon(o: RunOptions): Promise<void> {
     await o.client.registerKeys([publicKeyOf(priv)]);
     await o.client.publishConnectors(o.connectors.map(({ id, name, country, fields }) => ({ id, name, country, fields })));
   });
-  log.info('tw-sync ready', { url: o.client.url, connectors: o.connectors.map((c) => c.id) });
+  log.info('rigel-sync ready', { url: o.client.url, connectors: o.connectors.map((c) => c.id) });
 
   let failures = 0;
   while (!o.signal.aborted) {

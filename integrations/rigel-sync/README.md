@@ -1,6 +1,7 @@
-# tw-sync
+# rigel-sync
 
-A person's sync runner for Taiwan institutions (P4c-2). Each person runs their
+A person's sync runner (P4c-2): every institution RigelLedger syncs, whatever
+the country or kind -- banks, cards, brokers, exchanges. Each person runs their
 own and links it to RigelLedger under **Settings -> Sync runner**, the way a
 self-hosted CI runner is registered: on a computer they leave on, or (the
 owner's) on the server next to the app. It syncs that person's connections and
@@ -33,18 +34,21 @@ RIGEL_URL=https://ledger.chenantunez.com RUNNER_TOKEN=... DATA_DIR=./data node s
 | `POLL_SECONDS` | how often to look for due connections, default 30 |
 | `CHROME_PATH` | the browser; by default the first Chrome or Chromium found in the usual places |
 | `CHROME_ARGS` | more Chrome flags, space-separated, `"quoted"` when one holds a space; e.g. `--proxy-server=socks5://...` to sign in to the banks from a Taiwan address |
-| `TW_SYNC_HEADFUL=1` | show the browser window, to watch a connector at work |
-| `TW_SYNC_OCR_MODEL` | a copy of the CAPTCHA model already on disk (an offline install); by default it is downloaded once into `DATA_DIR/models` |
-| `TW_SYNC_FAKE=1` | also offer the pretend institution `fake` (development only) |
+| `RIGEL_SYNC_HEADFUL=1` | show the browser window, to watch a connector at work |
+| `RIGEL_SYNC_OCR_MODEL` | a copy of the CAPTCHA model already on disk (an offline install); by default it is downloaded once into `DATA_DIR/models` |
+| `RIGEL_SYNC_FAKE=1` | also offer the pretend institution `fake` (development only) |
 
 `node src/main.ts run --once` claims and runs once, then exits.
 
 ## Institutions
 
+Connector ids are `<country>-<institution>` (ISO country code, lower case), and
+each connector lives in `src/connectors/<country>/`.
+
 | id | | fields | notes |
 |---|---|---|---|
-| `cathaybk` | 國泰世華 | 身分證字號, 用戶代號, password, codes by SMS or email | deposits (90 days) and the credit card (3 statements). The first run asks for a one-time code; the bank then trusts this runner's browser, and later runs ask nothing. Account ids keep the last four digits only |
-| `sinopac` | 永豐銀行 | 身分證字號, 使用者代碼, password | deposits in every currency (90 days) and the credit card (posted, and pending authorisations). Sign-in asks for a six-digit image CAPTCHA, which the runner reads itself (below); the session is kept and reused while the bank accepts it. When three images in a row are not read, the image goes to Connections ("Needs you") |
+| `tw-cathaybk` | 國泰世華 | 身分證字號, 用戶代號, password, codes by SMS or email | deposits (90 days) and the credit card (3 statements). The first run asks for a one-time code; the bank then trusts this runner's browser, and later runs ask nothing. Account ids keep the last four digits only |
+| `tw-sinopac` | 永豐銀行 | 身分證字號, 使用者代碼, password | deposits in every currency (90 days) and the credit card (posted, and pending authorisations). Sign-in asks for a six-digit image CAPTCHA, which the runner reads itself (below); the session is kept and reused while the bank accepts it. When three images in a row are not read, the image goes to Connections ("Needs you") |
 
 ## Trying a connector without the app
 
@@ -66,8 +70,8 @@ bun install
 bun run check        # tsc --noEmit, then node --test
 ```
 
-`make tw-sync/check` does the same from the repo root; CI runs it as the
-`tw-sync` job on both forges.
+`make rigel-sync/check` does the same from the repo root; CI runs it as the
+`rigel-sync` job on both forges.
 
 A connector (`src/connectors/types.ts`) gets its credentials, its saved
 state, `saveState`, `ask` (OTP, CAPTCHA, device check) and an abort signal,

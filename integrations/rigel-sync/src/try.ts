@@ -1,5 +1,5 @@
 /*
- * `tw-sync try <connector>`: run one connector from a terminal, with no app
+ * `rigel-sync try <connector>`: run one connector from a terminal, with no app
  * at all. It asks for the connector's fields here (secrets without echo),
  * answers OTP and CAPTCHA prompts here, and prints the batch it would send
  * as JSON on stdout. Its session state is kept under DATA_DIR/state as
@@ -15,7 +15,7 @@ import type { Store } from './store.ts';
 
 /**
  * One reader for the whole session, so piped input (printf 'u\np\n' |
- * tw-sync try ...) is not swallowed by the first prompt. A secret is not
+ * rigel-sync try ...) is not swallowed by the first prompt. A secret is not
  * echoed on a terminal.
  */
 function terminal() {

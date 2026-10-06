@@ -30,8 +30,8 @@ Go binary  -- chi JSON API, embedded SolidJS SPA, migrations on start,
         |
    +----+-----------------+----------------------+
 SolidJS PWA (web)   Flutter (later)     sync runners (one per person):
-                                          tw-sync (Node, all-set-tw connectors)
-                                          py-sync (Python: Shioaji, Firstrade)
+                                          rigel-sync (Node; every institution,
+                                          all-set-tw's Taiwan connectors vendored)
 ```
 
 - **One JSON API for every client.** This is why the web stays a SolidJS SPA rather than
@@ -522,10 +522,15 @@ runner works through that person's connections as a job queue (see "Connections"
 below). The only secrets a runner holds are its runner token and its X25519 private
 key.
 
-- **`integrations/tw-sync/` (Node).**
+- **`integrations/rigel-sync/` (Node), the one runner.** It was `tw-sync` until
+  2026-10-06; renamed because it is meant for every institution a person has --
+  Taiwan, Paraguay, the US, banks, brokers, crypto -- and a person links one runner.
+  Connector ids are `<country>-<institution>` (ISO 3166 alpha-2, lower case:
+  `tw-cathaybk`, `tw-sinopac`, `py-continental`, `us-firstrade`; `xx-` for one with
+  no home country), and the code sits under `src/connectors/<country>/`.
   - all-set-tw publishes no package: its connectors live inside its Cloudflare
     Worker (`apps/worker/src/sources/<id>/`), are rewritten often, and hand amounts
-    over as JS numbers. tw-sync **vendors the connectors it uses at a pinned commit**
+    over as JS numbers. rigel-sync **vendors the connectors it uses at a pinned commit**
     (with its MIT licence), and converts every amount to a decimal string at the
     boundary (`src/money.ts`, which throws rather than round).
   - How vendoring works (P4c-2b, implemented): `scripts/vendor.ts <commit>` copies
@@ -569,7 +574,7 @@ key.
   - Balance rows are keyed `<account>:<day>:balance`: the import key is
     `<connector>:<id>` per book, so a bare day collided across accounts.
   - The runner itself (P4c-2a, implemented): Node 22.18+ running its TypeScript
-    directly; puppeteer-core drives Chrome, onnxruntime-web reads CAPTCHAs. `tw-sync run` is the daemon; `tw-sync try
+    directly; puppeteer-core drives Chrome, onnxruntime-web reads CAPTCHAs. `rigel-sync run` is the daemon; `rigel-sync try
     <connector>` runs one connector from a terminal with no app, which is how a real
     login is checked before a connection is made. Its key and each connection's
     session state (cookies, trusted device) stay in its `DATA_DIR`.
@@ -577,9 +582,13 @@ key.
     transactions, card bills, invoices with items, positions, trades) to our import
     payload.
   - Upstream fixes arrive by bumping the pin. New connectors (將來, 兆豐) follow all-set-tw's connector contract, so they could be upstreamed.
-- **`integrations/py-sync/` (Python, uv).** Shioaji and Firstrade, both Python SDKs.
+- **Shioaji and Firstrade are Python SDKs, but not a second runner.** A person links
+  one runner (`RegisterKeys` retires every key a runner does not list, so two would
+  retire each other's), so a Python SDK runs inside rigel-sync's image, called by
+  its connector as a subprocess (the protocol stays in Node). To be designed with
+  P5; this replaces the planned `integrations/py-sync`.
 
-Both speak the runner protocol (`/api/runner/*`, with the `runner` token its person
+The runner speaks the runner protocol (`/api/runner/*`, with the `runner` token its person
 made in Settings -> Sync runner): claim due
 connections, open their sealed credentials, raise challenges, and post batches to
 `/api/runner/connections/{id}/imports`, which lands them in that connection's book's
@@ -744,7 +753,7 @@ token kinds). Migration `000008`.
   ledger.chenantunez.com from calling a bank's site with its cookies, and several
   all-set-tw connectors drive a real Chromium. A native mobile app could host a runner
   later, a PWA cannot.
-- **Packaged as a container, for every place.** tw-sync (P4c-2) ships as one image
+- **Packaged as a container, for every place.** rigel-sync (P4c-2) ships as one image
   with Node and Chromium inside, so a person installs Docker and nothing
   else -- no Node to install or keep up to date. The same image runs next to the app
   and on a laptop; the documented setup (Settings -> Sync runner shows it) is a
@@ -766,10 +775,10 @@ token kinds). Migration `000008`.
 
   The key is generated inside the volume on first start, so it stays on that machine.
   The image must be multi-arch (linux/amd64 and linux/arm64, for Apple silicon);
-  today's `image` workflow builds amd64 only, so tw-sync's gets both.
+  today's `image` workflow builds amd64 only, so rigel-sync's gets both.
 - **For a runner next to the app:** the cluster is in a data centre abroad, and some
   Taiwanese banks flag or block foreign data-centre addresses. The owner's runner may
-  need to leave through a Taiwan exit node (Tailscale): `tw-sync try cathaybk` from
+  need to leave through a Taiwan exit node (Tailscale): `rigel-sync try tw-cathaybk` from
   the server tells, and `CHROME_ARGS=--proxy-server=...` routes the browser alone.
 
 ### Receipts
@@ -809,7 +818,7 @@ Email is **evidence**, like e-invoices: it enriches and proposes, it does not po
   - **Subscriptions.** Renewal emails, plus recurring card charges from the same
     merchant at a steady interval, feed a **recurring list**: merchant, amount, cadence,
     next date, and price-change alerts. This later drives recurring-transaction templates.
-- The runner is a `mail` connector in tw-sync. IMAP is plain Node, so no browser is
+- The runner is a `mail` connector in rigel-sync. IMAP is plain Node, so no browser is
   needed.
 
 ### Security and risk
@@ -1034,7 +1043,8 @@ builds images.
 - A multi-stage `Dockerfile`: bun builds the SPA, Go builds static binaries with
   `-tags prod`, and the result runs on distroless static. P4 switches the runtime stage
   to Debian slim with `poppler-utils` for `pdftotext`.
-- The sync runner images (`tw-sync`, `py-sync`), built by the same pipelines from P4.
+- The sync runner image (`rigel-ledger-sync`, from `integrations/rigel-sync`), built by
+  the same pipelines from P4.
 - Identical pipelines on both forges: `ci` on every push, `image` on `main` and tags,
   and `release` (GoReleaser) on `v*` tags. Gitea pushes to
   `git.chenantunez.com/cwchen-twn/rigel-ledger`, and GitHub pushes to
@@ -1042,7 +1052,7 @@ builds images.
 
 **hcloud owns** `k3s/helm/rigel-ledger/`, modelled on `k3s/helm/navidrome/`:
 - A stateless Deployment (RollingUpdate, no PVC), plus the owner's own sync runners
-  (`tw-sync`, `py-sync`), each with only its runner token in a SOPS secret and its
+  (`rigel-ledger-sync`), with only its runner token in a SOPS secret and its
   private key in a small volume; institution logins live sealed in the app.
 - A SOPS secret `k3s/secrets/rigel-ledger-secrets.enc.yaml` that holds `DATABASE_URL`,
   pointing at `10.0.1.1:5432`.
@@ -1062,7 +1072,7 @@ builds images.
 | P2 | ~~Dockerfile, Gitea/GitHub CI and release; probes and the hcloud chart (tailnet-only ipAllowList, own Postgres role, nightly backup); release `v0.1.0` and deploy~~ (done, 2026-09-24) |
 | P2.5 | **Accounts and sign-in security.** a: first-login wizard, verified email, invitations, registration modes, bootstrap admin, the Administration page (users, requests, sign-in rules, defaults, SMTP), throttling and the sign-in audit, sessions (migration `000002`). b: ~~two-factor sign-in -- email codes, TOTP, passkeys, recovery codes, enforcement (`000003`)~~ (done). Both before any public exposure |
 | P3 | ~~Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency)~~ (P3a, done); ~~the three statements bound to closing rates with `rates_used`, display-currency translation~~ (P3b, done); ~~book rebase, tag (trip) report~~ (P3c, done) |
-| P4 | **Sync and review**: ~~import API, runner tokens, `source_accounts`, review queue, rules, matching (duplicates, pending/posted, transfers), balance assertions and drift, CSV import~~ (P4a, done); ~~per-user Connections with credentials sealed to the runner, the runner protocol, challenges, the fake runner~~ (P4c-1, done); ~~server or client sync mode per person, device runners~~ (P4c-1.5, done); ~~one runner kind, every person links their own~~ (P4c-1.6, done); ~~the tw-sync runner: protocol, sealing, `try`~~ (P4c-2a, done); ~~vendored all-set-tw, the Chrome stand-in, 國泰世華~~ (P4c-2b, done); ~~永豐銀行 deposits and card, CAPTCHAs read in the runner~~ (P4c-2c, done); tw-sync built once, one multi-arch container image for the cluster and for people's computers (P4c-2); `import_rows` kinds for invoices, holdings and trades, order emails, challenges; receipt attachments (upload, camera, optional local OCR); the tw-sync runner (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
-| P5 | Securities and futures: py-sync (Shioaji daily, Firstrade), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, Banco Continental (if its export is not enough). Recurring list and subscription templates. (Points, average cost and the security commodity itself are done.) |
+| P4 | **Sync and review**: ~~import API, runner tokens, `source_accounts`, review queue, rules, matching (duplicates, pending/posted, transfers), balance assertions and drift, CSV import~~ (P4a, done); ~~per-user Connections with credentials sealed to the runner, the runner protocol, challenges, the fake runner~~ (P4c-1, done); ~~server or client sync mode per person, device runners~~ (P4c-1.5, done); ~~one runner kind, every person links their own~~ (P4c-1.6, done); ~~the sync runner (then tw-sync, now rigel-sync): protocol, sealing, `try`~~ (P4c-2a, done); ~~vendored all-set-tw, the Chrome stand-in, 國泰世華~~ (P4c-2b, done); ~~永豐銀行 deposits and card, CAPTCHAs read in the runner~~ (P4c-2c, done); rigel-sync built once, one container image for the cluster and for people's computers (P4c-2); `import_rows` kinds for invoices, holdings and trades, order emails, challenges; receipt attachments (upload, camera, optional local OCR); rigel-sync connectors (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
+| P5 | Securities and futures: Shioaji (daily) and Firstrade in rigel-sync (their Python SDKs as subprocesses), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, Banco Continental (if its export is not enough). Recurring list and subscription templates. (Points, average cost and the security commodity itself are done.) |
 | P6 | PWA polish, then Flutter if a native feature is needed |
 | P7 | **Tax workbooks (TW, PY)**: `person` tags and `tax_profiles`; tax categories and account mappings per jurisdiction; `tax_withheld` accounts and foreign-tax-paid records; per-year rule files; workbook export (income by category, deductions with evidence, withholding, capital gains in the country's currency and rate). Needs P3 reports, P4 attachments and P5 lots. Prepares and cross-checks; does not file. |

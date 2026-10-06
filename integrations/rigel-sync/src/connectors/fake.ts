@@ -6,7 +6,7 @@ import { SyncError } from './types.ts';
  * the end-to-end check: any username; password "wrong" fails with
  * bad_credentials; password "otp" asks for a one-time code, which is 123456.
  * One checking account, three transactions and a balance, the same ids every
- * day. Offered only with TW_SYNC_FAKE=1.
+ * day. Offered only with RIGEL_SYNC_FAKE=1.
  */
 export const fake: Connector = {
   id: 'fake',

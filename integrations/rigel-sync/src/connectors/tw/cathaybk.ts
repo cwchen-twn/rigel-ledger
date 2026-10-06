@@ -20,18 +20,18 @@ import {
   CathayOtpSessionExpiredError,
   CathayVerificationRequiredError,
   createCathaybkConnector,
-} from '../../vendor/all-set-tw/cathaybk.js';
-import { closeSession } from '../browser/cloudflare.ts';
-import { toDecimal } from '../money.ts';
-import { dayOf, last4, short, taipeiDay } from './rows.ts';
-import type { Account, Batch, Connector, Row } from './types.ts';
-import { SyncError } from './types.ts';
+} from '../../../vendor/all-set-tw/cathaybk.js';
+import { closeSession } from '../../browser/cloudflare.ts';
+import { toDecimal } from '../../money.ts';
+import { dayOf, last4, short, taipeiDay } from '../rows.ts';
+import type { Account, Batch, Connector, Row } from '../types.ts';
+import { SyncError } from '../types.ts';
 
 const OTP_TRIES = 3;
 const OTP_TTL_S = 300;
 
 export const cathaybk: Connector = {
-  id: 'cathaybk',
+  id: 'tw-cathaybk',
   name: '國泰世華銀行 Cathay United Bank',
   country: 'TW',
   fields: [

@@ -5,7 +5,7 @@
  * The model is ddddocr's common_old.onnx (MIT, github.com/sml2h3/ddddocr),
  * a CNN + CTC recogniser trained on this kind of image. It is downloaded
  * once, from a pinned commit and checked against its sha256, into
- * DATA_DIR/models (TW_SYNC_OCR_MODEL names a copy already on disk), and run
+ * DATA_DIR/models (RIGEL_SYNC_OCR_MODEL names a copy already on disk), and run
  * by onnxruntime's WebAssembly build: no native code, the same on every
  * architecture. The image is prepared the way ddddocr prepares it (Lanczos
  * to 64 px high, as Pillow computes it, then grey), and only blank and the
@@ -33,7 +33,7 @@ const DIGITS = new Map([
 ]);
 
 export function modelPath(): string {
-  return process.env.TW_SYNC_OCR_MODEL || join(process.env.DATA_DIR || '/data', 'models', MODEL.file);
+  return process.env.RIGEL_SYNC_OCR_MODEL || join(process.env.DATA_DIR || '/data', 'models', MODEL.file);
 }
 
 const sha256 = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
@@ -44,7 +44,7 @@ async function model(): Promise<Uint8Array> {
   try {
     const have = await readFile(path);
     if (sha256(have) === MODEL.sha256) return have;
-    if (process.env.TW_SYNC_OCR_MODEL) throw new Error(`${path} is not ddddocr's common_old.onnx (sha256 differs)`);
+    if (process.env.RIGEL_SYNC_OCR_MODEL) throw new Error(`${path} is not ddddocr's common_old.onnx (sha256 differs)`);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
   }

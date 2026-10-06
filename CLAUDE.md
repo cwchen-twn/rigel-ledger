@@ -37,11 +37,11 @@ make swag              # Regenerate Swagger/OpenAPI docs (writes to api/)
 go run ./cmd/cli create-user -u alice -e alice@example.com   # password read from stdin; walks the wizard at first sign-in
 go run ./cmd/cli set-admin -u alice                          # promote (the Administration page needs an admin)
 go run ./cmd/cli reset-mfa -u alice                          # break-glass: drop every second factor and session
-go run ./cmd/cli create-runner-token -u alice -l tw-sync     # link alice's sync runner: its token, printed once
+go run ./cmd/cli create-runner-token -u alice -l rigel-sync  # link alice's sync runner: its token, printed once
 RUNNER_TOKEN=... go run ./integrations/fake-runner -url http://localhost:8080   # a pretend institution, for Connections
-make tw-sync/check                                           # typecheck + test the Node sync runner
-cd integrations/tw-sync && DATA_DIR=./data node src/main.ts try fake   # one connector from the terminal, no app
-cd integrations/tw-sync && bun scripts/vendor.ts <commit>             # move the vendored all-set-tw connectors to <commit>
+make rigel-sync/check                                        # typecheck + test the sync runner
+cd integrations/rigel-sync && DATA_DIR=./data node src/main.ts try fake  # one connector from the terminal, no app
+cd integrations/rigel-sync && bun scripts/vendor.ts <commit>            # move the vendored all-set-tw connectors to <commit>
 ```
 
 To run a single test: `go test -run TestName ./internal/ledger/` (with `TEST_DATABASE_URL` set, e.g. from `.env`).
@@ -77,8 +77,9 @@ web/
   templates/        # Thin Go html/template shell -- renders <div id="app"> only
 integrations/
   fake-runner/      # Go reference runner against one pretend institution (development only)
-  tw-sync/          # Node runner for Taiwan institutions; its own README. vendor/all-set-tw is
-                    #   upstream at a pinned commit, unedited, bundled by scripts/vendor.ts
+  rigel-sync/       # The sync runner (Node), every institution; its own README. Connector ids are
+                    #   <country>-<institution> (tw-cathaybk); src/connectors/<country>/. vendor/all-set-tw
+                    #   is upstream at a pinned commit, unedited, bundled by scripts/vendor.ts
 migrations/         # golang-migrate SQL, embedded; 000001_init, then one pair per change (frozen once applied)
 docs/               # ARCHITECTURE.md -- target design and roadmap
 api/                # Generated Swagger output (do not edit manually)
@@ -159,7 +160,7 @@ Copy `.env.example` to `.env`. Real environment variables always win over `.env`
 - UI text, including account names, lives in the frontend i18n files keyed by stable codes (follow the `translation` skill, `.claude/skills/translation/SKILL.md`: zh is Taiwan usage, and technical words Taiwanese users say in English stay English, e.g. token, never 權杖); the database stores no translations. API error codes are translated as `error.<code>`, per-field codes as `field.<code>`, sign-in events as `event.<name>`. The one server-side exception is mail: `internal/mail/templates/{en,zh,es}/*.tmpl`, one file per message per language.
 - Two-factor sign-in: sessions carry `aal` (1 password/link, 2 second factor or passkey). `auth.Manager.RequireMFA` confines aal-1 sessions to enrolment while `system_settings.mfa_required`; login answers a challenge instead of a session when the user has a factor. Factors live in `mfa_factors` (email, TOTP sealed by `secretbox`), `webauthn_credentials`, `mfa_recovery_codes`; short-lived ceremony state in `auth_challenges`. Code in `internal/identity/{mfa,passkey}.go`; the frontend's WebAuthn JSON glue is `web/src/lib/webauthn.ts`. Passkeys bind to `APP_ORIGIN`'s host.
 - Sign-in and account flows go through `identity.Service`, which records every outcome in `auth_events` (also the throttle's source). New anonymous or code-checking endpoints call `auth.Manager.Check` first and record failures with `Failure: true`.
-- Sync and imports: design in `docs/ARCHITECTURE.md` ("Data sources and sync"). Taiwan bank, card, 集保 and e-invoice connectors come from [all-set-tw](https://github.com/TedLin1993/all-set-tw) (MIT) via a Node runner; Shioaji and Firstrade via a Python runner. Each person links institutions under Connections: the browser seals the credentials to the runner's X25519 key (`web/src/lib/seal.ts` = `internal/sealing`), the app stores ciphertext it cannot open, and a runner claims jobs over `/api/runner/*` (`internal/connections`). Every person, admin or not, links their own runner (Settings -> Sync runner), like a self-hosted CI runner: the owner's runs next to the app, anyone else's on their own computer, and credentials are sealed to that person's runner's key. There is no server runner and no sync mode (migration `000008`). Never add a code path that decrypts, logs or returns a sealed blob. `integrations/fake-runner` is the reference runner for development.
+- Sync and imports: design in `docs/ARCHITECTURE.md` ("Data sources and sync"). Taiwan bank, card, 集保 and e-invoice connectors come from [all-set-tw](https://github.com/TedLin1993/all-set-tw) (MIT), vendored into the one runner, `integrations/rigel-sync`, which is meant for every institution (Paraguay, the US, brokers, crypto) under country-prefixed connector ids (`tw-sinopac`, `py-continental`, `us-firstrade`). Each person links institutions under Connections: the browser seals the credentials to the runner's X25519 key (`web/src/lib/seal.ts` = `internal/sealing`), the app stores ciphertext it cannot open, and a runner claims jobs over `/api/runner/*` (`internal/connections`). Every person, admin or not, links their own runner (Settings -> Sync runner), like a self-hosted CI runner: the owner's runs next to the app, anyone else's on their own computer, and credentials are sealed to that person's runner's key. There is no server runner and no sync mode (migration `000008`). Never add a code path that decrypts, logs or returns a sealed blob. `integrations/fake-runner` is the reference runner for development.
 - Deployment target: the Helm chart lives in the hcloud repo (`k3s/helm/rigel-ledger/`); this repo only builds the image. See `docs/ARCHITECTURE.md#deployment`.
 
 ## CI and releases

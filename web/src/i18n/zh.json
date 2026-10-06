@@ -846,7 +846,7 @@
     "new": "新增 token",
     "new_hint": "以執行位置命名，方便日後撤銷。",
     "label": "名稱",
-    "label_hint": "例如：叢集上的 tw-sync",
+    "label_hint": "例如：叢集上的 rigel-sync",
     "days": "有效天數",
     "expires": "到期",
     "never_used": "從未使用",
@@ -930,7 +930,7 @@
     "how_csv": "不想提供登入資料？也可以在「匯入」頁面手動匯入對帳單 CSV。"
   },
   "connector": {
-    "cathaybk": {
+    "tw-cathaybk": {
       "name": "國泰世華銀行",
       "field": {
         "id_number": "身分證字號",
@@ -945,7 +945,7 @@
         }
       }
     },
-    "sinopac": {
+    "tw-sinopac": {
       "name": "永豐銀行",
       "field": {
         "id_number": "身分證字號",

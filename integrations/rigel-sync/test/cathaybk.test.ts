@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { after, before, describe, test } from 'node:test';
 import { chromePath, liveSessions } from '../src/browser/cloudflare.ts';
-import { cathaybk, taipeiDay, toBatch } from '../src/connectors/cathaybk.ts';
+import { cathaybk, taipeiDay, toBatch } from '../src/connectors/tw/cathaybk.ts';
 import { type Ask, type State, type SyncContext, SyncError } from '../src/connectors/types.ts';
 import type { CathaybkResult } from '../vendor/all-set-tw/cathaybk.js';
 import { ACCOUNT, type FakeCathay, OTP, startFakeCathay } from './fake-cathay.ts';
@@ -60,8 +60,8 @@ function hasChrome() {
   }
 }
 
-// CI sets TW_SYNC_REQUIRE_CHROME=1, so a missing browser fails there instead of skipping.
-const skip = !hasChrome() && process.env.TW_SYNC_REQUIRE_CHROME !== '1' && 'no Chrome or openssl here';
+// CI sets RIGEL_SYNC_REQUIRE_CHROME=1, so a missing browser fails there instead of skipping.
+const skip = !hasChrome() && process.env.RIGEL_SYNC_REQUIRE_CHROME !== '1' && 'no Chrome or openssl here';
 
 describe('cathaybk against a pretend bank, in Chrome', { skip, timeout: 180_000 }, () => {
   let bank: FakeCathay;

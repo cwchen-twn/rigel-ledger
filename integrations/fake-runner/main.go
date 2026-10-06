@@ -2,7 +2,7 @@
 // tests: it speaks the whole runner protocol (keys, connectors, claims,
 // sealed credentials, challenges, batches) against one pretend institution,
 // "fake", so the app side can be exercised without a real bank. The real
-// runners (integrations/tw-sync, P4c-2) follow the same steps.
+// runners (integrations/rigel-sync, P4c-2) follow the same steps.
 //
 //	RUNNER_TOKEN=... go run ./integrations/fake-runner -url http://localhost:8080 -key /tmp/fake-runner.key
 //

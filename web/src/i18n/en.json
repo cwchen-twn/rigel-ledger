@@ -846,7 +846,7 @@
     "new": "New token",
     "new_hint": "Name it after where it will run, so you know which to revoke.",
     "label": "Name",
-    "label_hint": "e.g. tw-sync on the cluster",
+    "label_hint": "e.g. rigel-sync on the cluster",
     "days": "Valid for (days)",
     "expires": "Expires",
     "never_used": "Never",
@@ -930,7 +930,7 @@
     "how_csv": "Rather not share a login? A statement CSV on the Imports page does the same job by hand."
   },
   "connector": {
-    "cathaybk": {
+    "tw-cathaybk": {
       "name": "Cathay United Bank (國泰世華)",
       "field": {
         "id_number": "ID number",
@@ -945,7 +945,7 @@
         }
       }
     },
-    "sinopac": {
+    "tw-sinopac": {
       "name": "Bank SinoPac (永豐銀行)",
       "field": {
         "id_number": "ID number",

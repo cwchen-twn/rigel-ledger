@@ -1,11 +1,12 @@
 #!/usr/bin/env -S node --disable-warning=ExperimentalWarning
 /*
- * tw-sync: a person's sync runner for Taiwan institutions (P4c-2). Linked
- * in the app under Settings -> Sync runner; see integrations/tw-sync/README.md.
+ * rigel-sync: a person's sync runner, for every institution it has a
+ * connector for (P4c-2). Linked
+ * in the app under Settings -> Sync runner; see integrations/rigel-sync/README.md.
  *
- *   tw-sync run                 the daemon (RIGEL_URL, RUNNER_TOKEN, DATA_DIR)
- *   tw-sync try <connector>     one connector from the terminal, no app
- *   tw-sync connectors          what this build offers
+ *   rigel-sync run                 the daemon (RIGEL_URL, RUNNER_TOKEN, DATA_DIR)
+ *   rigel-sync try <connector>     one connector from the terminal, no app
+ *   rigel-sync connectors          what this build offers
  */
 import { format } from 'node:util';
 import { RigelClient } from './api.ts';
@@ -27,7 +28,7 @@ console.error = (...a: unknown[]) => vendorLog.error(format(...a));
 async function main(argv: string[]): Promise<number> {
   const [cmd = 'run', ...rest] = argv;
   const store = new Store(env('DATA_DIR', '/data')!);
-  const offered = connectors({ fake: env('TW_SYNC_FAKE') === '1' || cmd === 'try' });
+  const offered = connectors({ fake: env('RIGEL_SYNC_FAKE') === '1' || cmd === 'try' });
   const ac = new AbortController();
   for (const s of ['SIGINT', 'SIGTERM'] as const) process.once(s, () => ac.abort());
 
@@ -52,7 +53,7 @@ async function main(argv: string[]): Promise<number> {
     case 'try': {
       const c = offered.find((x) => x.id === rest[0]);
       if (!c) {
-        process.stderr.write(`usage: tw-sync try <${offered.map((x) => x.id).join('|')}>\n`);
+        process.stderr.write(`usage: rigel-sync try <${offered.map((x) => x.id).join('|')}>\n`);
         return 2;
       }
       return tryConnector(c, store, ac.signal);
@@ -61,7 +62,7 @@ async function main(argv: string[]): Promise<number> {
       for (const c of offered) process.stdout.write(`${c.id}\t${c.country}\t${c.name}\n`);
       return 0;
     default:
-      process.stderr.write('usage: tw-sync run [--once] | try <connector> | connectors\n');
+      process.stderr.write('usage: rigel-sync run [--once] | try <connector> | connectors\n');
       return 2;
   }
 }
