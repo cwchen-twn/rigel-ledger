@@ -42,7 +42,11 @@ repos:
         entry: make audit
         language: system
         stages: [pre-commit]
-        pass_filenames: true
+        # One run for the whole commit: with file names, pre-commit split a
+        # large commit into batches and ran the full audit once per batch,
+        # in parallel, against one database.
+        pass_filenames: false
+        require_serial: true
         always_run: true
         verbose: true
         description: "Run code quality checks and security audits via make audit"

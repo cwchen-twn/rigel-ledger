@@ -22,18 +22,29 @@ func (f *apiFixture) requireMFA(on bool) {
 }
 
 // code for a TOTP secret at an offset in steps (0 = now, 1 = the next 30 s).
-func totpCode(t *testing.T, secret string, step int) string {
+// totpStep is the current 30 s TOTP time step.
+func totpStep() int64 { return time.Now().Unix() / 30 }
+
+// totpAt is the code for one time step. A test that must tell steps apart
+// names them, so a 30 s boundary crossed mid-test changes nothing.
+func totpAt(t *testing.T, secret string, step int64) string {
 	t.Helper()
-	c, err := totp.GenerateCode(secret, time.Now().Add(time.Duration(step)*30*time.Second))
+	c, err := totp.GenerateCode(secret, time.Unix(step*30, 0))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return c
 }
 
+// totpCode is the code for the current step plus offset.
+func totpCode(t *testing.T, secret string, offset int) string {
+	t.Helper()
+	return totpAt(t, secret, totpStep()+int64(offset))
+}
+
 // enrolTOTP sets up an authenticator for a signed-in client and returns the
-// secret and the recovery codes.
-func enrolTOTP(t *testing.T, c *client) (string, []string) {
+// secret, the recovery codes and the time step its confirming code spent.
+func enrolTOTP(t *testing.T, c *client) (string, []string, int64) {
 	t.Helper()
 	var setup TOTPSetupDTO
 	c.json("POST", "/api/me/mfa/totp", nil, 200, &setup)
@@ -45,8 +56,9 @@ func enrolTOTP(t *testing.T, c *client) (string, []string) {
 		t.Fatalf("wrong code accepted: %d %s", res.StatusCode, b)
 	}
 	var out EnrolledDTO
-	c.json("POST", "/api/me/mfa/totp/confirm", map[string]string{"code": totpCode(t, setup.Secret, 0)}, 200, &out)
-	return setup.Secret, out.RecoveryCodes
+	step := totpStep()
+	c.json("POST", "/api/me/mfa/totp/confirm", map[string]string{"code": totpAt(t, setup.Secret, step)}, 200, &out)
+	return setup.Secret, out.RecoveryCodes, step
 }
 
 func TestMFAEnforcementAndTOTP(t *testing.T) {
@@ -65,7 +77,7 @@ func TestMFAEnforcementAndTOTP(t *testing.T) {
 		t.Fatalf("me = %+v", me)
 	}
 
-	secret, codes := enrolTOTP(t, alice)
+	secret, codes, enrolled := enrolTOTP(t, alice)
 	if len(codes) != 10 {
 		t.Fatalf("recovery codes = %v", codes)
 	}
@@ -79,12 +91,15 @@ func TestMFAEnforcementAndTOTP(t *testing.T) {
 	if !step.MFARequired || step.User != nil || step.Challenge == "" || strings.Join(step.Methods, ",") != "totp,recovery" {
 		t.Fatalf("password step = %+v", step)
 	}
-	// The code used to confirm (this 30 s step) is spent: no replay.
-	res, _ = anon.do("POST", "/api/auth/mfa", map[string]string{"challenge": step.Challenge, "method": "totp", "code": totpCode(t, secret, 0)})
+	// The code used to confirm (its 30 s step) is spent: no replay. It is
+	// named by its step: the clock may have moved on to a fresh one since,
+	// which was this test's flake.
+	res, _ = anon.do("POST", "/api/auth/mfa", map[string]string{"challenge": step.Challenge, "method": "totp", "code": totpAt(t, secret, enrolled)})
 	if res.StatusCode != 422 {
 		t.Fatalf("replayed TOTP = %d", res.StatusCode)
 	}
-	res, b = anon.do("POST", "/api/auth/mfa", map[string]string{"challenge": step.Challenge, "method": "totp", "code": totpCode(t, secret, 1)})
+	// A later step works: the next one, or now if that has passed already.
+	res, b = anon.do("POST", "/api/auth/mfa", map[string]string{"challenge": step.Challenge, "method": "totp", "code": totpAt(t, secret, max(enrolled+1, totpStep()))})
 	if res.StatusCode != 200 {
 		t.Fatalf("next-step TOTP = %d %s", res.StatusCode, b)
 	}
