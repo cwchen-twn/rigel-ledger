@@ -852,7 +852,18 @@
     "csv_submit": "Importar {rows} filas",
     "csv_done": "Preparadas {staged}, ya importadas {duplicates}",
     "balance_title": "Saldo informado por la entidad",
-    "evidence": "Comprobante de la fuente (se abre en otra pestaña)"
+    "evidence": "Comprobante de la fuente (se abre en otra pestaña)",
+    "trade_buy": "Compra",
+    "trade_sell": "Venta",
+    "holding_title": "Tiene",
+    "trade_units": "{units} unidades",
+    "trade_cash_hint": "confirma el efectivo liquidado",
+    "cash_paid": "Pagado",
+    "cash_received": "Recibido",
+    "settlement_missing": "elige arriba dónde liquida su cuenta de bolsa",
+    "securities_under": "Los valores van en…",
+    "settles_through": "Liquida en…",
+    "brokerage": "Cuenta de bolsa"
   },
   "tokens": {
     "title": "Tokens de API",

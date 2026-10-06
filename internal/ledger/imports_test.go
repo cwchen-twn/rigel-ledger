@@ -27,7 +27,7 @@ func (f *fixture) mapSource(t *testing.T, ext string, account int64) {
 	}
 	for _, s := range srcs {
 		if s.ExternalID == ext {
-			if _, err := f.svc.MapSourceAccount(f.ctx, f.acc, s.ID, &account); err != nil {
+			if _, err := f.svc.MapSourceAccount(f.ctx, f.acc, s.ID, SourceMapping{AccountID: &account}); err != nil {
 				t.Fatal(err)
 			}
 			return

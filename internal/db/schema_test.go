@@ -389,3 +389,41 @@ func TestAttachmentTriggers(t *testing.T) {
 		t.Fatal("a file nothing points at was kept")
 	}
 }
+
+// Holding and trade rows carry a security and units; other rows carry
+// neither (000010). Go checks first; this holds for any writer.
+func TestImportRowShape(t *testing.T) {
+	f := setupSchema(t)
+	var src, batch int64
+	_ = f.store.Pool.QueryRow(f.ctx, `INSERT INTO source_accounts (book_id, connector, external_id, kind) VALUES ($1, 'tw-tdcc', 'b', 'brokerage') RETURNING id`, f.bookID).Scan(&src)
+	_ = f.store.Pool.QueryRow(f.ctx, `INSERT INTO import_batches (book_id, connector) VALUES ($1, 'tw-tdcc') RETURNING id`, f.bookID).Scan(&batch)
+	if _, err := f.store.Pool.Exec(f.ctx, `INSERT INTO commodities (code, kind, name, decimals, quote_currency) VALUES ('XTAI:2330', 'security', 'TSMC', 0, 'TWD')`); err != nil {
+		t.Fatal(err)
+	}
+	row := func(id, kind, amount string, security, units, cash any) error {
+		_, err := f.store.Pool.Exec(f.ctx, `INSERT INTO import_rows (book_id, batch_id, source_account_id, kind, external_id, date, amount, currency, security, units, cash)
+			VALUES ($1, $2, $3, $4, $5, '2026-09-01', $6, 'TWD', $7, $8, $9)`, f.bookID, batch, src, kind, id, amount, security, units, cash)
+		return err
+	}
+	for _, c := range []struct {
+		name, kind, amount string
+		security, units    any
+		cash               any
+	}{
+		{"a trade moving nothing", "trade", "0", "XTAI:2330", "0", nil},
+		{"a trade without its security", "trade", "0", nil, "10", nil},
+		{"a trade with an amount", "trade", "-100", "XTAI:2330", "10", "-100"},
+		{"a negative holding", "holding", "0", "XTAI:2330", "-1", nil},
+		{"a holding with cash", "holding", "0", "XTAI:2330", "10", "5"},
+		{"a transaction with units", "transaction", "-100", nil, "10", nil},
+	} {
+		if err := row("x:"+c.name, c.kind, c.amount, c.security, c.units, c.cash); err == nil {
+			t.Errorf("%s was accepted", c.name)
+		} else {
+			wantConstraint(t, err, "import_rows_shape")
+		}
+	}
+	if err := row("x:ok", "trade", "0", "XTAI:2330", "1000", nil); err != nil {
+		t.Fatalf("a trade without cash yet: %v", err)
+	}
+}

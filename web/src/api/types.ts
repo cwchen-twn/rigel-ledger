@@ -494,7 +494,10 @@ export interface SourceAccount {
   external_id: string;
   label: string;
   currency: string | null;
+  /** brokerage: holds securities; account_id is their parent, and trades settle through settlement_account_id. */
+  kind: 'cash' | 'brokerage';
   account_id: number | null;
+  settlement_account_id: number | null;
   pending: number;
 }
 
@@ -502,7 +505,7 @@ export type Proposal = 'new' | 'duplicate' | 'clears' | 'transfer';
 
 export interface ImportRow {
   id: number;
-  kind: 'transaction' | 'balance';
+  kind: 'transaction' | 'balance' | 'holding' | 'trade';
   external_id: string;
   date: string;
   /** Signed on the account: money in > 0. */
@@ -523,6 +526,14 @@ export interface ImportRow {
   account_id: number | null;
   /** The row's evidence (api.fileUrl), attached to its transaction on accept. */
   attachment_id: number | null;
+  /** holding and trade rows: the security (XTAI:2330), its name, units (> 0 in), price per unit. */
+  security: string | null;
+  security_name: string | null;
+  units: string | null;
+  price: string | null;
+  /** What a trade settled for, signed on the settlement account; null until confirmed. */
+  cash: string | null;
+  settlement_account_id: number | null;
 }
 
 export interface ImportRowInput {

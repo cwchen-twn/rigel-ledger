@@ -852,7 +852,18 @@
     "csv_submit": "匯入 {rows} 列",
     "csv_done": "已暫存 {staged} 列，先前已匯入 {duplicates} 列",
     "balance_title": "金融機構回報的餘額",
-    "evidence": "來源附上的憑證（在新分頁開啟）"
+    "evidence": "來源附上的憑證（在新分頁開啟）",
+    "trade_buy": "買進",
+    "trade_sell": "賣出",
+    "holding_title": "持有",
+    "trade_units": "{units} 股",
+    "trade_cash_hint": "請確認實際交割金額",
+    "cash_paid": "支付",
+    "cash_received": "收到",
+    "settlement_missing": "請先在上方選擇此證券帳戶的交割帳戶",
+    "securities_under": "證券放在…之下",
+    "settles_through": "交割帳戶…",
+    "brokerage": "證券帳戶"
   },
   "tokens": {
     "title": "API token",

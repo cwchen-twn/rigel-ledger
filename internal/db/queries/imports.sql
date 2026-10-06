@@ -1,9 +1,10 @@
 -- name: UpsertSourceAccount :one
-INSERT INTO source_accounts (book_id, connector, external_id, label, currency)
-VALUES (@book_id, @connector, @external_id, @label, sqlc.narg(currency))
+INSERT INTO source_accounts (book_id, connector, external_id, label, currency, kind)
+VALUES (@book_id, @connector, @external_id, @label, sqlc.narg(currency), @kind)
 ON CONFLICT (book_id, connector, external_id) DO UPDATE
     SET label = CASE WHEN EXCLUDED.label <> '' THEN EXCLUDED.label ELSE source_accounts.label END,
-        currency = coalesce(source_accounts.currency, EXCLUDED.currency)
+        currency = coalesce(source_accounts.currency, EXCLUDED.currency),
+        kind = EXCLUDED.kind
 RETURNING *;
 
 -- name: ListSourceAccounts :many
@@ -17,7 +18,8 @@ ORDER BY s.connector, s.label, s.id;
 SELECT * FROM source_accounts WHERE book_id = @book_id AND id = @id;
 
 -- name: MapSourceAccount :one
-UPDATE source_accounts SET account_id = sqlc.narg(account_id) WHERE book_id = @book_id AND id = @id RETURNING *;
+UPDATE source_accounts SET account_id = sqlc.narg(account_id), settlement_account_id = sqlc.narg(settlement_account_id)
+WHERE book_id = @book_id AND id = @id RETURNING *;
 
 -- name: CreateImportBatch :one
 INSERT INTO import_batches (book_id, connector, label, created_by) VALUES (@book_id, @connector, @label, sqlc.narg(created_by))
@@ -30,9 +32,9 @@ UPDATE import_batches SET received = @received, duplicates = @duplicates WHERE i
 -- Nothing on a row already staged (the same external id): that is what
 -- makes a re-sync harmless. The caller counts the missing RETURNING.
 INSERT INTO import_rows (book_id, batch_id, source_account_id, kind, external_id, date, amount, currency,
-                         description, counterparty, pending, raw)
+                         description, counterparty, pending, raw, security, units, price, cash)
 VALUES (@book_id, @batch_id, @source_account_id, @kind, @external_id, @date, @amount, @currency,
-        @description, @counterparty, @pending, @raw)
+        @description, @counterparty, @pending, @raw, sqlc.narg(security), sqlc.narg(units), sqlc.narg(price), sqlc.narg(cash))
 ON CONFLICT (book_id, external_id) DO NOTHING
 RETURNING id;
 
@@ -40,14 +42,16 @@ RETURNING id;
 -- The review queue: pending rows with their source account's mapping.
 SELECT r.id, r.kind, r.external_id, r.date, r.amount, r.currency, r.description, r.counterparty, r.pending,
        r.proposal, r.proposed_account_id, r.match_transaction_id, r.match_row_id, r.rule_id, r.attachment_id,
-       s.id AS source_account_id, s.connector, s.label AS source_label, s.account_id
+       r.security, c.name AS security_name, r.units, r.price, r.cash,
+       s.id AS source_account_id, s.connector, s.label AS source_label, s.account_id, s.settlement_account_id
 FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
+LEFT JOIN commodities c ON c.code = r.security
 WHERE r.book_id = @book_id AND r.status = 'pending'
 ORDER BY r.date DESC, r.id DESC
 LIMIT @lim;
 
 -- name: GetImportRow :one
-SELECT r.*, s.account_id, s.connector
+SELECT r.*, s.account_id, s.connector, s.settlement_account_id
 FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
 WHERE r.book_id = @book_id AND r.id = @id;
 
@@ -135,3 +139,19 @@ ORDER BY ba.account_id, ba.date DESC, ba.created_at DESC;
 -- name: SetPostingStatus :exec
 UPDATE postings SET status = @status, cleared_on = sqlc.narg(cleared_on)
 WHERE transaction_id = @transaction_id AND account_id = @account_id AND status <> 'reconciled';
+
+-- name: PendingRowsOfAccount :many
+-- Waiting transaction rows on a ledger account, near a date: matched again
+-- once a trade has booked the cash they may duplicate.
+SELECT r.id FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
+WHERE r.book_id = @book_id AND r.status = 'pending' AND r.kind = 'transaction'
+  AND s.account_id = @account_id AND r.date BETWEEN @from_date AND @to_date
+ORDER BY r.date, r.id;
+
+-- name: GetSourceSecurity :one
+SELECT account_id FROM source_securities WHERE source_account_id = @source_account_id AND commodity = @commodity;
+
+-- name: SetSourceSecurity :exec
+INSERT INTO source_securities (source_account_id, commodity, account_id)
+VALUES (@source_account_id, @commodity, @account_id)
+ON CONFLICT (source_account_id, commodity) DO UPDATE SET account_id = EXCLUDED.account_id;

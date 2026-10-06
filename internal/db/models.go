@@ -482,6 +482,10 @@ type ImportRow struct {
 	DecidedAt          *time.Time
 	CreatedAt          time.Time
 	AttachmentID       *int64
+	Security           *string
+	Units              decimal.NullDecimal
+	Price              decimal.NullDecimal
+	Cash               decimal.NullDecimal
 }
 
 type ImportRule struct {
@@ -581,14 +585,22 @@ type Session struct {
 }
 
 type SourceAccount struct {
-	ID         int64
-	BookID     int64
-	Connector  string
-	ExternalID string
-	Label      string
-	Currency   *string
-	AccountID  *int64
-	CreatedAt  time.Time
+	ID                  int64
+	BookID              int64
+	Connector           string
+	ExternalID          string
+	Label               string
+	Currency            *string
+	AccountID           *int64
+	CreatedAt           time.Time
+	Kind                string
+	SettlementAccountID *int64
+}
+
+type SourceSecurity struct {
+	SourceAccountID int64
+	Commodity       string
+	AccountID       int64
 }
 
 type SystemSetting struct {

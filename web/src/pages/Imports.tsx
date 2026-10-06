@@ -5,7 +5,7 @@ import type { ImportRow, Proposal } from '~/api/types';
 import { AccountCombobox } from '~/components/AccountCombobox';
 import { PageHeader } from '~/components/AppShell';
 import { CsvImportDialog } from '~/components/CsvImportDialog';
-import { Money } from '~/components/Money';
+import { Money, MoneyInput } from '~/components/Money';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Dialog } from '~/components/ui/dialog';
@@ -14,7 +14,7 @@ import { Badge, EmptyState, Skeleton } from '~/components/ui/misc';
 import { toast } from '~/components/ui/toast';
 import { useI18n } from '~/i18n';
 import { formatDate } from '~/lib/dates';
-import { sub } from '~/lib/money';
+import { abs, cmp, mul, neg, parseAmount, strip, sub } from '~/lib/money';
 import { useBook } from '~/stores/book';
 import { useSession } from '~/stores/session';
 
@@ -34,14 +34,16 @@ const suggestPattern = (r: ImportRow) => (r.counterparty || r.description).repla
  * teaching rules along the way so next month's rows arrive categorised.
  */
 export default function Imports() {
-  const { t, te } = useI18n();
-  const { user } = useSession();
+  const { t, te, intl } = useI18n();
+  const { user, refetchCommodities } = useSession();
   const book = useBook();
   const [queue, { refetch: refetchQueue }] = createResource(book.id, (id) => api.importQueue(id));
   const [sources, { refetch: refetchSources }] = createResource(book.id, (id) => api.importSources(id));
   const [rules, { refetch: refetchRules }] = createResource(book.id, (id) => api.importRules(id));
   const [drift, { refetch: refetchDrift }] = createResource(book.id, (id) => api.drift(id));
   const [chosen, setChosen] = createSignal<Record<number, number | null>>({});
+  // A trade's settled cash as typed, unsigned: the trade's direction signs it.
+  const [cashTyped, setCashTyped] = createSignal<Record<number, string>>({});
   const [selected, setSelected] = createSignal<Set<number>>(new Set());
   const [busy, setBusy] = createSignal(false);
   const [csvOpen, setCsvOpen] = createSignal(false);
@@ -51,6 +53,10 @@ export default function Imports() {
     refetchQueue();
     refetchSources();
     refetchDrift();
+    // A mapping or a trade can make accounts (a security's) and register a
+    // security; the drift card and the pickers need to know them.
+    book.refetchAccounts();
+    refetchCommodities();
     setSelected(new Set<number>());
   };
   const fmt = (d: string) => formatDate(d, user()?.date_format ?? 'YYYY-MM-DD');
@@ -60,8 +66,29 @@ export default function Imports() {
   };
   const rowsById = createMemo(() => new Map((queue() ?? []).map((r) => [r.id, r])));
   const category = (r: ImportRow) => (r.id in chosen() ? chosen()[r.id] : r.proposed_account_id);
-  const acceptable = (r: ImportRow) => r.kind === 'transaction' && r.account_id !== null;
-  const unmapped = () => (sources() ?? []).filter((s) => s.account_id === null);
+
+  // ---- holdings and trades (#37) ----
+  const symbol = (r: ImportRow) => (r.security ?? '').split(':').pop() ?? '';
+  const buying = (r: ImportRow) => cmp(r.units ?? '0', '0') > 0;
+  /** The cash shown for a trade: typed, else sent, else units x price. */
+  const cashShown = (r: ImportRow) =>
+    r.id in cashTyped() ? cashTyped()[r.id] : r.cash ? abs(r.cash) : r.price ? abs(mul(r.units ?? '0', r.price)) : '';
+  const cashSigned = (r: ImportRow): string | null => {
+    const v = parseAmount(cashShown(r));
+    if (v === null || cmp(v, '0') <= 0) return null;
+    return buying(r) ? neg(v) : v;
+  };
+  const tradeTitle = (r: ImportRow) =>
+    `${buying(r) ? t('imports.trade_buy') : t('imports.trade_sell')} ${symbol(r)} ${r.security_name ?? ''}`.trim();
+  // Shares are whole; fund units are not: as many places as the source sent.
+  const units = (r: ImportRow) => new Intl.NumberFormat(intl(), { maximumFractionDigits: 8 }).format(abs(r.units ?? '0') as unknown as number);
+
+  const acceptable = (r: ImportRow) =>
+    r.kind === 'trade'
+      ? r.account_id !== null && r.settlement_account_id !== null && cashSigned(r) !== null
+      : r.kind === 'transaction' && r.account_id !== null;
+  const unmapped = () =>
+    (sources() ?? []).filter((s) => s.account_id === null || (s.kind === 'brokerage' && s.settlement_account_id === null));
 
   const toggle = (id: number, on: boolean) => {
     const s = new Set(selected());
@@ -74,9 +101,14 @@ export default function Imports() {
   /** Accept rows; a row whose category the person changed goes with that category. */
   const accept = async (ids: number[]) => {
     const groups = new Map<number | null, number[]>();
+    const cash: Record<number, string> = {};
     for (const id of ids) {
       const r = rowsById().get(id);
       if (!r) continue;
+      if (r.kind === 'trade') {
+        const c = cashSigned(r);
+        if (c !== null) cash[id] = c;
+      }
       const override = r.id in chosen() && chosen()[r.id] !== r.proposed_account_id ? chosen()[r.id] : null;
       groups.set(override ?? null, [...(groups.get(override ?? null) ?? []), id]);
     }
@@ -86,7 +118,7 @@ export default function Imports() {
     let other = 0;
     try {
       for (const [acct, rowIds] of groups) {
-        const res = await api.acceptRows(book.id(), rowIds, acct);
+        const res = await api.acceptRows(book.id(), rowIds, acct, cash);
         accepted += res.accepted.length;
         for (const f of res.failed) {
           if (f.code === 'required') needCategory++;
@@ -115,9 +147,9 @@ export default function Imports() {
       reload();
     }
   };
-  const map = async (sourceId: number, accountId: number | null) => {
+  const map = async (sourceId: number, accountId: number | null, settlementId: number | null = null) => {
     try {
-      await api.mapSource(book.id(), sourceId, accountId);
+      await api.mapSource(book.id(), sourceId, accountId, settlementId);
       toast.success(t('imports.mapped'));
     } catch (err) {
       toast.error(te(err));
@@ -136,6 +168,12 @@ export default function Imports() {
   const explain = (r: ImportRow) => {
     if (r.kind === 'balance') return t('imports.balance_row', { date: fmt(r.date) });
     if (r.account_id === null) return t('imports.unmapped_row');
+    if (r.kind === 'trade') {
+      const at = r.price ? ` @ ${strip(r.price)}` : '';
+      return r.settlement_account_id === null
+        ? t('imports.settlement_missing')
+        : `${t('imports.trade_units', { units: units(r) })}${at} · ${t('imports.trade_cash_hint')}`;
+    }
     switch (r.proposal) {
       case 'duplicate':
         return t('imports.explain_duplicate');
@@ -203,19 +241,45 @@ export default function Imports() {
                     <div class="min-w-0">
                       <div class="flex items-center gap-2 truncate text-sm font-medium">
                         {s.label || s.external_id}
-                        <Show when={s.account_id === null}><Badge variant="warning">{t('imports.unmapped')}</Badge></Show>
+                        <Show when={s.account_id === null || (s.kind === 'brokerage' && s.settlement_account_id === null)}>
+                          <Badge variant="warning">{t('imports.unmapped')}</Badge>
+                        </Show>
+                        <Show when={s.kind === 'brokerage'}><Badge variant="outline">{t('imports.brokerage')}</Badge></Show>
                       </div>
                       <div class="truncate text-xs text-muted-foreground">
                         {s.connector} · {s.external_id}
                         <Show when={s.pending}> · {t('imports.waiting', { count: s.pending })}</Show>
                       </div>
                     </div>
-                    <AccountCombobox
-                      value={s.account_id}
-                      onChange={(id) => book.canEdit() && map(s.id, id)}
-                      filter={(a) => a.class === 'asset' || a.class === 'liability'}
-                      placeholder={t('imports.map_to')}
-                    />
+                    <Show
+                      when={s.kind === 'brokerage'}
+                      fallback={
+                        <AccountCombobox
+                          value={s.account_id}
+                          onChange={(id) => book.canEdit() && map(s.id, id)}
+                          filter={(a) => a.class === 'asset' || a.class === 'liability'}
+                          placeholder={t('imports.map_to')}
+                        />
+                      }
+                    >
+                      <div class="grid min-w-0 gap-2">
+                        <AccountCombobox
+                          value={s.account_id}
+                          onChange={(id) => book.canEdit() && map(s.id, id, s.settlement_account_id)}
+                          filter={(a) => a.class === 'asset'}
+                          allowPlaceholders
+                          placeholder={t('imports.securities_under')}
+                          aria-label={t('imports.securities_under')}
+                        />
+                        <AccountCombobox
+                          value={s.settlement_account_id}
+                          onChange={(id) => book.canEdit() && map(s.id, s.account_id, id)}
+                          filter={(a) => a.class === 'asset'}
+                          placeholder={t('imports.settles_through')}
+                          aria-label={t('imports.settles_through')}
+                        />
+                      </div>
+                    </Show>
                   </div>
                 )}
               </For>
@@ -264,7 +328,13 @@ export default function Imports() {
                       <div class="grid min-w-0 gap-0.5">
                         <div class="flex items-center gap-2">
                           <span class="truncate text-sm font-medium">
-                            {r.kind === 'balance' ? t('imports.balance_title') : r.counterparty || r.description || '—'}
+                            {r.kind === 'balance'
+                              ? t('imports.balance_title')
+                              : r.kind === 'holding'
+                                ? `${t('imports.holding_title')} ${symbol(r)} ${r.security_name ?? ''}`
+                                : r.kind === 'trade'
+                                  ? tradeTitle(r)
+                                  : r.counterparty || r.description || '—'}
                           </span>
                           <Show when={r.kind === 'transaction' && r.account_id !== null}>
                             <Badge variant={BADGE[r.proposal]}>{t(`imports.proposal_${r.proposal}`)}</Badge>
@@ -290,7 +360,7 @@ export default function Imports() {
                         </div>
                       </div>
                       <div class="min-w-0">
-                        <Show when={acceptable(r) && r.proposal === 'new'}>
+                        <Show when={r.kind === 'transaction' && acceptable(r) && r.proposal === 'new'}>
                           <div class="flex items-center gap-1 lg:w-72">
                             <AccountCombobox
                               class="min-w-0 flex-1"
@@ -307,7 +377,28 @@ export default function Imports() {
                         </Show>
                       </div>
                       <div class="flex items-center justify-between gap-2 lg:justify-end">
-                        <Money class="text-sm font-medium" amount={r.amount} currency={r.currency} signed />
+                        <Show
+                          when={r.kind === 'trade'}
+                          fallback={
+                            <Show
+                              when={r.kind === 'holding'}
+                              fallback={<Money class="text-sm font-medium" amount={r.amount} currency={r.currency} signed />}
+                            >
+                              <span class="text-sm font-medium tabular-nums">{t('imports.trade_units', { units: units(r) })}</span>
+                            </Show>
+                          }
+                        >
+                          <label class="flex items-center gap-2 text-xs text-muted-foreground">
+                            {buying(r) ? t('imports.cash_paid') : t('imports.cash_received')}
+                            <MoneyInput
+                              class="w-32"
+                              value={cashShown(r)}
+                              disabled={!book.canEdit()}
+                              onInput={(e) => setCashTyped({ ...cashTyped(), [r.id]: e.currentTarget.value })}
+                            />
+                            <span>{r.currency}</span>
+                          </label>
+                        </Show>
                         <Show when={book.canEdit()}>
                           <div class="flex gap-1">
                             <Button size="sm" disabled={busy() || !acceptable(r)} onClick={() => accept([r.id])} aria-label={t('imports.accept')}>

@@ -172,8 +172,9 @@ transaction_attachments(transaction_id, attachment_id) and import_rows.attachmen
 -- P4a (migration 000005, implemented; see "The import core" below)
 source_accounts(book_id, connector, external_id, label, currency, account_id NULL)
 import_batches(id, book_id, connector, label, received, duplicates, created_by)
-import_rows(id, batch_id, source_account_id, kind transaction|balance, external_id UNIQUE per book,
+import_rows(id, batch_id, source_account_id, kind transaction|balance|holding|trade, external_id UNIQUE per book,
             date, amount signed, currency, description, counterparty, pending, raw JSONB,
+            security, units, price, cash  -- holding and trade rows (000010),
             proposal new|duplicate|clears|transfer, proposed_account_id, match_transaction_id,
             match_row_id, rule_id, status pending|accepted|ignored, transaction_id)
 import_rules(id, book_id, priority, pattern, source_account_id NULL, account_id)
@@ -623,8 +624,27 @@ implementation against one pretend institution, for development and end-to-end t
     - Only an unmatched cash invoice proposes a new cash transaction. Otherwise every
       card purchase would be booked twice.
   - **Broker trades** (集保, Shioaji, Firstrade) become buy and sell transactions with
-    `unit_cost`, using the existing average-cost rules. Dividends, fees and tax are their
-    own lines.
+    `unit_cost`, using the existing average-cost rules. Implemented for `holding` and
+    `trade` rows (#37, migration `000010`, `internal/ledger/securities.go`):
+    - A broker account is a source account of kind `brokerage`, mapped to a **parent**
+      (an asset account or group) and to the **settlement account** its trades' cash
+      goes through. Each security it reports gets its own account under the parent the
+      first time (`2330 台積電`, cash-flow class investing), remembered in
+      `source_securities` wherever it is moved or renamed; a security the book has never
+      seen is registered from the row (`XTAI:2330`, its name, its quote currency).
+    - `holding` rows are unit assertions on the security's account, applied when the
+      broker account is mapped: drift shows in units.
+    - `trade` rows wait for the person, because 集保 sends no fees, no tax and sometimes
+      a placeholder price: the queue pre-fills the cash from units x price (or the cash
+      the source sent) and the person confirms it. **A buy's cost is the cash paid, fees
+      included; a sale releases average cost and books the rest to Realized gains**, both
+      priced with the same `resolveLine` the editor uses, so any currency balances.
+    - After a trade is booked, the settlement account's waiting rows within 5 days are
+      matched again, so the bank's own 交割 line shows as the duplicate it is instead of
+      a second cash movement.
+    - Units that move with no cash -- a transfer between brokers, a stock dividend
+      (taxed at par in Taiwan) -- are refused on accept: ignore the row and enter them by
+      hand. Dividends paid in cash arrive as the bank's own rows.
   - **Futures.**
     - Daily settle P&L from `margin()` becomes margin-account ↔ futures P&L postings.
     - Equity is an assertion.
@@ -1100,7 +1120,7 @@ builds images.
 | P2 | ~~Dockerfile, Gitea/GitHub CI and release; probes and the hcloud chart (tailnet-only ipAllowList, own Postgres role, nightly backup); release `v0.1.0` and deploy~~ (done, 2026-09-24) |
 | P2.5 | **Accounts and sign-in security.** a: first-login wizard, verified email, invitations, registration modes, bootstrap admin, the Administration page (users, requests, sign-in rules, defaults, SMTP), throttling and the sign-in audit, sessions (migration `000002`). b: ~~two-factor sign-in -- email codes, TOTP, passkeys, recovery codes, enforcement (`000003`)~~ (done). Both before any public exposure |
 | P3 | ~~Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency)~~ (P3a, done); ~~the three statements bound to closing rates with `rates_used`, display-currency translation~~ (P3b, done); ~~book rebase, tag (trip) report~~ (P3c, done) |
-| P4 | **Sync and review**: ~~import API, runner tokens, `source_accounts`, review queue, rules, matching (duplicates, pending/posted, transfers), balance assertions and drift, CSV import~~ (P4a, done); ~~per-user Connections with credentials sealed to the runner, the runner protocol, challenges, the fake runner~~ (P4c-1, done); ~~server or client sync mode per person, device runners~~ (P4c-1.5, done); ~~one runner kind, every person links their own~~ (P4c-1.6, done); ~~the sync runner (then tw-sync, now rigel-sync): protocol, sealing, `try`~~ (P4c-2a, done); ~~vendored all-set-tw, the Chrome stand-in, 國泰世華~~ (P4c-2b, done); ~~永豐銀行 deposits and card, CAPTCHAs read in the runner~~ (P4c-2c, done); ~~rigel-sync, one container image for the cluster and for people's computers~~ (P4c-2d, done); `import_rows` kinds for invoices, holdings and trades, order emails, challenges; ~~receipt attachments (upload, camera) and synced evidence~~ (#36, done); optional local OCR for receipts (#44); rigel-sync connectors (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
+| P4 | **Sync and review**: ~~import API, runner tokens, `source_accounts`, review queue, rules, matching (duplicates, pending/posted, transfers), balance assertions and drift, CSV import~~ (P4a, done); ~~per-user Connections with credentials sealed to the runner, the runner protocol, challenges, the fake runner~~ (P4c-1, done); ~~server or client sync mode per person, device runners~~ (P4c-1.5, done); ~~one runner kind, every person links their own~~ (P4c-1.6, done); ~~the sync runner (then tw-sync, now rigel-sync): protocol, sealing, `try`~~ (P4c-2a, done); ~~vendored all-set-tw, the Chrome stand-in, 國泰世華~~ (P4c-2b, done); ~~永豐銀行 deposits and card, CAPTCHAs read in the runner~~ (P4c-2c, done); ~~rigel-sync, one container image for the cluster and for people's computers~~ (P4c-2d, done); `import_rows` kinds for invoices, holdings and trades, order emails, challenges; ~~receipt attachments (upload, camera) and synced evidence~~ (#36, done); ~~`holding` and `trade` rows, securities from a broker account~~ (#37, done); optional local OCR for receipts (#44); rigel-sync connectors (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
 | P5 | Securities and futures: Shioaji (daily) and Firstrade in rigel-sync (their Python SDKs as subprocesses), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, Banco Continental (if its export is not enough). Recurring list and subscription templates. (Points, average cost and the security commodity itself are done.) |
 | P6 | PWA polish, then Flutter if a native feature is needed |
 | P7 | **Tax workbooks (TW, PY)**: `person` tags and `tax_profiles`; tax categories and account mappings per jurisdiction; `tax_withheld` accounts and foreign-tax-paid records; per-year rule files; workbook export (income by category, deductions with evidence, withholding, capital gains in the country's currency and rate). Needs P3 reports, P4 attachments and P5 lots. Prepares and cross-checks; does not file. |

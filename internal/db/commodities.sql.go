@@ -50,6 +50,31 @@ func (q *Queries) CreateCommodity(ctx context.Context, arg CreateCommodityParams
 	return i, err
 }
 
+const ensureSecurity = `-- name: EnsureSecurity :exec
+INSERT INTO commodities (code, kind, name, decimals, quote_currency)
+VALUES ($1, 'security', $2, $3, $4)
+ON CONFLICT (code) DO NOTHING
+`
+
+type EnsureSecurityParams struct {
+	Code          string
+	Name          string
+	Decimals      int16
+	QuoteCurrency *string
+}
+
+// A security a source names, the first time it does; an existing code is
+// left as it is (its name may have been corrected by hand).
+func (q *Queries) EnsureSecurity(ctx context.Context, arg EnsureSecurityParams) error {
+	_, err := q.db.Exec(ctx, ensureSecurity,
+		arg.Code,
+		arg.Name,
+		arg.Decimals,
+		arg.QuoteCurrency,
+	)
+	return err
+}
+
 const getCommodity = `-- name: GetCommodity :one
 SELECT code, kind, name, decimals, quote_currency, exchange_mic, contract_size FROM commodities WHERE code = $1
 `

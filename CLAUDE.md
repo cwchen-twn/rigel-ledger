@@ -108,6 +108,7 @@ api/                # Generated Swagger output (do not edit manually)
 - New books are seeded from `personalTemplate` in `template.go`; account names are i18n keys (`account.template.<key>`) until renamed.
 - Imports (`imports.go`, migration `000005`): sources stage `import_rows`; `propose` matches each (duplicate -> clears -> transfer -> rule) and `AcceptRow` is the only way a row becomes a transaction. Balance rows become `balance_assertions`; `Drifts` compares the newest one per account with the books. Windows and rules: `docs/ARCHITECTURE.md` "The import core".
 - Attachments (`attachments.go`, migration `000009`): files on transactions, one copy per book and SHA-256, type sniffed from the bytes (images and PDFs only), deleted by trigger when nothing links them, bytes kept out of `audit_log`. A batch's `files` reach the transaction through `import_rows.attachment_id` when the row is accepted.
+- Securities from a sync (`securities.go`, migration `000010`): a `brokerage` source account maps to a parent (each security gets its own child account, `source_securities`) and a settlement account; `holding` rows are unit assertions, `trade` rows are booked on accept at the cash the person confirms (buy cost = cash paid, sale gain to `realized_gains`).
 
 ### Frontend (web/src)
 

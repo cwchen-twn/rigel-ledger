@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -103,10 +104,13 @@ type ImportAccountDTO struct {
 	ID       string `json:"id"`
 	Label    string `json:"label"`
 	Currency string `json:"currency"`
+	// brokerage: holds securities (holding and trade rows) and settles
+	// through a cash account; cash (the default) is everything else.
+	Kind string `json:"kind,omitempty" enums:"cash,brokerage"`
 }
 
 type ImportRowInDTO struct {
-	Kind    string `json:"kind" enums:"transaction,balance"`
+	Kind    string `json:"kind" enums:"transaction,balance,holding,trade"`
 	Account string `json:"account"`
 	// The source's id for the row, stable across resends.
 	ID           string          `json:"id"`
@@ -121,6 +125,19 @@ type ImportRowInDTO struct {
 	// The ref of the batch's file that is this row's evidence (an order
 	// email, an e-invoice, a statement); attached when the row is accepted.
 	File string `json:"file,omitempty"`
+
+	// holding and trade rows: the security as NAMESPACE:SYMBOL (XTAI:2330),
+	// registered with this name and quote currency the first time.
+	Security      string `json:"security,omitempty"`
+	SecurityName  string `json:"security_name,omitempty"`
+	QuoteCurrency string `json:"quote_currency,omitempty"`
+	// Units held (holding) or moved: > 0 in, < 0 out (trade).
+	Units *decimal.Decimal `json:"units,omitempty" swaggertype:"string"`
+	// Per unit, in the quote currency, when the source knows it.
+	Price *decimal.Decimal `json:"price,omitempty" swaggertype:"string"`
+	// What the trade settled for, signed on the settlement account (a buy
+	// < 0), when the source knows it; otherwise confirmed on accept.
+	Cash *decimal.Decimal `json:"cash,omitempty" swaggertype:"string"`
 }
 
 // ImportFileDTO is evidence a batch carries: an image or a PDF, up to 10 MiB,
@@ -177,12 +194,14 @@ func (h *handlers) importBatch(w http.ResponseWriter, r *http.Request) {
 func importInput(req ImportBatchDTO) ledger.ImportInput {
 	in := ledger.ImportInput{Connector: req.Connector, Label: req.Label}
 	for _, a := range req.Accounts {
-		in.Accounts = append(in.Accounts, ledger.ImportAccount{ExternalID: a.ID, Label: a.Label, Currency: a.Currency})
+		in.Accounts = append(in.Accounts, ledger.ImportAccount{ExternalID: a.ID, Label: a.Label, Currency: a.Currency, Kind: a.Kind})
 	}
 	for _, row := range req.Rows {
 		in.Rows = append(in.Rows, ledger.ImportRowInput{Kind: row.Kind, Account: row.Account, ID: row.ID, Date: row.Date.Time,
 			Amount: row.Amount, Currency: row.Currency, Description: row.Description, Counterparty: row.Counterparty,
-			Pending: row.Pending, Raw: row.Raw, File: row.File})
+			Pending: row.Pending, Raw: row.Raw, File: row.File,
+			Security: row.Security, SecurityName: row.SecurityName, QuoteCurrency: row.QuoteCurrency,
+			Units: row.Units, Price: row.Price, Cash: row.Cash})
 	}
 	for _, f := range req.Files {
 		in.Files = append(in.Files, ledger.ImportFile{Ref: f.Ref, FileInput: ledger.FileInput{Filename: f.Filename, Bytes: f.Data}})
@@ -200,8 +219,12 @@ type SourceAccountDTO struct {
 	ExternalID string  `json:"external_id"`
 	Label      string  `json:"label"`
 	Currency   *string `json:"currency"`
-	AccountID  *int64  `json:"account_id"`
-	Pending    int64   `json:"pending"`
+	Kind       string  `json:"kind" enums:"cash,brokerage"`
+	// For a brokerage, the parent its securities' accounts are made under.
+	AccountID *int64 `json:"account_id"`
+	// For a brokerage, where its trades' cash goes.
+	SettlementAccountID *int64 `json:"settlement_account_id"`
+	Pending             int64  `json:"pending"`
 }
 
 // listSources
@@ -221,14 +244,17 @@ func (h *handlers) listSources(w http.ResponseWriter, r *http.Request) {
 	out := make([]SourceAccountDTO, len(rows))
 	for i, s := range rows {
 		out[i] = SourceAccountDTO{ID: s.ID, Connector: s.Connector, ExternalID: s.ExternalID, Label: s.Label,
-			Currency: s.Currency, AccountID: s.AccountID, Pending: s.Pending}
+			Currency: s.Currency, Kind: s.Kind, AccountID: s.AccountID, SettlementAccountID: s.SettlementAccountID, Pending: s.Pending}
 	}
 	response.JSON(w, http.StatusOK, out)
 }
 
+// MapSourceDTO replaces the mapping; null unmaps.
 type MapSourceDTO struct {
-	// null unmaps.
+	// The account rows book to; for a brokerage, the parent of its securities.
 	AccountID *int64 `json:"account_id"`
+	// A brokerage only: the account its trades settle through.
+	SettlementAccountID *int64 `json:"settlement_account_id"`
 }
 
 // mapSource
@@ -253,7 +279,7 @@ func (h *handlers) mapSource(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	if _, err := h.svc.MapSourceAccount(r.Context(), access(r), sid, req.AccountID); err != nil {
+	if _, err := h.svc.MapSourceAccount(r.Context(), access(r), sid, ledger.SourceMapping{AccountID: req.AccountID, SettlementAccountID: req.SettlementAccountID}); err != nil {
 		h.fail(w, r, err)
 		return
 	}
@@ -282,6 +308,14 @@ type ImportRowDTO struct {
 	AccountID *int64 `json:"account_id"`
 	// The row's evidence (GET /api/books/{bookID}/attachments/{id}).
 	AttachmentID *int64 `json:"attachment_id"`
+	// holding and trade rows.
+	Security     *string          `json:"security"`
+	SecurityName *string          `json:"security_name"`
+	Units        *decimal.Decimal `json:"units" swaggertype:"string"`
+	Price        *decimal.Decimal `json:"price" swaggertype:"string"`
+	Cash         *decimal.Decimal `json:"cash" swaggertype:"string"`
+	// The brokerage's settlement account; a trade waits for it.
+	SettlementAccountID *int64 `json:"settlement_account_id"`
 }
 
 // importQueue
@@ -304,7 +338,9 @@ func (h *handlers) importQueue(w http.ResponseWriter, r *http.Request) {
 			Currency: q.Currency, Description: q.Description, Counterparty: q.Counterparty, Pending: q.Pending,
 			Proposal: q.Proposal, ProposedAccountID: q.ProposedAccountID, MatchTransactionID: q.MatchTransactionID,
 			MatchRowID: q.MatchRowID, RuleID: q.RuleID, SourceAccountID: q.SourceAccountID, SourceLabel: q.SourceLabel,
-			Connector: q.Connector, AccountID: q.AccountID, AttachmentID: q.AttachmentID}
+			Connector: q.Connector, AccountID: q.AccountID, AttachmentID: q.AttachmentID,
+			Security: q.Security, SecurityName: q.SecurityName, Units: decPtr(q.Units), Price: decPtr(q.Price), Cash: decPtr(q.Cash),
+			SettlementAccountID: q.SettlementAccountID}
 	}
 	response.JSON(w, http.StatusOK, out)
 }
@@ -313,6 +349,9 @@ type AcceptRowsDTO struct {
 	RowIDs []int64 `json:"row_ids"`
 	// Book them all against this category instead of the proposals.
 	AccountID *int64 `json:"account_id"`
+	// A trade's settled cash, by row id, signed on its settlement account
+	// (a buy < 0), when the source did not send it.
+	Cash map[string]decimal.Decimal `json:"cash,omitempty" swaggertype:"object,string"`
 }
 
 type AcceptFailureDTO struct {
@@ -351,7 +390,11 @@ func (h *handlers) acceptRows(w http.ResponseWriter, r *http.Request) {
 	a := access(r)
 	out := AcceptResultDTO{Accepted: []int64{}, Transactions: []int64{}, Failed: []AcceptFailureDTO{}}
 	for _, id := range req.RowIDs {
-		tx, err := h.svc.AcceptRow(r.Context(), a, id, req.AccountID)
+		in := ledger.AcceptInput{CategoryID: req.AccountID}
+		if c, ok := req.Cash[strconv.FormatInt(id, 10)]; ok {
+			in.Cash = &c
+		}
+		tx, err := h.svc.Accept(r.Context(), a, id, in)
 		if err != nil {
 			var le *ledger.Error
 			if !errors.As(err, &le) || le.Kind == ledger.KindForbidden {
@@ -515,4 +558,11 @@ func (h *handlers) drift(w http.ResponseWriter, r *http.Request) {
 		out[i] = DriftDTO{AccountID: x.AccountID, Date: Date{x.Date}, Asserted: x.Asserted, Booked: x.Booked, Source: x.Source}
 	}
 	response.JSON(w, http.StatusOK, out)
+}
+
+func decPtr(d decimal.NullDecimal) *decimal.Decimal {
+	if !d.Valid {
+		return nil
+	}
+	return &d.Decimal
 }

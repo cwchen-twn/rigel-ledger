@@ -237,11 +237,12 @@ export const api = {
 
   importBatch: (id: number, b: T.ImportBatch) => post<T.ImportResult>(`${book(id)}/imports`, b),
   importSources: (id: number) => get<T.SourceAccount[]>(`${book(id)}/imports/sources`),
-  mapSource: (id: number, sourceId: number, account_id: number | null) =>
-    patch<void>(`${book(id)}/imports/sources/${sourceId}`, { account_id }),
+  mapSource: (id: number, sourceId: number, account_id: number | null, settlement_account_id: number | null = null) =>
+    patch<void>(`${book(id)}/imports/sources/${sourceId}`, { account_id, settlement_account_id }),
   importQueue: (id: number) => get<T.ImportRow[]>(`${book(id)}/imports/queue`),
-  acceptRows: (id: number, row_ids: number[], account_id: number | null = null) =>
-    post<T.AcceptResult>(`${book(id)}/imports/accept`, { row_ids, account_id }),
+  /** cash: a trade's settled cash by row id, signed on its settlement account. */
+  acceptRows: (id: number, row_ids: number[], account_id: number | null = null, cash?: Record<number, string>) =>
+    post<T.AcceptResult>(`${book(id)}/imports/accept`, { row_ids, account_id, cash }),
   ignoreRows: (id: number, row_ids: number[]) => post<void>(`${book(id)}/imports/ignore`, { row_ids }),
   importRules: (id: number) => get<T.ImportRule[]>(`${book(id)}/imports/rules`),
   createRule: (id: number, r: { pattern: string; account_id: number; source_account_id: number | null }) =>

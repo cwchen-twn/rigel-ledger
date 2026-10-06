@@ -852,7 +852,18 @@
     "csv_submit": "Import {rows} rows",
     "csv_done": "Staged {staged}, already imported {duplicates}",
     "balance_title": "Balance reported by the institution",
-    "evidence": "Evidence from the source (opens in a new tab)"
+    "evidence": "Evidence from the source (opens in a new tab)",
+    "trade_buy": "Buy",
+    "trade_sell": "Sell",
+    "holding_title": "Holds",
+    "trade_units": "{units} units",
+    "trade_cash_hint": "confirm the cash it settled for",
+    "cash_paid": "Paid",
+    "cash_received": "Received",
+    "settlement_missing": "choose where its broker account settles, above",
+    "securities_under": "Securities go under…",
+    "settles_through": "Settles through…",
+    "brokerage": "Brokerage"
   },
   "tokens": {
     "title": "API tokens",

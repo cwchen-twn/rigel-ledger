@@ -35,10 +35,11 @@ type ImportAccount struct {
 	ExternalID string
 	Label      string
 	Currency   string
+	Kind       string // cash (default) | brokerage: holds securities, settles through a cash account
 }
 
 type ImportRowInput struct {
-	Kind         string // transaction | balance
+	Kind         string // transaction | balance | holding | trade
 	Account      string // ImportAccount.ExternalID
 	ID           string // the source's own id; with the connector, the dedupe key
 	Date         time.Time
@@ -49,6 +50,18 @@ type ImportRowInput struct {
 	Pending      bool
 	Raw          json.RawMessage
 	File         string // ImportFile.Ref: the row's evidence, attached when it is accepted
+
+	// holding and trade rows (#37): the security as NAMESPACE:SYMBOL
+	// (XTAI:2330), registered with its name and quote currency the first
+	// time; units held (holding) or moved, > 0 in (trade); the price per
+	// unit in the quote currency and the cash settled, signed on the
+	// settlement account, when the source knows them.
+	Security      string
+	SecurityName  string
+	QuoteCurrency string
+	Units         *decimal.Decimal
+	Price         *decimal.Decimal
+	Cash          *decimal.Decimal
 }
 
 // ImportFile is evidence a batch carries (an order email, an e-invoice, a
@@ -88,6 +101,36 @@ func (s *Service) Import(ctx context.Context, a Access, in ImportInput) (ImportR
 	if len(in.Rows) > 5000 {
 		return ImportResult{}, fieldError("rows", "too_many", "at most 5000 rows per batch")
 	}
+	// Securities first, so the commodity map below knows them.
+	kinds := map[string]string{}
+	for _, acc := range in.Accounts {
+		kinds[strings.TrimSpace(acc.ExternalID)] = acc.Kind
+	}
+	var secs []securityInput
+	for i, r := range in.Rows {
+		if r.Kind != "holding" && r.Kind != "trade" {
+			continue
+		}
+		code := strings.ToUpper(strings.TrimSpace(r.Security))
+		if !commodityCode.MatchString(code) {
+			return ImportResult{}, fieldError(idx("rows", i, "security"), "invalid", `a security is NAMESPACE:SYMBOL, e.g. "XTAI:2330"`)
+		}
+		if kinds[r.Account] != KindBrokerage {
+			return ImportResult{}, fieldError(idx("rows", i, "account"), "invalid", "holdings and trades belong to a brokerage account")
+		}
+		quote := strings.ToUpper(strings.TrimSpace(r.QuoteCurrency))
+		if quote == "" {
+			quote = a.Book.BaseCurrency
+		}
+		if err := s.validCurrency(ctx, quote); err != nil {
+			return ImportResult{}, fieldError(idx("rows", i, "quote_currency"), "unknown", "unknown currency %q", quote)
+		}
+		in.Rows[i].Security = code
+		secs = append(secs, securityInput{Code: code, Name: r.SecurityName, Quote: quote})
+	}
+	if err := s.ensureSecurities(ctx, secs); err != nil {
+		return ImportResult{}, err
+	}
 	commods, err := s.commodityMap(ctx)
 	if err != nil {
 		return ImportResult{}, err
@@ -109,8 +152,15 @@ func (s *Service) Import(ctx context.Context, a Access, in ImportInput) (ImportR
 				}
 				cur = &c
 			}
+			kind := acc.Kind
+			if kind == "" {
+				kind = KindCash
+			}
+			if kind != KindCash && kind != KindBrokerage {
+				return fieldError(idx("accounts", i, "kind"), "invalid", "kind is cash or brokerage")
+			}
 			sa, err := q.UpsertSourceAccount(ctx, db.UpsertSourceAccountParams{
-				BookID: a.Book.ID, Connector: in.Connector, ExternalID: ext, Label: strings.TrimSpace(acc.Label), Currency: cur,
+				BookID: a.Book.ID, Connector: in.Connector, ExternalID: ext, Label: strings.TrimSpace(acc.Label), Currency: cur, Kind: kind,
 			})
 			if err != nil {
 				return err
@@ -142,8 +192,10 @@ func (s *Service) Import(ctx context.Context, a Access, in ImportInput) (ImportR
 			if !ok {
 				return fieldError(idx("rows", i, "account"), "unknown", "account %q is not in accounts", r.Account)
 			}
-			if r.Kind != "transaction" && r.Kind != "balance" {
-				return fieldError(idx("rows", i, "kind"), "invalid", "kind is transaction or balance")
+			switch r.Kind {
+			case "transaction", "balance", "holding", "trade":
+			default:
+				return fieldError(idx("rows", i, "kind"), "invalid", "kind is transaction, balance, holding or trade")
 			}
 			if strings.TrimSpace(r.ID) == "" {
 				return fieldError(idx("rows", i, "id"), "required", "every row needs the source's id")
@@ -155,6 +207,9 @@ func (s *Service) Import(ctx context.Context, a Access, in ImportInput) (ImportR
 			if cur == "" && sa.Currency != nil {
 				cur = *sa.Currency
 			}
+			if cur == "" && (r.Kind == "holding" || r.Kind == "trade") {
+				cur = a.Book.BaseCurrency // what a trade settles in, unless the source says
+			}
 			if _, ok := commods[cur]; !ok {
 				return fieldError(idx("rows", i, "currency"), "unknown", "unknown currency %q", cur)
 			}
@@ -162,12 +217,18 @@ func (s *Service) Import(ctx context.Context, a Access, in ImportInput) (ImportR
 			if len(raw) == 0 {
 				raw = []byte("{}")
 			}
-			id, err := q.InsertImportRow(ctx, db.InsertImportRowParams{
+			params := db.InsertImportRowParams{
 				BookID: a.Book.ID, BatchID: batch.ID, SourceAccountID: sa.ID, Kind: r.Kind,
 				ExternalID: in.Connector + ":" + strings.TrimSpace(r.ID), Date: r.Date, Amount: r.Amount, Currency: cur,
 				Description: strings.TrimSpace(r.Description), Counterparty: strings.TrimSpace(r.Counterparty),
 				Pending: r.Pending, Raw: raw,
-			})
+			}
+			if r.Kind == "holding" || r.Kind == "trade" {
+				if err := securityRow(&params, r, commods[r.Security], cur, i); err != nil {
+					return err
+				}
+			}
+			id, err := q.InsertImportRow(ctx, params)
 			if errors.Is(err, pgx.ErrNoRows) {
 				res.Duplicates++
 				continue
@@ -227,6 +288,12 @@ func (s *Service) propose(ctx context.Context, a Access, rowID int64) (applied b
 		return false, nil // unmapped: waits for its source account to be mapped
 	}
 	acct := *r.AccountID
+	switch r.Kind {
+	case "holding":
+		return true, s.applyHolding(ctx, a, r)
+	case "trade":
+		return false, nil // no match to look for: the person confirms the cash
+	}
 	if r.Kind == "balance" {
 		err := s.store.WithTx(ctx, a.UserID, func(q *db.Queries) error {
 			if err := q.UpsertAssertion(ctx, db.UpsertAssertionParams{BookID: a.Book.ID, AccountID: acct, Date: r.Date,
@@ -298,9 +365,17 @@ func (s *Service) propose(ctx context.Context, a Access, rowID int64) (applied b
 	return false, set(db.SetRowProposalParams{Proposal: "new"})
 }
 
+// SourceMapping is where a source account's rows go: one ledger account; for
+// a brokerage, the parent its securities' accounts are made under, and the
+// account its trades settle through.
+type SourceMapping struct {
+	AccountID           *int64
+	SettlementAccountID *int64
+}
+
 // MapSourceAccount ties a source account to a ledger account and re-runs
 // the matcher on its waiting rows.
-func (s *Service) MapSourceAccount(ctx context.Context, a Access, sourceID int64, accountID *int64) (db.SourceAccount, error) {
+func (s *Service) MapSourceAccount(ctx context.Context, a Access, sourceID int64, m SourceMapping) (db.SourceAccount, error) {
 	if err := a.require(db.MemberRoleEditor); err != nil {
 		return db.SourceAccount{}, err
 	}
@@ -308,7 +383,15 @@ func (s *Service) MapSourceAccount(ctx context.Context, a Access, sourceID int64
 	if err != nil {
 		return db.SourceAccount{}, translate(err, "source account")
 	}
-	if accountID != nil {
+	accountID := m.AccountID
+	if sa.Kind == KindBrokerage {
+		if err := s.checkBrokerageMapping(ctx, a, sa, m); err != nil {
+			return db.SourceAccount{}, err
+		}
+	} else if m.SettlementAccountID != nil {
+		return db.SourceAccount{}, fieldError("settlement_account_id", "invalid", "only a brokerage account settles through another")
+	}
+	if accountID != nil && sa.Kind != KindBrokerage {
 		acc, err := s.store.GetAccount(ctx, db.GetAccountParams{BookID: a.Book.ID, ID: *accountID})
 		if err != nil {
 			return db.SourceAccount{}, fieldError("account_id", "not_found", "no such account in this book")
@@ -320,7 +403,8 @@ func (s *Service) MapSourceAccount(ctx context.Context, a Access, sourceID int64
 			return db.SourceAccount{}, fieldError("account_id", "mismatch", "the account holds %s, the source sends %s", *acc.Commodity, *sa.Currency)
 		}
 	}
-	sa, err = s.store.MapSourceAccount(ctx, db.MapSourceAccountParams{BookID: a.Book.ID, ID: sourceID, AccountID: accountID})
+	sa, err = s.store.MapSourceAccount(ctx, db.MapSourceAccountParams{BookID: a.Book.ID, ID: sourceID, AccountID: accountID,
+		SettlementAccountID: m.SettlementAccountID})
 	if err != nil {
 		return db.SourceAccount{}, translate(err, "source account")
 	}
@@ -341,6 +425,20 @@ func (s *Service) MapSourceAccount(ctx context.Context, a Access, sourceID int64
 // AcceptRow books a row as the queue proposes, or against categoryID when
 // given (a "new" row without a rule needs one).
 func (s *Service) AcceptRow(ctx context.Context, a Access, rowID int64, categoryID *int64) (int64, error) {
+	return s.Accept(ctx, a, rowID, AcceptInput{CategoryID: categoryID})
+}
+
+// AcceptInput is what the person adds when accepting a row: a category for
+// a new transaction row, the cash a trade settled for (signed on the
+// settlement account) when the source did not send it.
+type AcceptInput struct {
+	CategoryID *int64
+	Cash       *decimal.Decimal
+}
+
+// Accept books a row; see AcceptRow.
+func (s *Service) Accept(ctx context.Context, a Access, rowID int64, in AcceptInput) (int64, error) {
+	categoryID := in.CategoryID
 	if err := a.require(db.MemberRoleEditor); err != nil {
 		return 0, err
 	}
@@ -354,8 +452,11 @@ func (s *Service) AcceptRow(ctx context.Context, a Access, rowID int64, category
 	if r.AccountID == nil {
 		return 0, invalid("unmapped", "map the row's source account to an account first")
 	}
+	if r.Kind == "trade" {
+		return s.acceptTrade(ctx, a, r, in.Cash)
+	}
 	if r.Kind != "transaction" {
-		return 0, invalid("invalid_input", "balance rows are applied when their account is mapped")
+		return 0, invalid("invalid_input", "balance and holding rows are applied when their account is mapped")
 	}
 	acct := *r.AccountID
 	source := "sync"

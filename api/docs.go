@@ -4024,6 +4024,13 @@ const docTemplate = `{
                     "description": "Book them all against this category instead of the proposals.",
                     "type": "integer"
                 },
+                "cash": {
+                    "description": "A trade's settled cash, by row id, signed on its settlement account\n(a buy \u003c 0), when the source did not send it.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
                 "row_ids": {
                     "type": "array",
                     "items": {
@@ -4928,6 +4935,14 @@ const docTemplate = `{
                     "description": "The source's own id for the account (masked account number, card id).",
                     "type": "string"
                 },
+                "kind": {
+                    "description": "brokerage: holds securities (holding and trade rows) and settles\nthrough a cash account; cash (the default) is everything else.",
+                    "type": "string",
+                    "enum": [
+                        "cash",
+                        "brokerage"
+                    ]
+                },
                 "label": {
                     "type": "string"
                 }
@@ -5011,6 +5026,9 @@ const docTemplate = `{
                     "description": "The row's evidence (GET /api/books/{bookID}/attachments/{id}).",
                     "type": "integer"
                 },
+                "cash": {
+                    "type": "string"
+                },
                 "connector": {
                     "type": "string"
                 },
@@ -5044,6 +5062,9 @@ const docTemplate = `{
                 "pending": {
                     "type": "boolean"
                 },
+                "price": {
+                    "type": "string"
+                },
                 "proposal": {
                     "type": "string",
                     "enum": [
@@ -5059,10 +5080,24 @@ const docTemplate = `{
                 "rule_id": {
                     "type": "integer"
                 },
+                "security": {
+                    "description": "holding and trade rows.",
+                    "type": "string"
+                },
+                "security_name": {
+                    "type": "string"
+                },
+                "settlement_account_id": {
+                    "description": "The brokerage's settlement account; a trade waits for it.",
+                    "type": "integer"
+                },
                 "source_account_id": {
                     "type": "integer"
                 },
                 "source_label": {
+                    "type": "string"
+                },
+                "units": {
                     "type": "string"
                 }
             }
@@ -5074,6 +5109,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "amount": {
+                    "type": "string"
+                },
+                "cash": {
+                    "description": "What the trade settled for, signed on the settlement account (a buy\n\u003c 0), when the source knows it; otherwise confirmed on accept.",
                     "type": "string"
                 },
                 "counterparty": {
@@ -5100,15 +5139,35 @@ const docTemplate = `{
                     "type": "string",
                     "enum": [
                         "transaction",
-                        "balance"
+                        "balance",
+                        "holding",
+                        "trade"
                     ]
                 },
                 "pending": {
                     "type": "boolean"
                 },
+                "price": {
+                    "description": "Per unit, in the quote currency, when the source knows it.",
+                    "type": "string"
+                },
+                "quote_currency": {
+                    "type": "string"
+                },
                 "raw": {
                     "description": "The source record as it came, for the audit; never credentials.",
                     "type": "object"
+                },
+                "security": {
+                    "description": "holding and trade rows: the security as NAMESPACE:SYMBOL (XTAI:2330),\nregistered with this name and quote currency the first time.",
+                    "type": "string"
+                },
+                "security_name": {
+                    "type": "string"
+                },
+                "units": {
+                    "description": "Units held (holding) or moved: \u003e 0 in, \u003c 0 out (trade).",
+                    "type": "string"
                 }
             }
         },
@@ -5326,7 +5385,11 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "account_id": {
-                    "description": "null unmaps.",
+                    "description": "The account rows book to; for a brokerage, the parent of its securities.",
+                    "type": "integer"
+                },
+                "settlement_account_id": {
+                    "description": "A brokerage only: the account its trades settle through.",
                     "type": "integer"
                 }
             }
@@ -5721,6 +5784,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "account_id": {
+                    "description": "For a brokerage, the parent its securities' accounts are made under.",
                     "type": "integer"
                 },
                 "connector": {
@@ -5735,10 +5799,21 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
+                "kind": {
+                    "type": "string",
+                    "enum": [
+                        "cash",
+                        "brokerage"
+                    ]
+                },
                 "label": {
                     "type": "string"
                 },
                 "pending": {
+                    "type": "integer"
+                },
+                "settlement_account_id": {
+                    "description": "For a brokerage, where its trades' cash goes.",
                     "type": "integer"
                 }
             }
