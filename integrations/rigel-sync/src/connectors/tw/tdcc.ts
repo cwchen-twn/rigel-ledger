@@ -31,7 +31,7 @@ import {
   type TdccStockAccount,
   TdccVerificationRequiredError,
 } from '../../../vendor/all-set-tw/tdcc.js';
-import { last4, short, taipeiDay } from '../rows.ts';
+import { last4, plainDecimal, short, taipeiDay } from '../rows.ts';
 import type { Account, Batch, Connector, Logger, Row, SyncContext } from '../types.ts';
 import { SyncError } from '../types.ts';
 
@@ -160,14 +160,8 @@ export function tdccDay(value: string | undefined): string | undefined {
   return `${year}-${m[2]}-${m[3]}`;
 }
 
-/** A plain decimal from 集保's "1,234.5000"; undefined when it is not a number. */
-export function tdccDecimal(value: unknown): string | undefined {
-  const s = String(value ?? '').replace(/,/g, '').trim();
-  if (!/^-?\d+(\.\d+)?$/.test(s)) return undefined;
-  const [int, frac = ''] = s.replace(/^(-?)0+(?=\d)/, '$1').split('.');
-  const f = frac.replace(/0+$/, '');
-  return f ? `${int}.${f}` : int;
-}
+/** A plain decimal from 集保's "1,234.5000" (rows.ts). */
+export const tdccDecimal = plainDecimal;
 
 const brokerId = (brokerNo: string, brokerAccount: string) => `broker-${brokerNo}-${last4(brokerAccount)}`;
 const security = (symbol: string, fund: boolean) => `${fund ? 'FUND' : 'XTAI'}:${symbol.toUpperCase()}`;

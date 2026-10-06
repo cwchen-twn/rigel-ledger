@@ -993,6 +993,13 @@
         "id_number": "身分證字號",
         "password": "e存摺 密碼"
       }
+    },
+    "tw-einvoice": {
+      "name": "電子發票",
+      "field": {
+        "mobile": "手機號碼",
+        "password": "載具驗證碼"
+      }
     }
   },
   "runner": {

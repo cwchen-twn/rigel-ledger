@@ -993,6 +993,13 @@
         "id_number": "ID number",
         "password": "e存摺 password"
       }
+    },
+    "tw-einvoice": {
+      "name": "Taiwan e-invoices (電子發票)",
+      "field": {
+        "mobile": "Mobile number",
+        "password": "Carrier password (載具驗證碼)"
+      }
     }
   },
   "runner": {

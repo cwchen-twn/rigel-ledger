@@ -993,6 +993,13 @@
         "id_number": "Número de identidad",
         "password": "Contraseña de e存摺"
       }
+    },
+    "tw-einvoice": {
+      "name": "Facturas electrónicas de Taiwán (電子發票)",
+      "field": {
+        "mobile": "Número de móvil",
+        "password": "Contraseña del portador (載具驗證碼)"
+      }
     }
   },
   "runner": {

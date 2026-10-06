@@ -25,7 +25,7 @@ export interface Account {
 
 /** A row of the import queue; amounts are decimal strings (see money.ts). */
 export interface Row {
-  kind: 'transaction' | 'balance' | 'holding' | 'trade';
+  kind: 'transaction' | 'balance' | 'holding' | 'trade' | 'invoice';
   account: string; // Account.id
   id: string; // stable across runs: with the connector, the duplicate key
   date: string; // YYYY-MM-DD
@@ -43,6 +43,18 @@ export interface Row {
   units?: string; // held (holding), or moved: > 0 in, < 0 out (trade)
   price?: string; // per unit, in the quote currency, when known
   cash?: string; // what a trade settled for, signed on the settlement account, when known
+
+  // invoice rows (#38): amount is the total, signed on the account that paid
+  // (a purchase < 0); counterparty the seller; items its lines.
+  items?: InvoiceItem[];
+}
+
+/** A line of an invoice: what it cost (> 0; a discount < 0). */
+export interface InvoiceItem {
+  description: string;
+  quantity?: string;
+  unit_price?: string;
+  amount: string;
 }
 
 export interface Batch {

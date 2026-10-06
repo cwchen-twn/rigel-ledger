@@ -17,3 +17,12 @@ export function dayOf(who: string, t: { authorizedAt?: string; postedDate?: stri
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new Error(`${who}: a transaction without a date (${t.authorizedAt ?? t.postedDate})`);
   return d;
 }
+
+/** A plain decimal from an institution's "1,234.5000"; undefined when it is not a number. */
+export function plainDecimal(value: unknown): string | undefined {
+  const s = String(value ?? '').replace(/,/g, '').trim();
+  if (!/^-?\d+(\.\d+)?$/.test(s)) return undefined;
+  const [int, frac = ''] = s.replace(/^(-?)0+(?=\d)/, '$1').split('.');
+  const f = frac.replace(/0+$/, '');
+  return f ? `${int}.${f}` : int;
+}
