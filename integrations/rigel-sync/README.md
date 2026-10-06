@@ -141,6 +141,17 @@ runner's process with the `id_number` credential -- no temporary file, no
 password on another program's command line -- and `cathayfut.ts` books the
 month from its 保證金及權利金專戶餘額 table (docs/ARCHITECTURE.md, "Futures").
 
+### Capture runs (writing a new connector)
+
+`py-continental` (#67) is, for now, a capture run: with
+`RIGEL_SYNC_EXPERIMENTAL=1` (and best `RIGEL_SYNC_HEADFUL=1`), `try
+py-continental` signs in to ContiWeb through its real form, leaves the
+second factor to the person in the window, opens the accounts and cards, and
+writes the JSON the page fetched to `DATA_DIR/captures` (sign-in and token
+calls left out, token-like fields dropped, numbers of ten or more digits
+masked to their last four). It sends no rows; the mapping is written from
+the capture.
+
 ### CAPTCHAs
 
 `src/ocr/captcha.ts` reads numeric CAPTCHAs in the runner, so a bank's image
