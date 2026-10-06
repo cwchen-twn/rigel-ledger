@@ -1,1 +1,5 @@
 node_modules/
+# DATA_DIR in the README examples: the runner key, session cookies, a
+# trusted device. Never commit it, nor what `try` prints.
+/data/
+/out*.json

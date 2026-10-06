@@ -2,6 +2,10 @@
 // it (apps/worker/src/sources/cathaybk/connector.ts); keep in step when the
 // pinned commit moves.
 
+import type { ScrapedAccount, ScrapedBalance, ScrapedTransaction } from './shared.js';
+
+export type { ScrapedAccount, ScrapedBalance, ScrapedTransaction };
+
 export interface CathaybkConfig {
   userId?: string;
   account?: string;
@@ -12,38 +16,6 @@ export interface CathaybkConfig {
   browserSessionExpiresAt?: string;
   otp?: string;
   otpChannel?: 'email' | 'sms';
-}
-
-export interface ScrapedAccount {
-  sourceId: string;
-  institutionName?: string;
-  accountName?: string;
-  accountType?: 'checking' | 'savings' | 'credit' | 'loan' | 'settlement_cash' | 'time_deposit' | 'stored_value' | 'unknown';
-  currency: string;
-  creditLimit?: number;
-  raw?: unknown;
-}
-
-export interface ScrapedBalance {
-  accountId: string;
-  sourceId: string;
-  balance: number;
-  availableBalance?: number;
-  currency: string;
-  asOfAt: string;
-  raw?: unknown;
-}
-
-export interface ScrapedTransaction {
-  accountId: string;
-  sourceId: string;
-  postedDate?: string;
-  authorizedAt?: string;
-  amount: number;
-  currency: string;
-  description?: string;
-  counterparty?: string;
-  raw?: unknown;
 }
 
 export interface CathaybkResult {

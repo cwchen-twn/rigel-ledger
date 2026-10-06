@@ -907,6 +907,7 @@
     "error_other": "上次同步失敗（{code}）。",
     "error_bad_credentials": "金融機構拒絕了登入資料，請更換。",
     "error_bad_otp": "一次性驗證碼錯誤，請再按一次「立即同步」。",
+    "error_bad_captcha": "圖形驗證碼連續輸入錯誤三次，請再按一次「立即同步」。",
     "error_challenge_expired": "驗證在回覆前已過期，請再按一次「立即同步」。",
     "error_verification_failed": "金融機構的額外登入驗證沒有完成。請再按一次「立即同步」；若一直失敗，原因會記在同步程式的紀錄中。",
     "error_institution_down": "金融機構網站沒有回應，下次同步會再試。",
@@ -942,6 +943,14 @@
           "sms": "簡訊",
           "email": "電子郵件"
         }
+      }
+    },
+    "sinopac": {
+      "name": "永豐銀行",
+      "field": {
+        "id_number": "身分證字號",
+        "user_code": "使用者代碼",
+        "password": "網路銀行密碼"
       }
     }
   },

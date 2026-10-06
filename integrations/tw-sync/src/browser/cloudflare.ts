@@ -92,6 +92,11 @@ async function sessions(_binding: unknown): Promise<Array<{ sessionId: string }>
   return [...live.keys()].map((sessionId) => ({ sessionId }));
 }
 
+/** Cloudflare's rate limit on new browsers; a local Chrome has none. */
+async function limits(_binding: unknown) {
+  return { allowedBrowserAcquisitions: 1, timeUntilNextAllowedBrowserAcquisition: 0 };
+}
+
 /** End a session the connector left running; nothing if it has ended. */
 export async function closeSession(sessionId: string): Promise<void> {
   const s = live.get(sessionId);
@@ -107,4 +112,4 @@ export async function closeSession(sessionId: string): Promise<void> {
 /** How many sessions are running; for tests. */
 export const liveSessions = () => live.size;
 
-export default { launch, connect, sessions };
+export default { launch, connect, sessions, limits };

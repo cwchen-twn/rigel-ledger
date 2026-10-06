@@ -35,7 +35,7 @@ test('toBatch keeps the last four digits, signs card rows from the statement, an
   assert.ok(!JSON.stringify(b).includes('012345678901'), 'the full account number stays here');
   const rows = b.rows.map(({ kind, account, date, amount, id }) => ({ kind, account, date, amount, n: id.split(':').at(-1) }));
   assert.deepEqual(rows, [
-    { kind: 'balance', account: 'deposit-8901', date: '2026-10-05', amount: '40300', n: '2026-10-05-balance' },
+    { kind: 'balance', account: 'deposit-8901', date: '2026-10-05', amount: '40300', n: 'balance' },
     { kind: 'transaction', account: 'deposit-8901', date: '2026-09-30', amount: '-120', n: '1' },
     { kind: 'transaction', account: 'deposit-8901', date: '2026-09-30', amount: '-120', n: '2' },
     { kind: 'transaction', account: 'card', date: '2026-09-02', amount: '-1580', n: '1' },

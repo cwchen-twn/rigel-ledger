@@ -10,7 +10,6 @@
  * After the code the bank trusts this browser (a CUB.eBank.DeviceId cookie,
  * kept in the connection's state), so later runs ask nothing.
  */
-import { createHash } from 'node:crypto';
 import { TimeoutError } from 'puppeteer-core';
 import {
   type CathaybkConfig,
@@ -24,6 +23,7 @@ import {
 } from '../../vendor/all-set-tw/cathaybk.js';
 import { closeSession } from '../browser/cloudflare.ts';
 import { toDecimal } from '../money.ts';
+import { dayOf, last4, short, taipeiDay } from './rows.ts';
 import type { Account, Batch, Connector, Row } from './types.ts';
 import { SyncError } from './types.ts';
 
@@ -103,18 +103,7 @@ function failure(err: unknown): unknown {
   return err;
 }
 
-export function taipeiDay(d: Date): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(d);
-}
-
-const last4 = (s: string) => s.replace(/\D/g, '').slice(-4);
-const short = (...parts: string[]) => createHash('sha256').update(parts.join('\0')).digest('hex').slice(0, 12);
-
-function dayOf(t: { authorizedAt?: string; postedDate?: string }): string {
-  const d = (t.authorizedAt ?? t.postedDate ?? '').slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new Error(`cathaybk: a transaction without a date (${t.authorizedAt ?? t.postedDate})`);
-  return d;
-}
+export { taipeiDay };
 
 /**
  * Upstream's result as one batch. Account ids keep the last four digits
@@ -148,7 +137,7 @@ export function toBatch(r: CathaybkResult, day: string): Batch {
   for (const b of r.bankBalanceSnapshots ?? []) {
     if (credit.has(b.accountId)) continue;
     const a = accountOf(b.accountId);
-    rows.push({ kind: 'balance', account: a.id, id: `${day}-balance`, date: day, amount: toDecimal(b.balance, b.currency), currency: b.currency });
+    rows.push({ kind: 'balance', account: a.id, id: `${a.id}:${day}:balance`, date: day, amount: toDecimal(b.balance, b.currency), currency: b.currency });
   }
 
   const seen = new Map<string, number>();
@@ -161,7 +150,7 @@ export function toBatch(r: CathaybkResult, day: string): Batch {
       amount = -charged;
     }
     if (amount === 0) continue;
-    const date = dayOf(t);
+    const date = dayOf('cathaybk', t);
     const value = toDecimal(amount, t.currency);
     const description = (t.description ?? '').trim();
     const key = `${a.id}:${date}:${short(value, description)}`;

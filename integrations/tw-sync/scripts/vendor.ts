@@ -10,7 +10,8 @@
  * parameter properties, and @cloudflare/puppeteer. Node's type stripping
  * runs none of that, so Bun bundles each connector once, here, with
  * @cloudflare/puppeteer left as an import of our stand-in
- * (src/browser/cloudflare.ts). The copies are never edited: to move to a
+ * (src/browser/cloudflare.ts), and npm packages (zod, jpeg-js, ...) left
+ * as imports. The copies are never edited: to move to a
  * newer upstream, run this with the new commit and review the diff.
  */
 import { $ } from 'bun';
@@ -32,11 +33,15 @@ const FILES = [
   'apps/worker/src/sources/credit-card-status.ts',
   'apps/worker/src/sources/cathaybk/protocol.ts',
   'apps/worker/src/sources/cathaybk/connector.ts',
+  'apps/worker/src/sources/sinopac/protocol.ts',
+  'apps/worker/src/sources/sinopac/deposit-protocol.ts',
+  'apps/worker/src/sources/sinopac/connector.ts',
 ];
 
 // One bundle per connector: what our wrapper imports from it.
 const BUNDLES: Record<string, string> = {
   cathaybk: 'apps/worker/src/sources/cathaybk/connector.ts',
+  sinopac: 'apps/worker/src/sources/sinopac/connector.ts',
 };
 
 async function fetchUpstream(commit: string) {
@@ -70,6 +75,9 @@ async function bundle(id: string, entry: string): Promise<string> {
           path: relative(VENDOR, SHIM).replaceAll('\\', '/').replace(/^(?!\.)/, './'),
           external: true,
         }));
+        // npm packages stay imports, at the versions in package.json (upstream's
+        // lockfile): the bundle holds upstream's code only.
+        b.onResolve({ filter: /^[a-z@][^:]*$/ }, (a) => (a.importer ? { path: a.path, external: true } : undefined));
       },
     }],
   });

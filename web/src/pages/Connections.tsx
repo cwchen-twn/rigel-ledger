@@ -247,7 +247,7 @@ function ChallengeForm(props: { connection: Connection; challenge: NonNullable<C
       <p class="text-sm font-medium">{t(`connections.challenge_${props.challenge.kind}`)}</p>
       <Show when={props.challenge.prompt}><p class="text-sm text-muted-foreground">{props.challenge.prompt}</p></Show>
       <Show when={props.challenge.image}>
-        <img class="max-h-24 w-fit rounded border bg-white" alt={t('connections.captcha_alt')} src={`data:image/png;base64,${props.challenge.image}`} />
+        <img class="h-20 w-fit max-w-full rounded border bg-white" alt={t('connections.captcha_alt')} src={`data:image/png;base64,${props.challenge.image}`} />
       </Show>
       <div class="flex flex-wrap items-end gap-2">
         <Show when={props.challenge.kind !== 'device'}>

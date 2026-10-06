@@ -907,6 +907,7 @@
     "error_other": "La última sincronización falló ({code}).",
     "error_bad_credentials": "La entidad rechazó los datos de acceso. Reemplaza las credenciales.",
     "error_bad_otp": "El código de un solo uso era incorrecto. Vuelve a pulsar Sincronizar ahora.",
+    "error_bad_captcha": "El código de la imagen se escribió mal tres veces. Vuelve a pulsar Sincronizar ahora.",
     "error_challenge_expired": "La verificación caducó antes de responderla. Vuelve a pulsar Sincronizar ahora.",
     "error_verification_failed": "No se pudo completar la verificación adicional de la entidad. Vuelve a pulsar Sincronizar ahora; si sigue fallando, el registro del sincronizador dice por qué.",
     "error_institution_down": "La web de la entidad no respondió. La próxima sincronización lo intentará de nuevo.",
@@ -942,6 +943,14 @@
           "sms": "SMS",
           "email": "Correo electrónico"
         }
+      }
+    },
+    "sinopac": {
+      "name": "Bank SinoPac (永豐銀行)",
+      "field": {
+        "id_number": "Número de identidad",
+        "user_code": "Código de usuario",
+        "password": "Contraseña"
       }
     }
   },

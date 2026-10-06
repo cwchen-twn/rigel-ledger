@@ -907,6 +907,7 @@
     "error_other": "The last sync failed ({code}).",
     "error_bad_credentials": "The institution rejected the sign-in details. Replace the credentials.",
     "error_bad_otp": "The one-time code was wrong. Try Sync now again.",
+    "error_bad_captcha": "The image check was answered wrong three times. Try Sync now again.",
     "error_challenge_expired": "The check expired before it was answered. Try Sync now again.",
     "error_verification_failed": "The institution's extra sign-in check could not be finished. Try Sync now again; if it keeps failing, the runner's log says why.",
     "error_institution_down": "The institution's site did not answer. The next sync tries again.",
@@ -942,6 +943,14 @@
           "sms": "SMS",
           "email": "Email"
         }
+      }
+    },
+    "sinopac": {
+      "name": "Bank SinoPac (永豐銀行)",
+      "field": {
+        "id_number": "ID number",
+        "user_code": "User code",
+        "password": "Password"
       }
     }
   },
