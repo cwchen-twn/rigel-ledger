@@ -120,9 +120,13 @@ export function toBatch(r: CathaybkResult, day: string): Batch {
   const credit = new Set<string>();
 
   for (const a of r.bankAccounts ?? []) {
-    let id = a.accountType === 'credit' ? 'card' : `deposit-${last4(a.sourceId)}`;
-    if (accounts.some((x) => x.id === id)) id = `deposit-${a.sourceId.replace(/\D/g, '')}`; // two numbers ending alike
-    const label = a.accountType === 'credit' ? (a.accountName ?? '國泰信用卡') : `${a.accountName ?? '國泰世華存款'} ***${last4(a.sourceId)}`;
+    // One number can hold several currencies (外幣活存): a foreign one carries its own.
+    const cur = a.currency && a.currency !== 'TWD' ? `-${a.currency.toLowerCase()}` : '';
+    let id = a.accountType === 'credit' ? 'card' : `deposit-${last4(a.sourceId)}${cur}`;
+    if (accounts.some((x) => x.id === id)) id = `deposit-${a.sourceId.replace(/\D/g, '')}${cur}`; // two numbers ending alike
+    const label = a.accountType === 'credit'
+      ? (a.accountName ?? '國泰信用卡')
+      : `${a.accountName ?? '國泰世華存款'} ***${last4(a.sourceId)}${cur ? ` ${a.currency}` : ''}`;
     const acc = { id, label, currency: a.currency };
     accounts.push(acc);
     ours.set(a.sourceId, acc);

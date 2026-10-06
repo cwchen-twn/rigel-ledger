@@ -13,6 +13,8 @@ import { existsSync } from 'node:fs';
 import puppeteerCore, { type Browser, type ClickOptions, type Page } from 'puppeteer-core';
 
 export type { Browser, CookieParam, Page } from 'puppeteer-core';
+// The class puppeteer-core throws, so `instanceof TimeoutError` holds for its waits.
+export { TimeoutError } from 'puppeteer-core';
 
 type Session = Browser & { sessionId(): string };
 

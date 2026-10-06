@@ -1,8 +1,9 @@
 /*
  * A pretend www.cathaybk.com.tw, just enough of the pages and calls the
  * vendored connector uses: the login form, the SMS code and trusted device,
- * one deposit account with its transactions, and one credit card with a
- * statement. Chrome is pointed here with --host-resolver-rules, over HTTPS
+ * one deposit account with its transactions (picked on the detail page's
+ * account and period comboboxes), one USD account, and one credit card
+ * with a statement. Chrome is pointed here with --host-resolver-rules, over HTTPS
  * with a throwaway certificate (openssl). Password "wrong" fails; the code
  * is 123456.
  */
@@ -15,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 export const ACCOUNT = '012345678901';
+export const FOREIGN = '098765432109';
 export const OTP = '123456';
 
 const page = (body: string, script = '') =>
@@ -57,17 +59,50 @@ const VERIFY = page(
 const DEPOSITS = page(`<h1>存款總覽</h1><div class="row">臺幣活存 <button type="button">${ACCOUNT}</button> $40,300 $40,000</div>`,
   `document.querySelector('button').onclick = () => { location.href = '/OnlineBanking/AcctInq/B0103'; };`);
 
-const DETAIL = page(`<h1>交易明細</h1><button type="button" id="q">查詢</button>`,
-  `const q = () => fetch('/OnlineBankingApi/Acct/B_ACCT_Q_TransferDetail', { method: 'POST' });
+// Like the bank's detail page: an account and a period picker (comboboxes
+// whose control shows the choice), a query on load for 30 days, and 查詢.
+const DETAIL = page(`<h1>交易明細</h1>
+  <div class="ctl" data-kind="account"><span class="val">${ACCOUNT}</span><input role="combobox"></div>
+  <div class="ctl" data-kind="period"><span class="val">近 30 天</span><input role="combobox"></div>
+  <ul id="menu"></ul><button type="button" id="q">查詢</button>`,
+  `const OPTIONS = { account: ['${ACCOUNT}'], period: ['近 30 天', '近 90 天', '近 1 年'] };
+   const DAYS = { '近 30 天': 30, '近 90 天': 90, '近 1 年': 365 };
+   const val = (kind) => document.querySelector('[data-kind="' + kind + '"] .val').textContent;
+   const day = (d) => d.toISOString().slice(0, 10);
+   const q = () => {
+     const end = new Date();
+     const start = new Date(end.getTime() - (DAYS[val('period')] - 1) * 86400000);
+     return fetch('/OnlineBankingApi/Acct/B_ACCT_Q_TransferDetail', { method: 'POST', headers: { 'content-type': 'application/json' },
+       body: JSON.stringify({ content: { queryFilters: [{ accountNumber: '0000' + val('account'), startDate: day(start), endDate: day(end) }] } }) });
+   };
+   for (const ctl of document.querySelectorAll('.ctl')) {
+     ctl.querySelector('input').onkeydown = (e) => {
+       if (e.key !== 'ArrowDown') return;
+       const menu = document.getElementById('menu');
+       menu.innerHTML = '';
+       for (const o of OPTIONS[ctl.dataset.kind]) {
+         const li = document.createElement('li');
+         li.setAttribute('role', 'option');
+         li.textContent = o;
+         li.onclick = () => { ctl.querySelector('.val').textContent = o; menu.innerHTML = ''; };
+         menu.append(li);
+       }
+     };
+   }
    q(); document.getElementById('q').onclick = q;`);
 
-const CARD = page(`<h1>信用卡總覽</h1><p>國泰世華 CUBE VISA 卡</p><p>卡片末四碼：4321</p><p>永久信用額度 TWD 50,000</p>
+const FOREIGN_PAGE = page('<h1>外幣存款總覽</h1>',
+  `fetch('/OnlineBankingApi/FAcct/R_ACCT_Q_OverView', { method: 'POST' });`);
+
+const CARD = page(`<h1>信用卡總覽</h1><script>fetch('/OnlineBankingApi/Com/C_COM_Q_CardStatus', { method: 'POST' });</script><p>國泰世華 CUBE VISA 卡</p><p>卡片末四碼：4321</p><p>永久信用額度 TWD 50,000</p>
   <p>剩餘可用額度 TWD 48,420</p><p>繳款截止日 2026/10/20</p><p>應繳金額 TWD 1,380</p>`);
 
 const TRANSFERS = {
+  returnCode: '0000',
   content: {
     datas: [{
-      accountNumber: ACCOUNT,
+      accountNumber: `0000${ACCOUNT}`,
+      queryStatus: 'Success',
       details: [
         { txnDateTime: '2026/09/30 09:15:00', description: '薪資', incomeAmt: 42000, expendAmt: 0 },
         { txnDateTime: '2026/09/30 12:01:00', description: '7-ELEVEN', incomeAmt: 0, expendAmt: 120 },
@@ -151,6 +186,12 @@ export async function startFakeCathay(): Promise<FakeCathay> {
     if (path === '/OnlineBanking/AcctInq/B0101_DepInq') return send(res, 200, DEPOSITS);
     if (path === '/OnlineBanking/AcctInq/B0103') return send(res, 200, DETAIL);
     if (path.endsWith('/B_ACCT_Q_TransferDetail')) return send(res, 200, JSON.stringify(TRANSFERS));
+    if (path === '/OnlineBanking/FAcctInq/R0101_FDepInq') return send(res, 200, FOREIGN_PAGE);
+    if (path.endsWith('/R_ACCT_Q_OverView')) {
+      return send(res, 200, JSON.stringify({ returnCode: '0000', content: { isGetDemandAccountSuccess: true,
+        demandAccounts: [{ account: FOREIGN, details: [{ currencyCode: 'USD', balance: '1234.5' }] }] } }));
+    }
+    if (path.endsWith('/C_COM_Q_CardStatus')) return send(res, 200, JSON.stringify({ returnCode: '0000', content: { cardStatus: 'Valid' } }));
     if (path === '/OnlineBanking/CQuery/C0101_BillOverview') return send(res, 200, CARD);
     if (path === '/OnlineBanking/CQuery/C0102_BillInq') return send(res, 200, page('<h1>帳單查詢</h1>'));
     if (path === '/MyBank/Customized/GetJWT') return send(res, 200, JSON.stringify({ Data: { JwtToken: 'jwt', CustomerId: 'c1' } }));

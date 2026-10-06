@@ -5,7 +5,7 @@ import { chromePath, liveSessions } from '../src/browser/cloudflare.ts';
 import { cathaybk, taipeiDay, toBatch } from '../src/connectors/tw/cathaybk.ts';
 import { type Ask, type State, type SyncContext, SyncError } from '../src/connectors/types.ts';
 import type { CathaybkResult } from '../vendor/all-set-tw/cathaybk.js';
-import { ACCOUNT, type FakeCathay, OTP, startFakeCathay } from './fake-cathay.ts';
+import { ACCOUNT, type FakeCathay, FOREIGN, OTP, startFakeCathay } from './fake-cathay.ts';
 
 test('toBatch keeps the last four digits, signs card rows from the statement, and sends no card balance', () => {
   const r: CathaybkResult = {
@@ -107,11 +107,16 @@ describe('cathaybk against a pretend bank, in Chrome', { skip, timeout: 180_000 
     assert.match(String(first.saved[0].sessionCookies), /CUB\.eBank\.DeviceId/);
     assert.equal(liveSessions(), 0, 'no Chrome left running');
 
-    assert.deepEqual(batch.accounts.map((a) => a.id), ['deposit-8901', 'card']);
+    assert.deepEqual(batch.accounts.map((a) => [a.id, a.label, a.currency]), [
+      ['deposit-8901', '臺幣活存 ***8901', 'TWD'],
+      ['deposit-2109-usd', '國泰外幣活存 ***2109 USD', 'USD'],
+      ['card', '國泰信用卡 末四碼 4321', 'TWD'],
+    ]);
     const rows = batch.rows.map(({ kind, account, date, amount, description }) => `${kind} ${account} ${date} ${amount} ${description ?? ''}`.trim());
     const day = taipeiDay(new Date());
     assert.deepEqual(rows, [
       `balance deposit-8901 ${day} 40300`,
+      `balance deposit-2109-usd ${day} 1234.5`,
       'transaction deposit-8901 2026-09-30 42000 薪資',
       'transaction deposit-8901 2026-09-30 -120 7-ELEVEN',
       'transaction deposit-8901 2026-09-30 -120 7-ELEVEN',
@@ -119,7 +124,7 @@ describe('cathaybk against a pretend bank, in Chrome', { skip, timeout: 180_000 
       'transaction card 2026-09-02 -1580 全聯福利中心',
       'transaction card 2026-09-05 200 退貨 全聯',
     ]);
-    assert.ok(!JSON.stringify(batch).includes(ACCOUNT));
+    assert.ok(!JSON.stringify(batch).includes(ACCOUNT) && !JSON.stringify(batch).includes(FOREIGN));
 
     const second = run(creds, first.saved[0], []);
     const again = await second.batch;
