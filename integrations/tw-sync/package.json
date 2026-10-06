@@ -14,10 +14,14 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p .",
     "test": "node --disable-warning=ExperimentalWarning --test 'test/*.test.ts'",
-    "check": "bun run typecheck && bun run test"
+    "vendor:check": "bun scripts/vendor.ts --check",
+    "check": "bun run typecheck && bun run vendor:check && bun run test"
   },
   "devDependencies": {
     "@types/node": "22.18.0",
     "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "puppeteer-core": "25.12.0"
   }
 }

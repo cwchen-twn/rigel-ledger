@@ -389,8 +389,7 @@
     "not_claimed": "Esta sincronización no está en curso",
     "challenge_gone": "Esta verificación caducó o ya se respondió",
     "disabled": "Activa la conexión primero",
-    "no_access": "El dueño de la conexión ya no tiene acceso a este libro",
-    "sync_mode": "Tus conexiones se sincronizan en el servidor; no hace falta un sincronizador en el dispositivo"
+    "no_access": "El dueño de la conexión ya no tiene acceso a este libro"
   },
   "profile": {
     "username_hint": "Para iniciar sesión: a-z, 0-9, punto, guion, guion bajo"
@@ -904,11 +903,12 @@
     "syncing": "Sincronizando…",
     "sync_requested": "El sincronizador la atiende en un minuto",
     "enabled": "Sincronizar automáticamente",
-    "key_retired": "Estas credenciales se cifraron para otro sincronizador (cambió su clave o tu modo de sincronización). Vuelve a introducirlas para seguir sincronizando.",
+    "key_retired": "Estas credenciales se cifraron para otra clave de tu sincronizador (se vinculó de nuevo o perdió sus datos). Vuelve a introducirlas para seguir sincronizando.",
     "error_other": "La última sincronización falló ({code}).",
     "error_bad_credentials": "La entidad rechazó los datos de acceso. Reemplaza las credenciales.",
     "error_bad_otp": "El código de un solo uso era incorrecto. Vuelve a pulsar Sincronizar ahora.",
     "error_challenge_expired": "La verificación caducó antes de responderla. Vuelve a pulsar Sincronizar ahora.",
+    "error_verification_failed": "No se pudo completar la verificación adicional de la entidad. Vuelve a pulsar Sincronizar ahora; si sigue fallando, el registro del sincronizador dice por qué.",
     "error_institution_down": "La web de la entidad no respondió. La próxima sincronización lo intentará de nuevo.",
     "error_credentials_unreadable": "El sincronizador no pudo abrir estas credenciales. Vuelve a introducirlas.",
     "error_connector_unavailable": "El sincronizador ya no ofrece esta entidad.",
@@ -927,6 +927,23 @@
     "how_sealed": "Se cifran en tu navegador con la clave de tu sincronizador antes de salir de él. El servidor solo guarda texto cifrado que no puede abrir, y el sincronizador de nadie más tampoco: solo el tuyo las abre, mientras inicia sesión por ti, dondequiera que se ejecute.",
     "how_review": "Nada se registra automáticamente: las filas obtenidas esperan tu aprobación en la cola de Importaciones del libro.",
     "how_csv": "¿Prefieres no compartir un acceso? Un CSV del extracto en la página de Importaciones hace lo mismo a mano."
+  },
+  "connector": {
+    "cathaybk": {
+      "name": "Cathay United Bank (國泰世華)",
+      "field": {
+        "id_number": "Número de identidad",
+        "user_code": "Código de usuario",
+        "password": "Contraseña",
+        "otp_channel": "Enviar códigos de un solo uso por"
+      },
+      "option": {
+        "otp_channel": {
+          "sms": "SMS",
+          "email": "Correo electrónico"
+        }
+      }
+    }
   },
   "runner": {
     "title": "Sincronizador",

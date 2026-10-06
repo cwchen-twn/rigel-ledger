@@ -41,6 +41,7 @@ go run ./cmd/cli create-runner-token -u alice -l tw-sync     # link alice's sync
 RUNNER_TOKEN=... go run ./integrations/fake-runner -url http://localhost:8080   # a pretend institution, for Connections
 make tw-sync/check                                           # typecheck + test the Node sync runner
 cd integrations/tw-sync && DATA_DIR=./data node src/main.ts try fake   # one connector from the terminal, no app
+cd integrations/tw-sync && bun scripts/vendor.ts <commit>             # move the vendored all-set-tw connectors to <commit>
 ```
 
 To run a single test: `go test -run TestName ./internal/ledger/` (with `TEST_DATABASE_URL` set, e.g. from `.env`).
@@ -76,7 +77,8 @@ web/
   templates/        # Thin Go html/template shell -- renders <div id="app"> only
 integrations/
   fake-runner/      # Go reference runner against one pretend institution (development only)
-  tw-sync/          # Node runner for Taiwan institutions (all-set-tw connectors, vendored); its own README
+  tw-sync/          # Node runner for Taiwan institutions; its own README. vendor/all-set-tw is
+                    #   upstream at a pinned commit, unedited, bundled by scripts/vendor.ts
 migrations/         # golang-migrate SQL, embedded; 000001_init, then one pair per change (frozen once applied)
 docs/               # ARCHITECTURE.md -- target design and roadmap
 api/                # Generated Swagger output (do not edit manually)

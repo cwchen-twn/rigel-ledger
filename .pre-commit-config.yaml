@@ -7,8 +7,11 @@ repos:
           - --branch
           - main
       - id: check-merge-conflict
+      # vendor/all-set-tw is upstream's, unedited: scripts/vendor.ts checks it.
       - id: trailing-whitespace
+        exclude: ^integrations/tw-sync/vendor/all-set-tw/
       - id: end-of-file-fixer
+        exclude: ^integrations/tw-sync/vendor/all-set-tw/
       - id: check-case-conflict
       - id: check-yaml
       - id: check-added-large-files

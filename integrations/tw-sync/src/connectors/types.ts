@@ -9,7 +9,9 @@
 export interface Field {
   name: string;
   label: string; // English; the app prefers connector.<id>.field.<name> when translated
-  kind: 'text' | 'secret' | 'id_number';
+  kind: 'text' | 'secret' | 'id_number' | 'choice';
+  /** A choice's values, the first the default; the app labels them connector.<id>.option.<name>.<value>. */
+  options?: string[];
   optional?: boolean;
 }
 

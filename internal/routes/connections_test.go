@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -256,6 +257,21 @@ func TestRunnersStayWithTheirOwner(t *testing.T) {
 	br.json("PUT", "/api/runner/connectors", map[string]any{"connectors": []map[string]any{
 		{"id": "fake", "name": "Fake Bank (bob's copy)", "fields": fields}, {"id": "evil", "name": "Evil", "fields": fields}}}, 204, nil)
 
+	// A choice field carries its options, and only a choice does.
+	choice := map[string]any{"name": "otp_channel", "label": "Codes by", "kind": "choice", "options": []string{"sms", "email"}, "optional": true}
+	for _, bad := range []map[string]any{
+		{"name": "otp_channel", "label": "Codes by", "kind": "choice", "options": []string{"sms"}},
+		{"name": "otp_channel", "label": "Codes by", "kind": "choice", "options": []string{"sms", "sms"}},
+		{"name": "otp_channel", "label": "Codes by", "kind": "choice", "options": []string{"sms", "E-Mail"}},
+		{"name": "username", "label": "Username", "kind": "text", "options": []string{"a", "b"}},
+	} {
+		if res, b := br.do("PUT", "/api/runner/connectors", map[string]any{"connectors": []map[string]any{{"id": "evil", "name": "Evil", "fields": []map[string]any{bad}}}}); res.StatusCode != 422 {
+			t.Fatalf("field %v was accepted: %d %s", bad, res.StatusCode, b)
+		}
+	}
+	br.json("PUT", "/api/runner/connectors", map[string]any{"connectors": []map[string]any{
+		{"id": "evil", "name": "Evil", "fields": append(append([]map[string]any{}, fields...), choice)}}}, 204, nil)
+
 	// Each person sees their own runner's key and connectors.
 	var ac, bc CatalogDTO
 	alice.json("GET", "/api/connectors", nil, 200, &ac)
@@ -265,6 +281,11 @@ func TestRunnersStayWithTheirOwner(t *testing.T) {
 	}
 	if bc.Key == nil || !bytes.Equal(bc.Key.PublicKey, bpub) || len(bc.Connectors) != 2 {
 		t.Fatalf("bob catalog = %+v", bc)
+	}
+	for _, c := range bc.Connectors {
+		if c.ID == "evil" && (len(c.Fields) != 3 || c.Fields[2].Kind != "choice" || strings.Join(c.Fields[2].Options, ",") != "sms,email" || !c.Fields[2].Optional) {
+			t.Fatalf("the choice field came back as %+v", c.Fields)
+		}
 	}
 	var bs RunnerStatusDTO
 	bob.json("GET", "/api/me/runner", nil, 200, &bs)

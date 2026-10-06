@@ -7,13 +7,22 @@
  *   tw-sync try <connector>     one connector from the terminal, no app
  *   tw-sync connectors          what this build offers
  */
+import { format } from 'node:util';
 import { RigelClient } from './api.ts';
 import { connectors } from './connectors/index.ts';
+import { logger } from './log.ts';
 import { runDaemon } from './runner.ts';
 import { Store } from './store.ts';
 import { tryConnector } from './try.ts';
 
 const env = (name: string, fallback?: string) => process.env[name] || fallback;
+
+// The vendored connectors log with console; their lines join ours on
+// stderr, leaving stdout to what `try` and `connectors` print.
+const vendorLog = logger({ from: 'all-set-tw' });
+console.log = console.info = (...a: unknown[]) => vendorLog.info(format(...a));
+console.warn = (...a: unknown[]) => vendorLog.warn(format(...a));
+console.error = (...a: unknown[]) => vendorLog.error(format(...a));
 
 async function main(argv: string[]): Promise<number> {
   const [cmd = 'run', ...rest] = argv;

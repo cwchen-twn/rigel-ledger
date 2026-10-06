@@ -4610,7 +4610,8 @@ const docTemplate = `{
                     "enum": [
                         "text",
                         "secret",
-                        "id_number"
+                        "id_number",
+                        "choice"
                     ]
                 },
                 "label": {
@@ -4621,6 +4622,13 @@ const docTemplate = `{
                 },
                 "optional": {
                     "type": "boolean"
+                },
+                "options": {
+                    "description": "A choice's values; the first is the default",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

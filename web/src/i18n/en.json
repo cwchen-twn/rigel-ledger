@@ -389,8 +389,7 @@
     "not_claimed": "This sync is not in progress",
     "challenge_gone": "This check expired or was already answered",
     "disabled": "Turn the connection on first",
-    "no_access": "The connection's owner no longer has access to this book",
-    "sync_mode": "Your connections sync on the server; no device runner is needed"
+    "no_access": "The connection's owner no longer has access to this book"
   },
   "profile": {
     "username_hint": "Used to sign in: a-z, 0-9, dot, dash, underscore"
@@ -904,11 +903,12 @@
     "syncing": "Syncing…",
     "sync_requested": "The runner picks it up within a minute",
     "enabled": "Sync automatically",
-    "key_retired": "These credentials were encrypted for another sync runner (its key or your sync mode changed). Enter the credentials again to keep syncing.",
+    "key_retired": "These credentials were encrypted for another key of your sync runner (it was linked again, or its data was lost). Enter the credentials again to keep syncing.",
     "error_other": "The last sync failed ({code}).",
     "error_bad_credentials": "The institution rejected the sign-in details. Replace the credentials.",
     "error_bad_otp": "The one-time code was wrong. Try Sync now again.",
     "error_challenge_expired": "The check expired before it was answered. Try Sync now again.",
+    "error_verification_failed": "The institution's extra sign-in check could not be finished. Try Sync now again; if it keeps failing, the runner's log says why.",
     "error_institution_down": "The institution's site did not answer. The next sync tries again.",
     "error_credentials_unreadable": "The sync runner could not open these credentials. Enter them again.",
     "error_connector_unavailable": "The sync runner no longer offers this institution.",
@@ -927,6 +927,23 @@
     "how_sealed": "They are encrypted in your browser to your sync runner's key before they leave it. The server keeps only ciphertext it cannot open, and nobody else's runner can open it either: only yours does, while it signs in for you, wherever it runs.",
     "how_review": "Nothing is booked automatically: fetched rows wait in the book's Imports queue for you to accept.",
     "how_csv": "Rather not share a login? A statement CSV on the Imports page does the same job by hand."
+  },
+  "connector": {
+    "cathaybk": {
+      "name": "Cathay United Bank (國泰世華)",
+      "field": {
+        "id_number": "ID number",
+        "user_code": "User code",
+        "password": "Password",
+        "otp_channel": "Send one-time codes by"
+      },
+      "option": {
+        "otp_channel": {
+          "sms": "SMS",
+          "email": "Email"
+        }
+      }
+    }
   },
   "runner": {
     "title": "Sync runner",

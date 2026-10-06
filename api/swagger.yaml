@@ -579,6 +579,7 @@ definitions:
         - text
         - secret
         - id_number
+        - choice
         type: string
       label:
         type: string
@@ -586,6 +587,11 @@ definitions:
         type: string
       optional:
         type: boolean
+      options:
+        description: A choice's values; the first is the default
+        items:
+          type: string
+        type: array
     type: object
   routes.CostBasisDTO:
     properties:

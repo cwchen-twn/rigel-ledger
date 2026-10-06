@@ -2,7 +2,7 @@ import { A } from '@solidjs/router';
 import { KeyRound, Link2, Plus, RefreshCw, ShieldCheck, Trash2 } from 'lucide-solid';
 import { createEffect, createMemo, createResource, createSignal, For, on, onCleanup, Show } from 'solid-js';
 import { api } from '~/api/client';
-import type { Connection, Connector } from '~/api/types';
+import type { Connection, Connector, ConnectorField } from '~/api/types';
 import { PageHeader } from '~/components/AppShell';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
@@ -302,7 +302,9 @@ function CredentialsDialog(props: {
     if (props.open && b.length && !b.some((x) => x.id === bookId())) setBookId(user()?.default_book_id && b.some((x) => x.id === user()!.default_book_id) ? user()!.default_book_id! : b[0].id);
   });
   const current = () => props.connectors.find((c) => c.id === connector());
-  const complete = () => !!current() && current()!.fields.every((f) => f.optional || (values()[f.name] ?? '').trim() !== '');
+  // A choice starts on its first option, so it always has a value.
+  const value = (f: ConnectorField) => values()[f.name] ?? (f.kind === 'choice' ? (f.options?.[0] ?? '') : '');
+  const complete = () => !!current() && current()!.fields.every((f) => f.optional || value(f).trim() !== '');
 
   const submit = async (e: Event) => {
     e.preventDefault();
@@ -312,7 +314,7 @@ function CredentialsDialog(props: {
     setBusy(true);
     try {
       const creds: Record<string, string> = {};
-      for (const f of c.fields) creds[f.name] = f.kind === 'id_number' ? (values()[f.name] ?? '').trim().toUpperCase() : (values()[f.name] ?? '');
+      for (const f of c.fields) creds[f.name] = f.kind === 'id_number' ? value(f).trim().toUpperCase() : value(f);
       const sealed = await seal(props.keyInfo.public_key, JSON.stringify(creds), aad('credentials', u.id, c.id));
       setValues({}); // the plaintext does not outlive the request
       if (props.mode === 'add') {
@@ -368,7 +370,7 @@ function CredentialsDialog(props: {
           <For each={current()?.fields ?? []}>
             {(f) => (
               <Field label={label(`connector.${connector()}.field.${f.name}`, f.label)}>
-                <Input
+                <Show when={f.kind === 'choice'} fallback={<Input
                   type={f.kind === 'secret' ? 'password' : 'text'}
                   autocomplete={f.kind === 'secret' ? 'new-password' : 'off'}
                   autocapitalize={f.kind === 'id_number' ? 'characters' : 'off'}
@@ -376,7 +378,11 @@ function CredentialsDialog(props: {
                   required={!f.optional}
                   value={values()[f.name] ?? ''}
                   onInput={(e) => setValues({ ...values(), [f.name]: e.currentTarget.value })}
-                />
+                />}>
+                  <Select value={value(f)} onChange={(e) => setValues({ ...values(), [f.name]: e.currentTarget.value })}>
+                    <For each={f.options ?? []}>{(o) => <option value={o}>{label(`connector.${connector()}.option.${f.name}.${o}`, o)}</option>}</For>
+                  </Select>
+                </Show>
               </Field>
             )}
           </For>

@@ -50,8 +50,13 @@ export async function tryConnector(c: Connector, store: Store, signal: AbortSign
   const prompt = term.prompt;
   const credentials: Record<string, string> = {};
   for (const f of c.fields) {
-    const v = await prompt(`${f.label}${f.optional ? ' (optional)' : ''}: `, f.kind === 'secret');
-    if (v !== '') credentials[f.name] = v;
+    const choices = f.kind === 'choice' && f.options ? ` [${f.options.join('/')}, default ${f.options[0]}]` : '';
+    for (;;) {
+      const v = await prompt(`${f.label}${choices}${f.optional && !choices ? ' (optional)' : ''}: `, f.kind === 'secret');
+      if (choices && v !== '' && !f.options!.includes(v)) continue;
+      if (v !== '') credentials[f.name] = f.kind === 'id_number' ? v.trim().toUpperCase() : v;
+      break;
+    }
   }
   const stateName = `try-${c.id}`;
   try {

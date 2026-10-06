@@ -63,10 +63,12 @@ func (h *handlers) runnerKeys(w http.ResponseWriter, r *http.Request) {
 }
 
 type ConnectorFieldDTO struct {
-	Name     string `json:"name"`
-	Label    string `json:"label"`
-	Kind     string `json:"kind" enums:"text,secret,id_number"`
-	Optional bool   `json:"optional,omitempty"`
+	Name  string `json:"name"`
+	Label string `json:"label"`
+	Kind  string `json:"kind" enums:"text,secret,id_number,choice"`
+	// A choice's values; the first is the default
+	Options  []string `json:"options,omitempty"`
+	Optional bool     `json:"optional,omitempty"`
 }
 
 type ConnectorDTO struct {
@@ -98,7 +100,7 @@ func (h *handlers) publishConnectors(w http.ResponseWriter, r *http.Request) {
 	for i, c := range req.Connectors {
 		cs[i] = connections.Connector{ID: c.ID, Name: c.Name, Country: c.Country}
 		for _, f := range c.Fields {
-			cs[i].Fields = append(cs[i].Fields, connections.Field{Name: f.Name, Label: f.Label, Kind: f.Kind, Optional: f.Optional})
+			cs[i].Fields = append(cs[i].Fields, connections.Field{Name: f.Name, Label: f.Label, Kind: f.Kind, Options: f.Options, Optional: f.Optional})
 		}
 	}
 	if err := h.conns.PublishConnectors(r.Context(), runnerOf(r), cs); err != nil {
@@ -292,7 +294,7 @@ func (h *handlers) finishRun(w http.ResponseWriter, r *http.Request) {
 func connectorDTO(c connections.Connector) ConnectorDTO {
 	out := ConnectorDTO{ID: c.ID, Name: c.Name, Country: c.Country, Fields: []ConnectorFieldDTO{}}
 	for _, f := range c.Fields {
-		out.Fields = append(out.Fields, ConnectorFieldDTO{Name: f.Name, Label: f.Label, Kind: f.Kind, Optional: f.Optional})
+		out.Fields = append(out.Fields, ConnectorFieldDTO{Name: f.Name, Label: f.Label, Kind: f.Kind, Options: f.Options, Optional: f.Optional})
 	}
 	return out
 }

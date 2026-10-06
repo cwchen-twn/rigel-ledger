@@ -4602,7 +4602,8 @@
                     "enum": [
                         "text",
                         "secret",
-                        "id_number"
+                        "id_number",
+                        "choice"
                     ]
                 },
                 "label": {
@@ -4613,6 +4614,13 @@
                 },
                 "optional": {
                     "type": "boolean"
+                },
+                "options": {
+                    "description": "A choice's values; the first is the default",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

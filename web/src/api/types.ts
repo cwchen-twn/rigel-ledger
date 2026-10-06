@@ -568,7 +568,9 @@ export interface ConnectorField {
   name: string;
   /** English default; the UI prefers connector.<id>.field.<name>. */
   label: string;
-  kind: 'text' | 'secret' | 'id_number';
+  kind: 'text' | 'secret' | 'id_number' | 'choice';
+  /** A choice's values, the first the default; labelled connector.<id>.option.<name>.<value>. */
+  options?: string[];
   optional?: boolean;
 }
 

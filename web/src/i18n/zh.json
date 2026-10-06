@@ -389,8 +389,7 @@
     "not_claimed": "此同步未在進行中",
     "challenge_gone": "此驗證已過期或已回覆",
     "disabled": "請先啟用此連結",
-    "no_access": "連結擁有者已無此帳本的權限",
-    "sync_mode": "你的連結在伺服器上同步，不需要裝置同步程式"
+    "no_access": "連結擁有者已無此帳本的權限"
   },
   "profile": {
     "username_hint": "用於登入：a-z、0-9、點、連字號、底線"
@@ -904,11 +903,12 @@
     "syncing": "同步中…",
     "sync_requested": "同步程式會在一分鐘內處理",
     "enabled": "自動同步",
-    "key_retired": "這組登入資料是為另一個同步程式加密的（其金鑰或你的同步模式已變更），請重新輸入以繼續同步。",
+    "key_retired": "這組登入資料是為你同步程式的另一把金鑰加密的（它重新連結過，或遺失了資料），請重新輸入以繼續同步。",
     "error_other": "上次同步失敗（{code}）。",
     "error_bad_credentials": "金融機構拒絕了登入資料，請更換。",
     "error_bad_otp": "一次性驗證碼錯誤，請再按一次「立即同步」。",
     "error_challenge_expired": "驗證在回覆前已過期，請再按一次「立即同步」。",
+    "error_verification_failed": "金融機構的額外登入驗證沒有完成。請再按一次「立即同步」；若一直失敗，原因會記在同步程式的紀錄中。",
     "error_institution_down": "金融機構網站沒有回應，下次同步會再試。",
     "error_credentials_unreadable": "同步程式無法解開這組登入資料，請重新輸入。",
     "error_connector_unavailable": "同步程式已不再支援此金融機構。",
@@ -927,6 +927,23 @@
     "how_sealed": "登入資料在離開瀏覽器前，就以你的同步程式的金鑰加密。伺服器只保存無法解開的密文，其他人的同步程式也無法解開；只有你的同步程式能在代你登入時解開，不論它在哪裡執行。",
     "how_review": "不會自動入帳：抓取的資料列會在帳本的「匯入」清單中等你接受。",
     "how_csv": "不想提供登入資料？也可以在「匯入」頁面手動匯入對帳單 CSV。"
+  },
+  "connector": {
+    "cathaybk": {
+      "name": "國泰世華銀行",
+      "field": {
+        "id_number": "身分證字號",
+        "user_code": "用戶代號",
+        "password": "網路銀行密碼",
+        "otp_channel": "一次性驗證碼傳送方式"
+      },
+      "option": {
+        "otp_channel": {
+          "sms": "簡訊",
+          "email": "電子郵件"
+        }
+      }
+    }
   },
   "runner": {
     "title": "同步程式",

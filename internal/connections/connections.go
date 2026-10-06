@@ -53,10 +53,13 @@ func AnswerAAD(challengeID int64) []byte {
 
 // Field is one input a connector needs; the UI renders its form from these.
 type Field struct {
-	Name     string `json:"name"`
-	Label    string `json:"label"` // English default; the UI prefers connector.<id>.field.<name>
-	Kind     string `json:"kind"`  // text | secret | id_number
-	Optional bool   `json:"optional,omitempty"`
+	Name  string `json:"name"`
+	Label string `json:"label"` // English default; the UI prefers connector.<id>.field.<name>
+	Kind  string `json:"kind"`  // text | secret | id_number | choice
+	// A choice's values, the first the default; the UI labels them
+	// connector.<id>.option.<name>.<value>.
+	Options  []string `json:"options,omitempty"`
+	Optional bool     `json:"optional,omitempty"`
 }
 
 type Connector struct {
@@ -124,8 +127,8 @@ func (s *Service) PublishConnectors(ctx context.Context, r Runner, cs []Connecto
 			return ledger.FieldError(at+".fields", "out_of_range", "1 to 10 fields")
 		}
 		for _, f := range c.Fields {
-			if !fieldPattern.MatchString(f.Name) || (f.Kind != "text" && f.Kind != "secret" && f.Kind != "id_number") {
-				return ledger.FieldError(at+".fields", "invalid", "a field needs a name and a kind: text, secret or id_number")
+			if !fieldPattern.MatchString(f.Name) || !validField(f) {
+				return ledger.FieldError(at+".fields", "invalid", "a field needs a name and a kind: text, secret, id_number, or choice with 2 to 10 options")
 			}
 		}
 	}
@@ -139,6 +142,26 @@ func (s *Service) PublishConnectors(ctx context.Context, r Runner, cs []Connecto
 		}
 		return nil
 	})
+}
+
+func validField(f Field) bool {
+	switch f.Kind {
+	case "text", "secret", "id_number":
+		return len(f.Options) == 0
+	case "choice":
+		if len(f.Options) < 2 || len(f.Options) > 10 {
+			return false
+		}
+		seen := map[string]bool{}
+		for _, o := range f.Options {
+			if !fieldPattern.MatchString(o) || seen[o] {
+				return false
+			}
+			seen[o] = true
+		}
+		return true
+	}
+	return false
 }
 
 // Claim hands the runner up to limit due connections.

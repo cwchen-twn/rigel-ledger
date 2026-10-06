@@ -72,13 +72,14 @@ jobs:
 
 
   tw-sync:
-    # The Node sync runner (integrations/tw-sync): typecheck and node:test.
-    # Node runs its TypeScript directly (type stripping, 22.18+), so there is
-    # no build; Bun only installs the dev dependencies, as in web/.
+    # The Node sync runner (integrations/tw-sync): typecheck, node:test, and
+    # that vendor/ bundles are what their vendored all-set-tw source gives.
+    # Node runs our TypeScript directly (type stripping, 22.18+), so there is
+    # no build; Bun installs the dependencies and bundles vendor/.
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4.4.0
+        uses: actions/checkout@v7.0.1
 
       - name: Set up Node
         uses: actions/setup-node@v4.4.0
@@ -90,7 +91,17 @@ jobs:
         with:
           bun-version-file: integrations/tw-sync/package.json
 
+      - name: Set up Chrome
+        # The connector tests drive a pretend bank in a real browser.
+        id: chrome
+        uses: browser-actions/setup-chrome@v2.2.0
+        with:
+          install-dependencies: true
+
       - name: Check
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+          TW_SYNC_REQUIRE_CHROME: "1"
         run: cd integrations/tw-sync && bun install --frozen-lockfile && bun run check
 
   hooks:

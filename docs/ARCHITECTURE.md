@@ -528,13 +528,31 @@ key.
     over as JS numbers. tw-sync **vendors the connectors it uses at a pinned commit**
     (with its MIT licence), and converts every amount to a decimal string at the
     boundary (`src/money.ts`, which throws rather than round).
+  - How vendoring works (P4c-2b, implemented): `scripts/vendor.ts <commit>` copies
+    the upstream files, unedited, under `vendor/all-set-tw/` (with `UPSTREAM`
+    naming the commit), and Bun bundles each connector into
+    `vendor/all-set-tw/<id>.js`, because Node's type stripping runs neither
+    upstream's extensionless imports nor its parameter properties. CI checks the
+    bundle is what the copies give (`bun run vendor:check`). A newer upstream is
+    one command and a reviewed diff.
   - A small adapter replaces the Cloudflare-only pieces: `@cloudflare/puppeteer`
     (Browser Run, with detached sessions kept alive between the OTP or CAPTCHA
-    round-trips) becomes a shim over local Puppeteer/Chromium that keeps the browser
-    in memory, and the Workers AI CAPTCHA callback becomes local OCR or a `captcha`
-    challenge. D1, KV and Queues sit outside the connectors and are not needed.
+    round-trips) becomes `src/browser/cloudflare.ts` over puppeteer-core and a local
+    Chrome (`CHROME_PATH`), which keeps the browser running between disconnect and
+    connect. Upstream's throw-and-call-again OTP steps run in one sync through
+    `ctx.ask` (`src/connectors/cathaybk.ts`), so the person answers in the app. The
+    Workers AI CAPTCHA callback becomes local OCR or a `captcha` challenge. D1, KV
+    and Queues sit outside the connectors and are not needed.
+  - 國泰世華 (P4c-2b): deposits and the credit card. Account ids keep the last four
+    digits only. Card rows are signed from the statement (upstream signs refunds and
+    payments as charges), and the card's balance is not sent: upstream's is the
+    unpaid statement, not what is owed today. The one-time code goes by SMS or
+    email, a `choice` field on the connect form; once answered, the bank trusts the
+    runner's browser (a cookie kept in the connection's state) and later runs ask
+    nothing. The tests drive the whole flow against a pretend bank in Chrome
+    (`test/fake-cathay.ts`).
   - The runner itself (P4c-2a, implemented): Node 22.18+ running its TypeScript
-    directly, no runtime dependency. `tw-sync run` is the daemon; `tw-sync try
+    directly; puppeteer-core is its one runtime dependency. `tw-sync run` is the daemon; `tw-sync try
     <connector>` runs one connector from a terminal with no app, which is how a real
     login is checked before a connection is made. Its key and each connection's
     session state (cookies, trusted device) stay in its `DATA_DIR`.
@@ -735,7 +753,8 @@ token kinds). Migration `000008`.
   today's `image` workflow builds amd64 only, so tw-sync's gets both.
 - **For a runner next to the app:** the cluster is in a data centre abroad, and some
   Taiwanese banks flag or block foreign data-centre addresses. The owner's runner may
-  need to leave through a Taiwan exit node (Tailscale); decided when tw-sync is built.
+  need to leave through a Taiwan exit node (Tailscale): `tw-sync try cathaybk` from
+  the server tells, and `CHROME_ARGS=--proxy-server=...` routes the browser alone.
 
 ### Receipts
 
@@ -1027,7 +1046,7 @@ builds images.
 | P2 | ~~Dockerfile, Gitea/GitHub CI and release; probes and the hcloud chart (tailnet-only ipAllowList, own Postgres role, nightly backup); release `v0.1.0` and deploy~~ (done, 2026-09-24) |
 | P2.5 | **Accounts and sign-in security.** a: first-login wizard, verified email, invitations, registration modes, bootstrap admin, the Administration page (users, requests, sign-in rules, defaults, SMTP), throttling and the sign-in audit, sessions (migration `000002`). b: ~~two-factor sign-in -- email codes, TOTP, passkeys, recovery codes, enforcement (`000003`)~~ (done). Both before any public exposure |
 | P3 | ~~Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency)~~ (P3a, done); ~~the three statements bound to closing rates with `rates_used`, display-currency translation~~ (P3b, done); ~~book rebase, tag (trip) report~~ (P3c, done) |
-| P4 | **Sync and review**: ~~import API, runner tokens, `source_accounts`, review queue, rules, matching (duplicates, pending/posted, transfers), balance assertions and drift, CSV import~~ (P4a, done); ~~per-user Connections with credentials sealed to the runner, the runner protocol, challenges, the fake runner~~ (P4c-1, done); ~~server or client sync mode per person, device runners~~ (P4c-1.5, done); ~~one runner kind, every person links their own~~ (P4c-1.6, done); ~~the tw-sync runner: protocol, sealing, `try`~~ (P4c-2a, done); tw-sync built once, one multi-arch container image for the cluster and for people's computers (P4c-2); `import_rows` kinds for invoices, holdings and trades, order emails, challenges; receipt attachments (upload, camera, optional local OCR); the tw-sync runner (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
+| P4 | **Sync and review**: ~~import API, runner tokens, `source_accounts`, review queue, rules, matching (duplicates, pending/posted, transfers), balance assertions and drift, CSV import~~ (P4a, done); ~~per-user Connections with credentials sealed to the runner, the runner protocol, challenges, the fake runner~~ (P4c-1, done); ~~server or client sync mode per person, device runners~~ (P4c-1.5, done); ~~one runner kind, every person links their own~~ (P4c-1.6, done); ~~the tw-sync runner: protocol, sealing, `try`~~ (P4c-2a, done); ~~vendored all-set-tw, the Chrome stand-in, 國泰世華~~ (P4c-2b, done); tw-sync built once, one multi-arch container image for the cluster and for people's computers (P4c-2); `import_rows` kinds for invoices, holdings and trades, order emails, challenges; receipt attachments (upload, camera, optional local OCR); the tw-sync runner (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
 | P5 | Securities and futures: py-sync (Shioaji daily, Firstrade), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, 永豐 deposits, Banco Continental (if its export is not enough). Recurring list and subscription templates. (Points, average cost and the security commodity itself are done.) |
 | P6 | PWA polish, then Flutter if a native feature is needed |
 | P7 | **Tax workbooks (TW, PY)**: `person` tags and `tax_profiles`; tax categories and account mappings per jurisdiction; `tax_withheld` accounts and foreign-tax-paid records; per-year rule files; workbook export (income by category, deductions with evidence, withholding, capital gains in the country's currency and rate). Needs P3 reports, P4 attachments and P5 lots. Prepares and cross-checks; does not file. |
