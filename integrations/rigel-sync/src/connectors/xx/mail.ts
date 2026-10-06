@@ -5,8 +5,12 @@
  * and proposes, it does not post.
  *
  *   an order or a receipt  an `invoice` row (#38): its lines join the card
- *                          payment it matches, and the email, printed to
- *                          PDF, is kept with it
+ *                          payment it matches, and the PDF it attaches (or,
+ *                          when it has none, the email printed to PDF) is
+ *                          kept with it. One that states no amount (an
+ *                          invoice notice) is evidence only: amount 0,
+ *                          matched by its seller and day, or by the
+ *                          電子發票 number it names (#57)
  *   a card alert (刷卡通知) a pending card row: the earliest estimate of a
  *                          charge, which the statement's posted row clears
  *
@@ -75,7 +79,7 @@ export function makeMail(opts: { open?: (l: MailboxLogin) => Promise<Mailbox>; p
       const since = new Date(today.getTime() - (state.lastDay && sameBox ? OVERLAP_DAYS : FIRST_DAYS) * 86_400_000);
       const lastUid = sameBox ? (state.lastUid ?? 0) : 0;
       const printer = new MailPrinter(ctx.log);
-      const found: Array<{ uid: number; mail: Mail; raw: { from: string; date: string }; parsed: Parsed[] }> = [];
+      const found: Array<{ uid: number; mail: Mail; raw: { from: string; date: string }; parsed: Parsed[]; attached?: Attached }> = [];
       let read = 0;
       let maxUid = lastUid;
       try {
@@ -95,24 +99,30 @@ export function makeMail(opts: { open?: (l: MailboxLogin) => Promise<Mailbox>; p
             text: p.text,
           };
           const parsed = parseMail(mail, opts.parsers ?? parsers);
-          if (parsed.length) found.push({ uid: m.uid, mail, raw: { from: p.from?.text ?? mail.from, date: typeof dateHeader === 'string' ? dateHeader : mail.day }, parsed });
+          if (parsed.length) {
+            found.push({
+              uid: m.uid, mail, parsed, attached: evidenceOf(p.attachments),
+              raw: { from: p.from?.text ?? mail.from, date: typeof dateHeader === 'string' ? dateHeader : mail.day },
+            });
+          }
         }
 
-        // Print the new ones that become invoices, within the budget.
+        // The new ones that become invoices keep their own PDF (a receipt, an
+        // invoice), or are printed when they carry none; within the budget.
         const files: BatchFile[] = [];
         const fileOf = new Map<number, string>();
         let used = 0;
         for (const f of found) {
           if (f.uid <= lastUid || !f.parsed.some((x) => x.kind === 'order')) continue;
-          const pdf = await printer.print(f.mail, f.raw);
-          if (!pdf || used + pdf.length > FILE_BUDGET) continue;
-          used += pdf.length;
-          const ref = `mail-${f.uid}`;
           const subject = f.mail.subject.replace(/[\\/:*?"<>|\r\n]+/g, ' ').trim().slice(0, 80) || 'email';
-          files.push({ ref, filename: `${f.mail.day} ${subject}.pdf`, data: pdf.toString('base64') });
+          const file = f.attached ?? { filename: `${f.mail.day} ${subject}.pdf`, content: await printer.print(f.mail, f.raw) };
+          if (!file.content || used + file.content.length > FILE_BUDGET) continue;
+          used += file.content.length;
+          const ref = `mail-${f.uid}`;
+          files.push({ ref, filename: file.filename, data: file.content.toString('base64') });
           fileOf.set(f.uid, ref);
         }
-        ctx.log.info('mail read', { read, recognised: found.length, printed: files.length });
+        ctx.log.info('mail read', { read, recognised: found.length, files: files.length, attached: found.filter((f) => f.attached).length });
         await ctx.saveState({ uidValidity: box.uidValidity, lastUid: maxUid, lastDay: taipeiDay(today) } satisfies MailState);
         return toBatch(found.map((f) => ({ mail: f.mail, parsed: f.parsed, file: fileOf.get(f.uid) })), files, taipeiDay(today));
       } finally {
@@ -124,6 +134,30 @@ export function makeMail(opts: { open?: (l: MailboxLogin) => Promise<Mailbox>; p
 }
 
 export const mail = makeMail();
+
+interface Attached {
+  filename: string;
+  content: Buffer | null;
+}
+
+const EVIDENCE_NAME = /receipt|invoice|bill|收據|發票|帳單|inv\b|\.inv\./i;
+const isPdf = (b: Buffer) => b.subarray(0, 5).toString('latin1') === '%PDF-';
+const isImage = (b: Buffer) =>
+  b[0] === 0xff && b[1] === 0xd8 || b.subarray(1, 4).toString('latin1') === 'PNG' || b.subarray(8, 12).toString('latin1') === 'WEBP';
+
+/**
+ * The file an email carries that is its evidence: a PDF it attaches (the
+ * one named like a receipt or an invoice first), else an attached photo.
+ * Inline pictures (logos) are not attachments. The content is not read.
+ */
+export function evidenceOf(attachments: Array<{ filename?: string; content: Buffer; contentDisposition?: string; related?: boolean }>): Attached | undefined {
+  const files = attachments.filter((a) => !a.related && a.contentDisposition !== 'inline' && a.content?.length);
+  const pdfs = files.filter((a) => isPdf(a.content));
+  const pick = pdfs.find((a) => EVIDENCE_NAME.test(a.filename ?? '')) ?? pdfs[0] ?? files.find((a) => isImage(a.content));
+  if (!pick) return undefined;
+  const name = (pick.filename ?? '').replace(/[\\/:*?"<>|\r\n]+/g, ' ').trim() || (isPdf(pick.content) ? 'evidence.pdf' : 'evidence');
+  return { filename: name, content: pick.content };
+}
 
 const slug = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '').slice(0, 40) || 'seller';
 
@@ -141,9 +175,11 @@ export function toBatch(found: Array<{ mail: Mail; parsed: Parsed[]; file?: stri
         accounts.set('orders', { id: 'orders', label: 'Orders by email', currency: '' });
         // An order's own number when it has one, so a second email about it is the same row.
         const id = p.number ? `order:${slug(p.seller)}:${p.number}` : `order:${short(mail.messageId)}:${i}`;
+        // An email that states no amount is evidence: amount 0, no items (#57).
         rows.push({
-          kind: 'invoice', account: 'orders', id, date: p.day, amount: `-${p.total}`, currency: p.currency,
-          counterparty: p.seller, description: mail.subject || undefined, items: p.items, file: i === 0 ? file : undefined,
+          kind: 'invoice', account: 'orders', id, date: p.day, amount: p.total ? `-${p.total}` : '0', currency: p.currency,
+          counterparty: p.seller, description: mail.subject || undefined, items: p.total ? p.items : [],
+          reference: p.reference, file: i === 0 ? file : undefined,
         });
       } else {
         const account = `card-${p.issuer}-${p.card}`;

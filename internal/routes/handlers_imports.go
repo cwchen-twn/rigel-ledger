@@ -140,8 +140,12 @@ type ImportRowInDTO struct {
 	Cash *decimal.Decimal `json:"cash,omitempty" swaggertype:"string"`
 	// invoice rows: its lines. The row's amount is the invoice's total,
 	// signed on the account that paid (a purchase < 0); counterparty is
-	// the seller.
+	// the seller. An email that states no amount is an invoice of amount 0
+	// with no items: evidence matched by its seller and day.
 	Items []InvoiceItemDTO `json:"items,omitempty"`
+	// invoice rows: the number of an invoice another source also sends
+	// (the 電子發票 an Apple email names), which ties the two exactly.
+	Reference string `json:"reference,omitempty"`
 }
 
 // InvoiceItemDTO is one line of an invoice: what it cost (> 0; a discount
@@ -216,7 +220,7 @@ func importInput(req ImportBatchDTO) ledger.ImportInput {
 			Amount: row.Amount, Currency: row.Currency, Description: row.Description, Counterparty: row.Counterparty,
 			Pending: row.Pending, Raw: row.Raw, File: row.File,
 			Security: row.Security, SecurityName: row.SecurityName, QuoteCurrency: row.QuoteCurrency,
-			Units: row.Units, Price: row.Price, Cash: row.Cash, Items: invoiceItems(row.Items)})
+			Units: row.Units, Price: row.Price, Cash: row.Cash, Items: invoiceItems(row.Items), Reference: row.Reference})
 	}
 	for _, f := range req.Files {
 		in.Files = append(in.Files, ledger.ImportFile{Ref: f.Ref, FileInput: ledger.FileInput{Filename: f.Filename, Bytes: f.Data}})

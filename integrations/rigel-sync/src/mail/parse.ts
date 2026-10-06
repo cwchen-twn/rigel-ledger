@@ -9,6 +9,7 @@
  */
 import { addDecimal, mulDecimal, plainDecimal } from '../connectors/rows.ts';
 import type { InvoiceItem } from '../connectors/types.ts';
+import { senders } from './senders.ts';
 
 /** An email, decoded. */
 export interface Mail {
@@ -29,9 +30,12 @@ export type Parsed =
       seller: string;
       number?: string;
       day: string;
-      total: string;
+      /** Absent when the email does not state it (an invoice notice): then it is evidence only. */
+      total?: string;
       currency: string;
       items: InvoiceItem[];
+      /** The number of an invoice another source also sends (the 電子發票 it names). */
+      reference?: string;
     }
   | {
       kind: 'card_alert';
@@ -153,8 +157,8 @@ export const schemaOrg: Parser = {
   },
 };
 
-/** The parsers, most specific first. Per-sender ones join here as samples arrive. */
-export const parsers: Parser[] = [schemaOrg];
+/** The parsers, most specific first: per-sender ones (src/mail/senders.ts), then schema.org. */
+export const parsers: Parser[] = [...senders, schemaOrg];
 
 export function parseMail(mail: Mail, list: Parser[] = parsers): Parsed[] {
   for (const p of list) {

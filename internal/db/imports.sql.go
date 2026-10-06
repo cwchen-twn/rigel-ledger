@@ -308,7 +308,7 @@ WHERE r.book_id = $1 AND r.status = 'pending' AND r.kind = 'transaction'
   AND r.currency <> $2 AND sign(r.amount) = sign($3::NUMERIC)
   AND r.date BETWEEN $4 AND $5
   AND NOT EXISTS (SELECT 1 FROM import_rows o WHERE o.book_id = $1 AND o.kind = 'invoice' AND o.status = 'pending'
-                  AND o.match_row_id = r.id AND o.id <> $6)
+                  AND o.amount <> 0 AND o.match_row_id = r.id AND o.id <> $6)
 ORDER BY abs(r.date - $7::DATE), r.id
 LIMIT 50
 `
@@ -376,7 +376,7 @@ WHERE t.book_id = $1 AND a.class IN ('asset', 'liability')
   AND t.date BETWEEN $4 AND $5
   AND NOT EXISTS (SELECT 1 FROM transaction_items i WHERE i.transaction_id = t.id)
   AND NOT EXISTS (SELECT 1 FROM import_rows o WHERE o.book_id = $1 AND o.kind = 'invoice' AND o.status = 'pending'
-                  AND o.match_transaction_id = t.id AND o.id <> $6)
+                  AND o.amount <> 0 AND o.match_transaction_id = t.id AND o.id <> $6)
 ORDER BY abs(t.date - $7::DATE), t.id
 LIMIT 50
 `
@@ -436,6 +436,29 @@ func (q *Queries) FindForeignPayments(ctx context.Context, arg FindForeignPaymen
 	return items, nil
 }
 
+const findInvoiceByReference = `-- name: FindInvoiceByReference :one
+SELECT i.transaction_id FROM transaction_items i
+WHERE i.book_id = $1 AND i.source NOT LIKE $2::TEXT || ':%'
+  AND (i.source LIKE '%:' || $3::TEXT || ':%' OR i.source LIKE '%:' || $3::TEXT)
+ORDER BY i.transaction_id DESC
+LIMIT 1
+`
+
+type FindInvoiceByReferenceParams struct {
+	BookID    int64
+	Connector string
+	Reference string
+}
+
+// The payment that already carries the lines of the invoice with this
+// number, from another source (the 電子發票 an Apple email names).
+func (q *Queries) FindInvoiceByReference(ctx context.Context, arg FindInvoiceByReferenceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, findInvoiceByReference, arg.BookID, arg.Connector, arg.Reference)
+	var transaction_id int64
+	err := row.Scan(&transaction_id)
+	return transaction_id, err
+}
+
 const findInvoiceMatch = `-- name: FindInvoiceMatch :one
 SELECT t.id FROM postings p
 JOIN transactions t ON t.id = p.transaction_id
@@ -445,7 +468,7 @@ WHERE t.book_id = $1 AND a.class IN ('asset', 'liability')
   AND t.date BETWEEN $4 AND $5
   AND NOT EXISTS (SELECT 1 FROM transaction_items i WHERE i.transaction_id = t.id)
   AND NOT EXISTS (SELECT 1 FROM import_rows o WHERE o.book_id = $1 AND o.kind = 'invoice' AND o.status = 'pending'
-                  AND o.match_transaction_id = t.id AND o.id <> $6)
+                  AND o.amount <> 0 AND o.match_transaction_id = t.id AND o.id <> $6)
 ORDER BY ($7::TEXT <> '' AND t.payee ILIKE '%' || $7::TEXT || '%') DESC, abs(t.date - $8::DATE), t.id
 LIMIT 1
 `
@@ -486,7 +509,7 @@ SELECT r.id FROM import_rows r
 WHERE r.book_id = $1 AND r.status = 'pending' AND r.kind = 'transaction'
   AND r.currency = $2 AND r.amount = $3 AND r.date BETWEEN $4 AND $5
   AND NOT EXISTS (SELECT 1 FROM import_rows o WHERE o.book_id = $1 AND o.kind = 'invoice' AND o.status = 'pending'
-                  AND o.match_row_id = r.id AND o.id <> $6)
+                  AND o.amount <> 0 AND o.match_row_id = r.id AND o.id <> $6)
 ORDER BY ($7::TEXT <> '' AND (r.description ILIKE '%' || $7::TEXT || '%' OR r.counterparty ILIKE '%' || $7::TEXT || '%')) DESC,
          abs(r.date - $8::DATE), r.id
 LIMIT 1
@@ -518,6 +541,136 @@ func (q *Queries) FindInvoiceRow(ctx context.Context, arg FindInvoiceRowParams) 
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const findInvoiceRowByReference = `-- name: FindInvoiceRowByReference :one
+SELECT o.id FROM import_rows o JOIN source_accounts s ON s.id = o.source_account_id
+WHERE o.book_id = $1 AND o.status = 'pending' AND o.kind = 'invoice' AND o.id <> $2
+  AND s.connector <> $3 AND o.amount <> 0 AND (o.id < $2 OR $4::BOOLEAN)
+  AND (o.external_id LIKE '%:' || $5::TEXT || ':%' OR o.external_id LIKE '%:' || $5::TEXT
+       OR o.reference = $5::TEXT)
+ORDER BY o.id
+LIMIT 1
+`
+
+type FindInvoiceRowByReferenceParams struct {
+	BookID    int64
+	RowID     int64
+	Connector string
+	AnyOrder  bool
+	Reference string
+}
+
+// That invoice still waiting in the queue: an earlier one, or any when this
+// row states no amount (it never waits the other way, so they never wait on
+// each other).
+func (q *Queries) FindInvoiceRowByReference(ctx context.Context, arg FindInvoiceRowByReferenceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, findInvoiceRowByReference,
+		arg.BookID,
+		arg.RowID,
+		arg.Connector,
+		arg.AnyOrder,
+		arg.Reference,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const findPaymentRowsNamed = `-- name: FindPaymentRowsNamed :many
+SELECT r.id, r.description, r.counterparty FROM import_rows r
+WHERE r.book_id = $1 AND r.status = 'pending' AND r.kind = 'transaction' AND r.amount < 0
+  AND r.date BETWEEN $2 AND $3
+ORDER BY abs(r.date - $4::DATE), r.id
+LIMIT 100
+`
+
+type FindPaymentRowsNamedParams struct {
+	BookID   int64
+	FromDate time.Time
+	ToDate   time.Time
+	OnDate   time.Time
+}
+
+type FindPaymentRowsNamedRow struct {
+	ID           int64
+	Description  string
+	Counterparty string
+}
+
+func (q *Queries) FindPaymentRowsNamed(ctx context.Context, arg FindPaymentRowsNamedParams) ([]FindPaymentRowsNamedRow, error) {
+	rows, err := q.db.Query(ctx, findPaymentRowsNamed,
+		arg.BookID,
+		arg.FromDate,
+		arg.ToDate,
+		arg.OnDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FindPaymentRowsNamedRow{}
+	for rows.Next() {
+		var i FindPaymentRowsNamedRow
+		if err := rows.Scan(&i.ID, &i.Description, &i.Counterparty); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const findPaymentsNamed = `-- name: FindPaymentsNamed :many
+SELECT t.id, t.payee, t.memo FROM postings p
+JOIN transactions t ON t.id = p.transaction_id
+JOIN accounts a ON a.id = p.account_id
+WHERE t.book_id = $1 AND a.class IN ('asset', 'liability') AND p.amount < 0
+  AND t.date BETWEEN $2 AND $3
+ORDER BY abs(t.date - $4::DATE), t.id
+LIMIT 100
+`
+
+type FindPaymentsNamedParams struct {
+	BookID   int64
+	FromDate time.Time
+	ToDate   time.Time
+	OnDate   time.Time
+}
+
+type FindPaymentsNamedRow struct {
+	ID    int64
+	Payee string
+	Memo  string
+}
+
+// Money out in a window, whatever its amount or currency: candidates for an
+// email that states none. The caller checks the payee names the seller.
+func (q *Queries) FindPaymentsNamed(ctx context.Context, arg FindPaymentsNamedParams) ([]FindPaymentsNamedRow, error) {
+	rows, err := q.db.Query(ctx, findPaymentsNamed,
+		arg.BookID,
+		arg.FromDate,
+		arg.ToDate,
+		arg.OnDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FindPaymentsNamedRow{}
+	for rows.Next() {
+		var i FindPaymentsNamedRow
+		if err := rows.Scan(&i.ID, &i.Payee, &i.Memo); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const findSameInvoiceRow = `-- name: FindSameInvoiceRow :one
@@ -640,7 +793,7 @@ func (q *Queries) FindTransferPartner(ctx context.Context, arg FindTransferPartn
 }
 
 const getImportRow = `-- name: GetImportRow :one
-SELECT r.id, r.book_id, r.batch_id, r.source_account_id, r.kind, r.external_id, r.date, r.amount, r.currency, r.description, r.counterparty, r.pending, r.raw, r.proposal, r.proposed_account_id, r.match_transaction_id, r.match_row_id, r.rule_id, r.status, r.transaction_id, r.decided_by, r.decided_at, r.created_at, r.attachment_id, r.security, r.units, r.price, r.cash, r.items, s.account_id, s.connector, s.settlement_account_id
+SELECT r.id, r.book_id, r.batch_id, r.source_account_id, r.kind, r.external_id, r.date, r.amount, r.currency, r.description, r.counterparty, r.pending, r.raw, r.proposal, r.proposed_account_id, r.match_transaction_id, r.match_row_id, r.rule_id, r.status, r.transaction_id, r.decided_by, r.decided_at, r.created_at, r.attachment_id, r.security, r.units, r.price, r.cash, r.items, r.reference, s.account_id, s.connector, s.settlement_account_id
 FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
 WHERE r.book_id = $1 AND r.id = $2
 `
@@ -680,6 +833,7 @@ type GetImportRowRow struct {
 	Price               decimal.NullDecimal
 	Cash                decimal.NullDecimal
 	Items               []byte
+	Reference           *string
 	AccountID           *int64
 	Connector           string
 	SettlementAccountID *int64
@@ -718,6 +872,7 @@ func (q *Queries) GetImportRow(ctx context.Context, arg GetImportRowParams) (Get
 		&i.Price,
 		&i.Cash,
 		&i.Items,
+		&i.Reference,
 		&i.AccountID,
 		&i.Connector,
 		&i.SettlementAccountID,
@@ -770,10 +925,10 @@ func (q *Queries) GetSourceSecurity(ctx context.Context, arg GetSourceSecurityPa
 
 const insertImportRow = `-- name: InsertImportRow :one
 INSERT INTO import_rows (book_id, batch_id, source_account_id, kind, external_id, date, amount, currency,
-                         description, counterparty, pending, raw, security, units, price, cash, items)
+                         description, counterparty, pending, raw, security, units, price, cash, items, reference)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
         $9, $10, $11, $12, $13, $14, $15, $16,
-        $17)
+        $17, $18)
 ON CONFLICT (book_id, external_id) DO NOTHING
 RETURNING id
 `
@@ -796,6 +951,7 @@ type InsertImportRowParams struct {
 	Price           decimal.NullDecimal
 	Cash            decimal.NullDecimal
 	Items           []byte
+	Reference       *string
 }
 
 // Nothing on a row already staged (the same external id): that is what
@@ -819,6 +975,7 @@ func (q *Queries) InsertImportRow(ctx context.Context, arg InsertImportRowParams
 		arg.Price,
 		arg.Cash,
 		arg.Items,
+		arg.Reference,
 	)
 	var id int64
 	err := row.Scan(&id)

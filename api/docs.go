@@ -5157,7 +5157,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "items": {
-                    "description": "invoice rows: its lines. The row's amount is the invoice's total,\nsigned on the account that paid (a purchase \u003c 0); counterparty is\nthe seller.",
+                    "description": "invoice rows: its lines. The row's amount is the invoice's total,\nsigned on the account that paid (a purchase \u003c 0); counterparty is\nthe seller. An email that states no amount is an invoice of amount 0\nwith no items: evidence matched by its seller and day.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/routes.InvoiceItemDTO"
@@ -5186,6 +5186,10 @@ const docTemplate = `{
                 "raw": {
                     "description": "The source record as it came, for the audit; never credentials.",
                     "type": "object"
+                },
+                "reference": {
+                    "description": "invoice rows: the number of an invoice another source also sends\n(the 電子發票 an Apple email names), which ties the two exactly.",
+                    "type": "string"
                 },
                 "security": {
                     "description": "holding and trade rows: the security as NAMESPACE:SYMBOL (XTAI:2330),\nregistered with this name and quote currency the first time.",

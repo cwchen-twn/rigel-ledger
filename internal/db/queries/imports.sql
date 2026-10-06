@@ -32,10 +32,10 @@ UPDATE import_batches SET received = @received, duplicates = @duplicates WHERE i
 -- Nothing on a row already staged (the same external id): that is what
 -- makes a re-sync harmless. The caller counts the missing RETURNING.
 INSERT INTO import_rows (book_id, batch_id, source_account_id, kind, external_id, date, amount, currency,
-                         description, counterparty, pending, raw, security, units, price, cash, items)
+                         description, counterparty, pending, raw, security, units, price, cash, items, reference)
 VALUES (@book_id, @batch_id, @source_account_id, @kind, @external_id, @date, @amount, @currency,
         @description, @counterparty, @pending, @raw, sqlc.narg(security), sqlc.narg(units), sqlc.narg(price), sqlc.narg(cash),
-        sqlc.narg(items))
+        sqlc.narg(items), sqlc.narg(reference))
 ON CONFLICT (book_id, external_id) DO NOTHING
 RETURNING id;
 
@@ -178,7 +178,7 @@ WHERE t.book_id = @book_id AND a.class IN ('asset', 'liability')
   AND t.date BETWEEN @from_date AND @to_date
   AND NOT EXISTS (SELECT 1 FROM transaction_items i WHERE i.transaction_id = t.id)
   AND NOT EXISTS (SELECT 1 FROM import_rows o WHERE o.book_id = @book_id AND o.kind = 'invoice' AND o.status = 'pending'
-                  AND o.match_transaction_id = t.id AND o.id <> @row_id)
+                  AND o.amount <> 0 AND o.match_transaction_id = t.id AND o.id <> @row_id)
 ORDER BY (@seller::TEXT <> '' AND t.payee ILIKE '%' || @seller::TEXT || '%') DESC, abs(t.date - @on_date::DATE), t.id
 LIMIT 1;
 
@@ -188,7 +188,7 @@ SELECT r.id FROM import_rows r
 WHERE r.book_id = @book_id AND r.status = 'pending' AND r.kind = 'transaction'
   AND r.currency = @currency AND r.amount = @amount AND r.date BETWEEN @from_date AND @to_date
   AND NOT EXISTS (SELECT 1 FROM import_rows o WHERE o.book_id = @book_id AND o.kind = 'invoice' AND o.status = 'pending'
-                  AND o.match_row_id = r.id AND o.id <> @row_id)
+                  AND o.amount <> 0 AND o.match_row_id = r.id AND o.id <> @row_id)
 ORDER BY (@seller::TEXT <> '' AND (r.description ILIKE '%' || @seller::TEXT || '%' OR r.counterparty ILIKE '%' || @seller::TEXT || '%')) DESC,
          abs(r.date - @on_date::DATE), r.id
 LIMIT 1;
@@ -255,7 +255,7 @@ WHERE t.book_id = @book_id AND a.class IN ('asset', 'liability')
   AND t.date BETWEEN @from_date AND @to_date
   AND NOT EXISTS (SELECT 1 FROM transaction_items i WHERE i.transaction_id = t.id)
   AND NOT EXISTS (SELECT 1 FROM import_rows o WHERE o.book_id = @book_id AND o.kind = 'invoice' AND o.status = 'pending'
-                  AND o.match_transaction_id = t.id AND o.id <> @row_id)
+                  AND o.amount <> 0 AND o.match_transaction_id = t.id AND o.id <> @row_id)
 ORDER BY abs(t.date - @on_date::DATE), t.id
 LIMIT 50;
 
@@ -267,6 +267,45 @@ WHERE r.book_id = @book_id AND r.status = 'pending' AND r.kind = 'transaction'
   AND r.currency <> @currency AND sign(r.amount) = sign(@amount::NUMERIC)
   AND r.date BETWEEN @from_date AND @to_date
   AND NOT EXISTS (SELECT 1 FROM import_rows o WHERE o.book_id = @book_id AND o.kind = 'invoice' AND o.status = 'pending'
-                  AND o.match_row_id = r.id AND o.id <> @row_id)
+                  AND o.amount <> 0 AND o.match_row_id = r.id AND o.id <> @row_id)
 ORDER BY abs(r.date - @on_date::DATE), r.id
 LIMIT 50;
+
+-- name: FindInvoiceByReference :one
+-- The payment that already carries the lines of the invoice with this
+-- number, from another source (the 電子發票 an Apple email names).
+SELECT i.transaction_id FROM transaction_items i
+WHERE i.book_id = @book_id AND i.source NOT LIKE @connector::TEXT || ':%'
+  AND (i.source LIKE '%:' || @reference::TEXT || ':%' OR i.source LIKE '%:' || @reference::TEXT)
+ORDER BY i.transaction_id DESC
+LIMIT 1;
+
+-- name: FindInvoiceRowByReference :one
+-- That invoice still waiting in the queue: an earlier one, or any when this
+-- row states no amount (it never waits the other way, so they never wait on
+-- each other).
+SELECT o.id FROM import_rows o JOIN source_accounts s ON s.id = o.source_account_id
+WHERE o.book_id = @book_id AND o.status = 'pending' AND o.kind = 'invoice' AND o.id <> @row_id
+  AND s.connector <> @connector AND o.amount <> 0 AND (o.id < @row_id OR @any_order::BOOLEAN)
+  AND (o.external_id LIKE '%:' || @reference::TEXT || ':%' OR o.external_id LIKE '%:' || @reference::TEXT
+       OR o.reference = @reference::TEXT)
+ORDER BY o.id
+LIMIT 1;
+
+-- name: FindPaymentsNamed :many
+-- Money out in a window, whatever its amount or currency: candidates for an
+-- email that states none. The caller checks the payee names the seller.
+SELECT t.id, t.payee, t.memo FROM postings p
+JOIN transactions t ON t.id = p.transaction_id
+JOIN accounts a ON a.id = p.account_id
+WHERE t.book_id = @book_id AND a.class IN ('asset', 'liability') AND p.amount < 0
+  AND t.date BETWEEN @from_date AND @to_date
+ORDER BY abs(t.date - @on_date::DATE), t.id
+LIMIT 100;
+
+-- name: FindPaymentRowsNamed :many
+SELECT r.id, r.description, r.counterparty FROM import_rows r
+WHERE r.book_id = @book_id AND r.status = 'pending' AND r.kind = 'transaction' AND r.amount < 0
+  AND r.date BETWEEN @from_date AND @to_date
+ORDER BY abs(r.date - @on_date::DATE), r.id
+LIMIT 100;

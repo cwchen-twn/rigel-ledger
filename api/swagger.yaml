@@ -877,7 +877,8 @@ definitions:
         description: |-
           invoice rows: its lines. The row's amount is the invoice's total,
           signed on the account that paid (a purchase < 0); counterparty is
-          the seller.
+          the seller. An email that states no amount is an invoice of amount 0
+          with no items: evidence matched by its seller and day.
         items:
           $ref: '#/definitions/routes.InvoiceItemDTO'
         type: array
@@ -899,6 +900,11 @@ definitions:
       raw:
         description: The source record as it came, for the audit; never credentials.
         type: object
+      reference:
+        description: |-
+          invoice rows: the number of an invoice another source also sends
+          (the 電子發票 an Apple email names), which ties the two exactly.
+        type: string
       security:
         description: |-
           holding and trade rows: the security as NAMESPACE:SYMBOL (XTAI:2330),

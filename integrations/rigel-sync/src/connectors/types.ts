@@ -49,6 +49,8 @@ export interface Row {
   items?: InvoiceItem[];
   /** BatchFile.ref: the row's evidence, attached to its transaction when accepted (#36). */
   file?: string;
+  /** invoice rows: the number of an invoice another source also sends (a 電子發票 an email names). */
+  reference?: string;
 }
 
 /** Evidence a batch carries: an image or a PDF, up to 10 MiB, inside the batch's 16 MiB. */

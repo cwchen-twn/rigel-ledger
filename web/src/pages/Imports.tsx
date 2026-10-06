@@ -14,7 +14,7 @@ import { Badge, EmptyState, Skeleton } from '~/components/ui/misc';
 import { toast } from '~/components/ui/toast';
 import { useI18n } from '~/i18n';
 import { formatDate } from '~/lib/dates';
-import { abs, cmp, mul, neg, parseAmount, strip, sub } from '~/lib/money';
+import { abs, cmp, isZero, mul, neg, parseAmount, strip, sub } from '~/lib/money';
 import { useBook } from '~/stores/book';
 import { useSession } from '~/stores/session';
 
@@ -97,6 +97,8 @@ export default function Imports() {
     r.kind === 'invoice' && r.match_amount !== null && r.match_currency !== null && r.match_currency !== r.currency
       ? { amount: r.match_amount, currency: r.match_currency }
       : undefined;
+  /** An email that states no amount (#57): evidence for the payment that names its seller. */
+  const evidence = (r: ImportRow) => r.kind === 'invoice' && isZero(r.amount);
   /** Lines a rule gives another category: what a split would move (in the payment's currency only). */
   const splittable = (r: ImportRow) =>
     !foreignMatch(r) && (r.items ?? []).some((it) => it.account_id && it.account_id !== category(r));
@@ -109,7 +111,7 @@ export default function Imports() {
         ? r.proposal === 'enrich' || r.proposal === 'same_invoice'
           ? r.match_transaction_id !== null
           : r.proposal === 'waiting'
-            ? r.account_id !== null && chosen()[r.id] != null // booked as cash only by choice
+            ? !evidence(r) && r.account_id !== null && chosen()[r.id] != null // booked as cash only by choice
             : r.account_id !== null
         : r.kind === 'transaction' && r.account_id !== null &&
           // the same charge as a waiting row: settled when that one is accepted
@@ -208,6 +210,7 @@ export default function Imports() {
     if (r.kind === 'invoice' && r.proposal === 'same_invoice') {
       return r.match_transaction_id !== null ? t('imports.explain_same_invoice') : t('imports.explain_same_invoice_waiting');
     }
+    if (evidence(r) && r.proposal === 'waiting') return t('imports.explain_evidence_waiting', { seller: r.counterparty });
     if (r.kind === 'invoice' && r.account_id === null) return t('imports.invoice_unmapped');
     if (r.kind === 'invoice' && r.proposal === 'waiting') {
       return t('imports.explain_waiting', { date: fmt(addDays(r.date, 7)) });
@@ -448,7 +451,7 @@ export default function Imports() {
                       <div class="min-w-0">
                         <Show
                           when={
-                            (r.kind === 'transaction' || r.kind === 'invoice') && r.account_id !== null &&
+                            (r.kind === 'transaction' || r.kind === 'invoice') && r.account_id !== null && !evidence(r) &&
                             (r.proposal === 'new' || (r.kind === 'invoice' && r.proposal === 'waiting'))
                           }
                         >
@@ -475,7 +478,9 @@ export default function Imports() {
                               when={r.kind === 'holding'}
                               fallback={
                                 <span class="flex flex-col items-end">
-                                  <Money class="text-sm font-medium" amount={r.amount} currency={r.currency} signed />
+                                  <Show when={!evidence(r)} fallback={<span class="text-sm text-muted-foreground">{t('imports.amount_not_stated')}</span>}>
+                                    <Money class="text-sm font-medium" amount={r.amount} currency={r.currency} signed />
+                                  </Show>
                                   <Show when={foreignMatch(r)}>
                                     {(m) => (
                                       <span class="text-xs text-muted-foreground" title={t('imports.charged_as_hint')}>

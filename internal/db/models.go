@@ -487,6 +487,7 @@ type ImportRow struct {
 	Price              decimal.NullDecimal
 	Cash               decimal.NullDecimal
 	Items              []byte
+	Reference          *string
 }
 
 type ImportRule struct {

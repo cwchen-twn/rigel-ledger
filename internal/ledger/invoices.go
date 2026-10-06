@@ -44,7 +44,10 @@ type InvoiceItem struct {
 // TransactionItem is a line of the invoice a transaction carries.
 type TransactionItem = db.TransactionItem
 
-func checkItems(items []InvoiceItem, places int32, i int) error {
+func checkItems(items []InvoiceItem, evidence bool, places int32, i int) error {
+	if evidence && len(items) == 0 {
+		return nil // an email that states no amount (#57)
+	}
 	if len(items) == 0 || len(items) > maxItems {
 		return fieldError(idx("rows", i, "items"), "out_of_range", "an invoice has 1 to %d items", maxItems)
 	}
@@ -111,6 +114,34 @@ func (s *Service) proposeInvoice(ctx context.Context, a Access, r db.GetImportRo
 	set := func(p db.SetRowProposalParams) error {
 		p.ID = r.ID
 		return s.store.SetRowProposal(ctx, p)
+	}
+	// The invoice number another source knows: the same invoice, exactly.
+	if r.Reference != nil {
+		if tx, err := s.store.FindInvoiceByReference(ctx, db.FindInvoiceByReferenceParams{BookID: a.Book.ID, Connector: r.Connector, Reference: *r.Reference}); err == nil {
+			return set(db.SetRowProposalParams{Proposal: "same_invoice", MatchTransactionID: &tx})
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		if other, err := s.store.FindInvoiceRowByReference(ctx, db.FindInvoiceRowByReferenceParams{BookID: a.Book.ID, RowID: r.ID,
+			Connector: r.Connector, AnyOrder: r.Amount.IsZero(), Reference: *r.Reference}); err == nil {
+			return set(db.SetRowProposalParams{Proposal: "same_invoice", MatchRowID: &other})
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+	}
+	// An email that states no amount (#57): the payment that names its
+	// seller, nearest the day. It never becomes a purchase by itself.
+	if r.Amount.IsZero() {
+		m, err := s.findNamedPayment(ctx, a, r, from, to)
+		switch {
+		case err != nil:
+			return err
+		case m.txn != 0:
+			return set(db.SetRowProposalParams{Proposal: "enrich", MatchTransactionID: &m.txn})
+		case m.row != 0:
+			return set(db.SetRowProposalParams{Proposal: "enrich", MatchRowID: &m.row})
+		}
+		return set(db.SetRowProposalParams{Proposal: "waiting"})
 	}
 	if tx, err := s.store.FindInvoiceMatch(ctx, db.FindInvoiceMatchParams{BookID: a.Book.ID, Currency: r.Currency, Amount: r.Amount,
 		FromDate: from, ToDate: to, RowID: r.ID, Seller: seller, OnDate: r.Date}); err == nil {
@@ -199,6 +230,35 @@ func namesSeller(tokens []string, text ...string) bool {
 
 type foreignMatch struct{ txn, row int64 }
 
+// findNamedPayment looks for the payment an email without an amount is
+// evidence of: money out in its window whose text names the seller, a
+// booked one first, the nearest day winning.
+func (s *Service) findNamedPayment(ctx context.Context, a Access, r db.GetImportRowRow, from, to time.Time) (foreignMatch, error) {
+	tokens := sellerTokens(r.Counterparty)
+	if len(tokens) == 0 {
+		return foreignMatch{}, nil
+	}
+	txns, err := s.store.FindPaymentsNamed(ctx, db.FindPaymentsNamedParams{BookID: a.Book.ID, FromDate: from, ToDate: to, OnDate: r.Date})
+	if err != nil {
+		return foreignMatch{}, err
+	}
+	for _, t := range txns {
+		if namesSeller(tokens, t.Payee, t.Memo) {
+			return foreignMatch{txn: t.ID}, nil
+		}
+	}
+	rows, err := s.store.FindPaymentRowsNamed(ctx, db.FindPaymentRowsNamedParams{BookID: a.Book.ID, FromDate: from, ToDate: to, OnDate: r.Date})
+	if err != nil {
+		return foreignMatch{}, err
+	}
+	for _, o := range rows {
+		if namesSeller(tokens, o.Description, o.Counterparty) {
+			return foreignMatch{row: o.ID}, nil
+		}
+	}
+	return foreignMatch{}, nil
+}
+
 // findForeignPayment looks for what paid an invoice in another currency:
 // a booked payment first, then a row still waiting, the one closest to the
 // invoice at the day's rate, within fxTolerance and naming the seller.
@@ -283,7 +343,7 @@ func waiting(day, at time.Time) bool {
 func (s *Service) matchAgedInvoices(ctx context.Context, a Access, rows []db.ListQueueRow) (bool, error) {
 	aged := false
 	for _, r := range rows {
-		if r.Kind != "invoice" || r.Proposal != "waiting" || waiting(r.Date, now()) {
+		if r.Kind != "invoice" || r.Proposal != "waiting" || r.Amount.IsZero() || waiting(r.Date, now()) {
 			continue
 		}
 		row, err := s.store.GetImportRow(ctx, db.GetImportRowParams{BookID: a.Book.ID, ID: r.ID})
@@ -329,6 +389,8 @@ func (s *Service) acceptInvoice(ctx context.Context, a Access, r db.GetImportRow
 		proposal = "new" // the person chose a category: a cash purchase
 	}
 	switch {
+	case r.Amount.IsZero() && (proposal == "new" || proposal == "waiting"):
+		return 0, invalid("amount_unknown", "this email states no amount: it can only join the payment it belongs to")
 	case proposal == "waiting":
 		return 0, fieldError("account_id", "required", "a card charge may still come for this invoice; choose a category to book it as cash now")
 	case proposal == "same_invoice" && r.MatchTransactionID == nil:

@@ -403,7 +403,8 @@
     "not_claimed": "This sync is not in progress",
     "challenge_gone": "This check expired or was already answered",
     "disabled": "Turn the connection on first",
-    "no_access": "The connection's owner no longer has access to this book"
+    "no_access": "The connection's owner no longer has access to this book",
+    "amount_unknown": "This email states no amount: it can only join the payment it belongs to."
   },
   "profile": {
     "username_hint": "Used to sign in: a-z, 0-9, dot, dash, underscore"
@@ -881,7 +882,9 @@
     "explain_duplicate_row": "the same charge as {source}; accepting that one settles this",
     "proposal_same_charge": "Same charge",
     "charged_as": "charged as",
-    "charged_as_hint": "what the card or bank charged, in its own currency"
+    "charged_as_hint": "what the card or bank charged, in its own currency",
+    "explain_evidence_waiting": "the email states no amount; it joins the payment that names {seller} when that comes",
+    "amount_not_stated": "amount not stated"
   },
   "tokens": {
     "title": "API tokens",

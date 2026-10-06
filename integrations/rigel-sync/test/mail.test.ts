@@ -157,6 +157,36 @@ describe('xx-mail against a mailbox in memory', () => {
     assert.equal(fresh.files?.length ?? 0, hasChrome ? 1 : 0);
   });
 
+  test('an invoice email keeps the PDF it attaches; one with no amount is evidence', async () => {
+    const boundary = 'b1';
+    const withPdf = (uid: number, from: string, subject: string, body: string, pdfName: string) =>
+      Buffer.from([
+        `From: ${from}`, 'To: me@example.com', `Subject: ${subject}`, 'Date: Fri, 4 Sep 2026 02:30:38 +0200', `Message-ID: <att-${uid}@example.com>`,
+        'MIME-Version: 1.0', `Content-Type: multipart/mixed; boundary="${boundary}"`, '',
+        `--${boundary}`, 'Content-Type: text/plain; charset=utf-8', '', body, '',
+        `--${boundary}`, `Content-Type: application/octet-stream; name="${pdfName}"`, `Content-Disposition: attachment; filename="${pdfName}"`,
+        'Content-Transfer-Encoding: base64', '', Buffer.from('%PDF-1.4\n%%EOF\n').toString('base64'), `--${boundary}--`, '',
+      ].join('\r\n'));
+    const box: Mailbox = {
+      uidValidity: '5',
+      async *since() {
+        yield { uid: 1, source: withPdf(1, 'Billing <noreply.billing@hetzner.com>', 'Invoice 000099990000', 'The open invoice amount of $ 9.99 will soon be debited from your credit card.', 'Hetzner_000099990000.pdf') };
+        yield { uid: 2, source: withPdf(2, 'Music Co <b2ceci@ecimail1.tradevan.com.tw>', 'Music Co電子發票開立通知', '發票號碼 Invoice Number QQ00000002', 'notice.pdf') };
+      },
+      close: async () => {},
+    };
+    const ctx: SyncContext = {
+      credentials: { address: 'me@example.com', password: 'x' }, state: {}, saveState: async () => {},
+      ask: async () => { throw new Error('no'); }, log: { info() {}, warn() {} }, signal: AbortSignal.timeout(30_000),
+    };
+    const batch = await makeMail({ open: async () => box, now: () => new Date('2026-09-10T00:00:00Z') }).sync(ctx);
+    assert.deepEqual(batch.rows.map((r) => [r.id, r.amount, r.currency, r.reference, r.file]), [
+      ['order:hetzner-online-gmbh:000099990000', '-9.99', 'USD', undefined, 'mail-1'],
+      ['order:music-co:QQ00000002', '0', 'TWD', 'QQ00000002', 'mail-2'],
+    ]);
+    assert.deepEqual(batch.files?.map((f) => f.filename), ['Hetzner_000099990000.pdf', 'notice.pdf'], 'their own PDFs, nothing printed');
+  });
+
   test('a refused login is bad_credentials, a missing label verification_failed', async () => {
     await assert.rejects(run({}, async () => { throw new MailboxError('auth', 'Invalid credentials'); }).batch,
       (e) => e instanceof SyncError && e.code === 'bad_credentials');

@@ -403,7 +403,8 @@
     "not_claimed": "Esta sincronización no está en curso",
     "challenge_gone": "Esta verificación caducó o ya se respondió",
     "disabled": "Activa la conexión primero",
-    "no_access": "El dueño de la conexión ya no tiene acceso a este libro"
+    "no_access": "El dueño de la conexión ya no tiene acceso a este libro",
+    "amount_unknown": "Este correo no indica un importe: solo puede unirse al pago al que pertenece."
   },
   "profile": {
     "username_hint": "Para iniciar sesión: a-z, 0-9, punto, guion, guion bajo"
@@ -881,7 +882,9 @@
     "explain_duplicate_row": "el mismo cargo que {source}; al aceptar ese se resuelve este",
     "proposal_same_charge": "Mismo cargo",
     "charged_as": "cobrado como",
-    "charged_as_hint": "lo que cobró la tarjeta o el banco, en su propia moneda"
+    "charged_as_hint": "lo que cobró la tarjeta o el banco, en su propia moneda",
+    "explain_evidence_waiting": "el correo no indica un importe; se une al pago que nombra a {seller} cuando llegue",
+    "amount_not_stated": "importe no indicado"
   },
   "tokens": {
     "title": "Tokens de API",

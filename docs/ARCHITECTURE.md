@@ -936,14 +936,31 @@ Email is **evidence**, like e-invoices: it enriches and proposes, it does not po
   - Each run rereads the last 14 days (120 the first time) and resends what it finds:
     rows are idempotent, so a batch the app refused is not lost. Only emails new since
     the last run (by uid, within the folder's uid validity) are printed.
-  - **Evidence is the email printed to PDF** by the runner's Chrome, with script off and
+  - **Evidence is the PDF the email attaches** (an invoice, a receipt: the one named
+    like one first; #57). Its content is not read (the owner's call, 2026-10-06: an
+    email only has to join the payment, not to state it again). An email with no
+    attachment (Apple) is printed to PDF by the runner's Chrome, with script off and
     every request but inline `data:` refused, so a tracking pixel never reports the
-    sync. The From, Subject and Date head the page. Orders go on one `orders` source
+    sync; the From, Subject and Date head the page. Orders go on one `orders` source
     account; card alerts on `card-<issuer>-<last4>`.
-  - Parsers: schema.org Order and Invoice (done). Card alerts (國泰世華, 永豐), Taiwan
-    shops (momo, PChome, Shopee, Uber Eats, foodpanda) and app stores and
-    subscriptions (Apple, Google Play, Netflix, Spotify) follow, each written from a
-    real sample email.
+  - **An email that states no amount** (a 電子發票 notice, an order whose price is only
+    in its PDF) is an `invoice` row of amount 0 with no items: evidence. It is matched
+    to money out from 2 days before to 5 after whose payee or description names its
+    seller (the nearest day; booked first, then waiting rows), it never becomes a
+    purchase by itself (`amount_unknown`), and it claims nothing an invoice with an
+    amount could match.
+  - **An invoice number another source knows** (`reference`, migration `000014`): Apple
+    and the 關貿 (tradevan) notices name the 電子發票 they issue. The row is then
+    `same_invoice` of that 電子發票 (booked: its items' source; waiting: its external
+    id), whatever the amounts; it adds only its file.
+  - Parsers, each written from a real email and tested on invented ones
+    (`src/mail/senders.ts`): Hetzner, DigitalOcean, Apple, Gotogate, 遠傳 (the amount
+    due, 應繳金額, last period's unpaid amount included), 電子發票 notices (關貿), Trip.com;
+    then schema.org Order and Invoice. Card alerts (國泰世華, 永豐), Taiwan shops (momo,
+    PChome, Shopee, Uber Eats, foodpanda) and Google Play, Netflix follow, from samples.
+  - Known gap: a bill paid by auto-debit (遠傳) is charged days after its email, maybe
+    outside the 5-day window; it then waits like any invoice, and becomes a cash
+    purchase only if a person says so.
 
 ### Security and risk
 
@@ -1196,7 +1213,7 @@ builds images.
 | P2 | ~~Dockerfile, Gitea/GitHub CI and release; probes and the hcloud chart (tailnet-only ipAllowList, own Postgres role, nightly backup); release `v0.1.0` and deploy~~ (done, 2026-09-24) |
 | P2.5 | **Accounts and sign-in security.** a: first-login wizard, verified email, invitations, registration modes, bootstrap admin, the Administration page (users, requests, sign-in rules, defaults, SMTP), throttling and the sign-in audit, sessions (migration `000002`). b: ~~two-factor sign-in -- email codes, TOTP, passkeys, recovery codes, enforcement (`000003`)~~ (done). Both before any public exposure |
 | P3 | ~~Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency)~~ (P3a, done); ~~the three statements bound to closing rates with `rates_used`, display-currency translation~~ (P3b, done); ~~book rebase, tag (trip) report~~ (P3c, done) |
-| P4 | **Sync and review**: ~~import API, runner tokens, `source_accounts`, review queue, rules, matching (duplicates, pending/posted, transfers), balance assertions and drift, CSV import~~ (P4a, done); ~~per-user Connections with credentials sealed to the runner, the runner protocol, challenges, the fake runner~~ (P4c-1, done); ~~server or client sync mode per person, device runners~~ (P4c-1.5, done); ~~one runner kind, every person links their own~~ (P4c-1.6, done); ~~the sync runner (then tw-sync, now rigel-sync): protocol, sealing, `try`~~ (P4c-2a, done); ~~vendored all-set-tw, the Chrome stand-in, 國泰世華~~ (P4c-2b, done); ~~永豐銀行 deposits and card, CAPTCHAs read in the runner~~ (P4c-2c, done); ~~rigel-sync, one container image for the cluster and for people's computers~~ (P4c-2d, done); `import_rows` kinds for invoices, holdings and trades, order emails, challenges; ~~receipt attachments (upload, camera) and synced evidence~~ (#36, done); ~~`holding` and `trade` rows, securities from a broker account~~ (#37, done); ~~`invoice` rows with items, matched to what paid, split by item category~~ (#38, done); ~~`tw-tdcc`, 集保 e存摺~~ (#39, done); ~~`tw-einvoice`, 電子發票 on a mobile barcode~~ (#40, done); ~~`xx-mail`, email over IMAP, schema.org orders~~ (#41 part 1, done; per-sender parsers next); ~~one purchase from several sources: waiting rows matched to each other, a second invoice, invoices that wait~~ (#53-#55, done); ~~foreign-currency invoices matched to the card charge~~ (#56, done); optional local OCR for receipts (#44); rigel-sync connectors (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
+| P4 | **Sync and review**: ~~import API, runner tokens, `source_accounts`, review queue, rules, matching (duplicates, pending/posted, transfers), balance assertions and drift, CSV import~~ (P4a, done); ~~per-user Connections with credentials sealed to the runner, the runner protocol, challenges, the fake runner~~ (P4c-1, done); ~~server or client sync mode per person, device runners~~ (P4c-1.5, done); ~~one runner kind, every person links their own~~ (P4c-1.6, done); ~~the sync runner (then tw-sync, now rigel-sync): protocol, sealing, `try`~~ (P4c-2a, done); ~~vendored all-set-tw, the Chrome stand-in, 國泰世華~~ (P4c-2b, done); ~~永豐銀行 deposits and card, CAPTCHAs read in the runner~~ (P4c-2c, done); ~~rigel-sync, one container image for the cluster and for people's computers~~ (P4c-2d, done); `import_rows` kinds for invoices, holdings and trades, order emails, challenges; ~~receipt attachments (upload, camera) and synced evidence~~ (#36, done); ~~`holding` and `trade` rows, securities from a broker account~~ (#37, done); ~~`invoice` rows with items, matched to what paid, split by item category~~ (#38, done); ~~`tw-tdcc`, 集保 e存摺~~ (#39, done); ~~`tw-einvoice`, 電子發票 on a mobile barcode~~ (#40, done); ~~`xx-mail`, email over IMAP, schema.org orders~~ (#41 part 1, done); ~~email evidence: the attached PDF, emails without an amount, invoice numbers, parsers for Hetzner, DigitalOcean, Apple, Gotogate, 遠傳, 電子發票 notices, Trip.com~~ (#57, done; card alerts and shops next, #41); ~~one purchase from several sources: waiting rows matched to each other, a second invoice, invoices that wait~~ (#53-#55, done); ~~foreign-currency invoices matched to the card charge~~ (#56, done); optional local OCR for receipts (#44); rigel-sync connectors (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
 | P5 | Securities and futures: Shioaji (daily) and Firstrade in rigel-sync (their Python SDKs as subprocesses), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, Banco Continental (if its export is not enough). Recurring list and subscription templates. (Points, average cost and the security commodity itself are done.) |
 | P6 | PWA polish, then Flutter if a native feature is needed |
 | P7 | **Tax workbooks (TW, PY)**: `person` tags and `tax_profiles`; tax categories and account mappings per jurisdiction; `tax_withheld` accounts and foreign-tax-paid records; per-year rule files; workbook export (income by category, deductions with evidence, withholding, capital gains in the country's currency and rate). Needs P3 reports, P4 attachments and P5 lots. Prepares and cross-checks; does not file. |

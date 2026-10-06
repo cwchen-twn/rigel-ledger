@@ -65,7 +65,10 @@ type ImportRowInput struct {
 
 	// invoice rows (#38): the invoice's lines. Amount is its total, signed
 	// on the account that paid (a purchase < 0); Counterparty the seller.
-	Items []InvoiceItem
+	// An amount of 0 with no items is evidence whose amount the source does
+	// not state (#57). Reference is an invoice number another source knows.
+	Items     []InvoiceItem
+	Reference string
 }
 
 // ImportFile is evidence a batch carries (an order email, an e-invoice, a
@@ -233,17 +236,28 @@ func (s *Service) Import(ctx context.Context, a Access, in ImportInput) (ImportR
 				}
 			}
 			if r.Kind == "invoice" {
-				if err := checkItems(r.Items, int32(commods[cur].Decimals), i); err != nil {
+				if r.Amount.IsZero() && len(r.Items) > 0 {
+					return fieldError(idx("rows", i, "amount"), "zero", "an invoice with items has a total")
+				}
+				if err := checkItems(r.Items, r.Amount.IsZero(), int32(commods[cur].Decimals), i); err != nil {
 					return err
 				}
-				if r.Amount.IsZero() {
-					return fieldError(idx("rows", i, "amount"), "zero", "an invoice has a total")
+				if ref := strings.TrimSpace(r.Reference); ref != "" {
+					if len(ref) < 6 || len(ref) > 64 {
+						return fieldError(idx("rows", i, "reference"), "invalid", "an invoice number has 6 to 64 characters")
+					}
+					params.Reference = &ref
+				}
+				if r.Items == nil {
+					r.Items = []InvoiceItem{} // [] for the row's check, not null
 				}
 				if params.Items, err = json.Marshal(r.Items); err != nil {
 					return err
 				}
 			} else if len(r.Items) > 0 {
 				return fieldError(idx("rows", i, "items"), "invalid", "only an invoice has items")
+			} else if r.Reference != "" {
+				return fieldError(idx("rows", i, "reference"), "invalid", "only an invoice has a reference")
 			}
 			id, err := q.InsertImportRow(ctx, params)
 			if errors.Is(err, pgx.ErrNoRows) {

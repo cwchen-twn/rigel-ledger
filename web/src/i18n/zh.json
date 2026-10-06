@@ -403,7 +403,8 @@
     "not_claimed": "此同步未在進行中",
     "challenge_gone": "此驗證已過期或已回覆",
     "disabled": "請先啟用此連結",
-    "no_access": "連結擁有者已無此帳本的權限"
+    "no_access": "連結擁有者已無此帳本的權限",
+    "amount_unknown": "此郵件未載明金額，只能併入它所屬的付款。"
   },
   "profile": {
     "username_hint": "用於登入：a-z、0-9、點、連字號、底線"
@@ -881,7 +882,9 @@
     "explain_duplicate_row": "與 {source} 是同一筆消費；接受那一筆時這筆會一併處理",
     "proposal_same_charge": "同一筆款項",
     "charged_as": "實際扣款",
-    "charged_as_hint": "信用卡或銀行以其幣別實際扣款的金額"
+    "charged_as_hint": "信用卡或銀行以其幣別實際扣款的金額",
+    "explain_evidence_waiting": "郵件未載明金額；待名稱含 {seller} 的付款出現後併入",
+    "amount_not_stated": "未載明金額"
   },
   "tokens": {
     "title": "API token",
