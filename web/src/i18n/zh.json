@@ -152,7 +152,8 @@
     "unit_cost": "單價",
     "cost_required": "請輸入成本（賺取的哩程填 0）",
     "base_missing": "部分行尚無本位幣金額",
-    "fill_remainder": "將差額填入此行"
+    "fill_remainder": "將差額填入此行",
+    "items": "發票品項"
   },
   "attachments": {
     "title": "收據與檔案",
@@ -863,7 +864,15 @@
     "settlement_missing": "請先在上方選擇此證券帳戶的交割帳戶",
     "securities_under": "證券放在…之下",
     "settles_through": "交割帳戶…",
-    "brokerage": "證券帳戶"
+    "brokerage": "證券帳戶",
+    "proposal_enrich": "補充明細",
+    "proposal_cash": "現金消費",
+    "explain_enrich": "帳本中某筆付款的發票；接受後加入其品項",
+    "explain_enrich_waiting": "等待對應的信用卡或銀行交易；請先接受那一筆",
+    "invoice_unmapped": "尚無對應付款；請在上方設定載具對應的帳戶，以現金消費入帳",
+    "invoice_items": "{count} 個品項",
+    "split_by_items": "依品項類別拆分",
+    "invoice_waiting_toast": "{count} 張發票在等待對應的信用卡或銀行交易"
   },
   "tokens": {
     "title": "API token",

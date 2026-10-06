@@ -486,6 +486,7 @@ type ImportRow struct {
 	Units              decimal.NullDecimal
 	Price              decimal.NullDecimal
 	Cash               decimal.NullDecimal
+	Items              []byte
 }
 
 type ImportRule struct {
@@ -659,6 +660,19 @@ type TransactionAttachment struct {
 	AttachmentID  int64
 	CreatedBy     *int64
 	CreatedAt     time.Time
+}
+
+type TransactionItem struct {
+	ID            int64
+	BookID        int64
+	TransactionID int64
+	Position      int16
+	Description   string
+	Quantity      decimal.NullDecimal
+	UnitPrice     decimal.NullDecimal
+	Amount        decimal.Decimal
+	AccountID     *int64
+	Source        string
 }
 
 type TransactionTag struct {

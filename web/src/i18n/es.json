@@ -152,7 +152,8 @@
     "unit_cost": "Precio unitario",
     "cost_required": "Introduce el coste (0 para millas ganadas)",
     "base_missing": "Algunas líneas aún no tienen importe base",
-    "fill_remainder": "Poner aquí el resto"
+    "fill_remainder": "Poner aquí el resto",
+    "items": "Artículos de la factura"
   },
   "attachments": {
     "title": "Recibos y archivos",
@@ -863,7 +864,15 @@
     "settlement_missing": "elige arriba dónde liquida su cuenta de bolsa",
     "securities_under": "Los valores van en…",
     "settles_through": "Liquida en…",
-    "brokerage": "Cuenta de bolsa"
+    "brokerage": "Cuenta de bolsa",
+    "proposal_enrich": "Añade detalle",
+    "proposal_cash": "Compra en efectivo",
+    "explain_enrich": "la factura de un pago ya registrado; al aceptarla se añaden sus artículos",
+    "explain_enrich_waiting": "espera su movimiento de tarjeta o banco; acéptalo primero",
+    "invoice_unmapped": "aún no hay pago; asigna arriba la cuenta del portador para registrarla en efectivo",
+    "invoice_items": "Artículos ({count})",
+    "split_by_items": "Dividir por categoría de artículo",
+    "invoice_waiting_toast": "{count} factura(s) esperan su movimiento de tarjeta o banco"
   },
   "tokens": {
     "title": "Tokens de API",

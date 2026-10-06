@@ -62,6 +62,10 @@ type ImportRowInput struct {
 	Units         *decimal.Decimal
 	Price         *decimal.Decimal
 	Cash          *decimal.Decimal
+
+	// invoice rows (#38): the invoice's lines. Amount is its total, signed
+	// on the account that paid (a purchase < 0); Counterparty the seller.
+	Items []InvoiceItem
 }
 
 // ImportFile is evidence a batch carries (an order email, an e-invoice, a
@@ -193,9 +197,9 @@ func (s *Service) Import(ctx context.Context, a Access, in ImportInput) (ImportR
 				return fieldError(idx("rows", i, "account"), "unknown", "account %q is not in accounts", r.Account)
 			}
 			switch r.Kind {
-			case "transaction", "balance", "holding", "trade":
+			case "transaction", "balance", "holding", "trade", "invoice":
 			default:
-				return fieldError(idx("rows", i, "kind"), "invalid", "kind is transaction, balance, holding or trade")
+				return fieldError(idx("rows", i, "kind"), "invalid", "kind is transaction, balance, holding, trade or invoice")
 			}
 			if strings.TrimSpace(r.ID) == "" {
 				return fieldError(idx("rows", i, "id"), "required", "every row needs the source's id")
@@ -227,6 +231,19 @@ func (s *Service) Import(ctx context.Context, a Access, in ImportInput) (ImportR
 				if err := securityRow(&params, r, commods[r.Security], cur, i); err != nil {
 					return err
 				}
+			}
+			if r.Kind == "invoice" {
+				if err := checkItems(r.Items, int32(commods[cur].Decimals), i); err != nil {
+					return err
+				}
+				if r.Amount.IsZero() {
+					return fieldError(idx("rows", i, "amount"), "zero", "an invoice has a total")
+				}
+				if params.Items, err = json.Marshal(r.Items); err != nil {
+					return err
+				}
+			} else if len(r.Items) > 0 {
+				return fieldError(idx("rows", i, "items"), "invalid", "only an invoice has items")
 			}
 			id, err := q.InsertImportRow(ctx, params)
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -265,7 +282,8 @@ func (s *Service) Import(ctx context.Context, a Access, in ImportInput) (ImportR
 			res.Balances++
 		}
 	}
-	return res, nil
+	// A card row just staged may be what a waiting invoice was paid with.
+	return res, s.rematchInvoices(ctx, a)
 }
 
 func idx(list string, i int, field string) string {
@@ -283,6 +301,10 @@ func (s *Service) propose(ctx context.Context, a Access, rowID int64) (applied b
 	r, err := s.store.GetImportRow(ctx, db.GetImportRowParams{BookID: a.Book.ID, ID: rowID})
 	if err != nil {
 		return false, err
+	}
+	if r.Status == "pending" && r.Kind == "invoice" {
+		// Matched whether or not its source is mapped: only a cash purchase needs that.
+		return false, s.proposeInvoice(ctx, a, r)
 	}
 	if r.Status != "pending" || r.AccountID == nil {
 		return false, nil // unmapped: waits for its source account to be mapped
@@ -434,6 +456,8 @@ func (s *Service) AcceptRow(ctx context.Context, a Access, rowID int64, category
 type AcceptInput struct {
 	CategoryID *int64
 	Cash       *decimal.Decimal
+	// An invoice: split the expense by the categories its items' rules give.
+	Split bool
 }
 
 // Accept books a row; see AcceptRow.
@@ -448,6 +472,9 @@ func (s *Service) Accept(ctx context.Context, a Access, rowID int64, in AcceptIn
 	}
 	if r.Status != "pending" {
 		return 0, conflict("already_decided", "this row was already accepted or ignored")
+	}
+	if r.Kind == "invoice" {
+		return s.acceptInvoice(ctx, a, r, in)
 	}
 	if r.AccountID == nil {
 		return 0, invalid("unmapped", "map the row's source account to an account first")
@@ -585,7 +612,8 @@ func (s *Service) Accept(ctx context.Context, a Access, rowID int64, in AcceptIn
 	if err != nil {
 		return 0, translate(err, "import row")
 	}
-	return txnID, nil
+	// An invoice waiting for this row can now be added to its transaction.
+	return txnID, s.rematchInvoices(ctx, a)
 }
 
 func clearedOn(st db.PostingStatus, d time.Time) *time.Time {

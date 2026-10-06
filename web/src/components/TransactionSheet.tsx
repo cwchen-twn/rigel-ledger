@@ -567,6 +567,30 @@ export function TransactionSheet(props: {
           </Field>
         </div>
 
+        <Show when={props.transaction?.items.length}>
+          <div class="grid gap-1">
+            <span class="text-sm font-medium">{t('transactions.items')}</span>
+            <ul class="grid gap-0.5 rounded-md border px-3 py-2 text-sm">
+              <For each={props.transaction!.items}>
+                {(it) => (
+                  <li class="flex min-w-0 items-baseline justify-between gap-3">
+                    <span class="min-w-0 truncate">
+                      {it.description}
+                      <Show when={it.quantity && it.unit_price}>
+                        <span class="text-muted-foreground"> · {strip(it.quantity!)} × {strip(it.unit_price!)}</span>
+                      </Show>
+                      <Show when={it.account_id}>
+                        {(acct) => <span class="text-muted-foreground"> → {book.byId().get(acct()) ? book.name(book.byId().get(acct())!) : ''}</span>}
+                      </Show>
+                    </span>
+                    <Money class="shrink-0 tabular-nums" amount={it.amount} currency={base()} />
+                  </li>
+                )}
+              </For>
+            </ul>
+          </div>
+        </Show>
+
         <Attachments
           bookId={book.id()}
           attachments={files()}

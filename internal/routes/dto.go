@@ -197,8 +197,10 @@ type TransactionDTO struct {
 	Tags     []string     `json:"tags"`
 	// Files on the transaction, without their bytes (GET .../attachments/{id}).
 	Attachments []AttachmentDTO `json:"attachments"`
-	CreatedAt   time.Time       `json:"created_at"`
-	UpdatedAt   time.Time       `json:"updated_at"`
+	// The lines of the invoice it carries.
+	Items     []TransactionItemDTO `json:"items"`
+	CreatedAt time.Time            `json:"created_at"`
+	UpdatedAt time.Time            `json:"updated_at"`
 }
 
 func transactionDTO(v ledger.TransactionView) TransactionDTO {
@@ -215,7 +217,7 @@ func transactionDTO(v ledger.TransactionView) TransactionDTO {
 	}
 	return TransactionDTO{
 		ID: v.ID, Date: Date{v.Date}, Payee: v.Payee, Memo: v.Memo, Source: v.Source,
-		Postings: ps, Tags: v.Tags, Attachments: attachmentDTOs(v.Attachments), CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt,
+		Postings: ps, Tags: v.Tags, Attachments: attachmentDTOs(v.Attachments), Items: itemDTOs(v.Items), CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt,
 	}
 }
 
@@ -316,4 +318,28 @@ type RateDTO struct {
 	To   string           `json:"to"`
 	Date Date             `json:"date" swaggertype:"string" format:"date"`
 	Rate *decimal.Decimal `json:"rate" swaggertype:"string"`
+}
+
+// TransactionItemDTO is a line of the invoice a transaction carries.
+type TransactionItemDTO struct {
+	Description string           `json:"description"`
+	Quantity    *decimal.Decimal `json:"quantity" swaggertype:"string"`
+	UnitPrice   *decimal.Decimal `json:"unit_price" swaggertype:"string"`
+	Amount      decimal.Decimal  `json:"amount" swaggertype:"string"`
+	// The category it was booked to when the expense was split.
+	AccountID *int64 `json:"account_id"`
+}
+
+func itemDTOs(items []ledger.TransactionItem) []TransactionItemDTO {
+	out := make([]TransactionItemDTO, len(items))
+	for i, it := range items {
+		out[i] = TransactionItemDTO{Description: it.Description, Amount: it.Amount, AccountID: it.AccountID}
+		if it.Quantity.Valid {
+			out[i].Quantity = &it.Quantity.Decimal
+		}
+		if it.UnitPrice.Valid {
+			out[i].UnitPrice = &it.UnitPrice.Decimal
+		}
+	}
+	return out
 }

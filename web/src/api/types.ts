@@ -278,6 +278,8 @@ export interface Transaction {
   postings: Posting[];
   tags: string[];
   attachments: Attachment[];
+  /** The lines of the invoice it carries. */
+  items: InvoiceItem[];
   created_at: string;
   updated_at: string;
 }
@@ -501,11 +503,22 @@ export interface SourceAccount {
   pending: number;
 }
 
-export type Proposal = 'new' | 'duplicate' | 'clears' | 'transfer';
+/** enrich: an invoice adds its items to what paid for it (match_transaction_id), or waits for its row (match_row_id). */
+export type Proposal = 'new' | 'duplicate' | 'clears' | 'transfer' | 'enrich';
+
+/** A line of an invoice: what it cost (a discount < 0). */
+export interface InvoiceItem {
+  description: string;
+  quantity?: string | null;
+  unit_price?: string | null;
+  amount: string;
+  /** In the queue: the category a rule gives it; on a transaction: where it was split to. */
+  account_id?: number | null;
+}
 
 export interface ImportRow {
   id: number;
-  kind: 'transaction' | 'balance' | 'holding' | 'trade';
+  kind: 'transaction' | 'balance' | 'holding' | 'trade' | 'invoice';
   external_id: string;
   date: string;
   /** Signed on the account: money in > 0. */
@@ -534,6 +547,8 @@ export interface ImportRow {
   /** What a trade settled for, signed on the settlement account; null until confirmed. */
   cash: string | null;
   settlement_account_id: number | null;
+  /** invoice rows: its lines, each with the category a rule gives it. */
+  items: InvoiceItem[] | null;
 }
 
 export interface ImportRowInput {

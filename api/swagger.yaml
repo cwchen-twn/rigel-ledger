@@ -107,6 +107,10 @@ definitions:
         items:
           type: integer
         type: array
+      split:
+        description: 'Invoices: split the expense by the categories their items''
+          rules give.'
+        type: boolean
     type: object
   routes.AccessRequestDTO:
     properties:
@@ -790,6 +794,12 @@ definitions:
         type: string
       id:
         type: integer
+      items:
+        description: 'invoice rows: the lines, each with the category a rule gives
+          it.'
+        items:
+          $ref: '#/definitions/routes.InvoiceItemDTO'
+        type: array
       kind:
         type: string
       match_row_id:
@@ -853,12 +863,21 @@ definitions:
       id:
         description: The source's id for the row, stable across resends.
         type: string
+      items:
+        description: |-
+          invoice rows: its lines. The row's amount is the invoice's total,
+          signed on the account that paid (a purchase < 0); counterparty is
+          the seller.
+        items:
+          $ref: '#/definitions/routes.InvoiceItemDTO'
+        type: array
       kind:
         enum:
         - transaction
         - balance
         - holding
         - trade
+        - invoice
         type: string
       pending:
         type: boolean
@@ -951,6 +970,20 @@ definitions:
       timezone:
         type: string
       username:
+        type: string
+    type: object
+  routes.InvoiceItemDTO:
+    properties:
+      account_id:
+        description: 'In the queue: the category a rule gives the line.'
+        type: integer
+      amount:
+        type: string
+      description:
+        type: string
+      quantity:
+        type: string
+      unit_price:
         type: string
     type: object
   routes.JobDTO:
@@ -1405,6 +1438,11 @@ definitions:
         type: string
       id:
         type: integer
+      items:
+        description: The lines of the invoice it carries.
+        items:
+          $ref: '#/definitions/routes.TransactionItemDTO'
+        type: array
       memo:
         type: string
       payee:
@@ -1439,6 +1477,20 @@ definitions:
         items:
           type: string
         type: array
+    type: object
+  routes.TransactionItemDTO:
+    properties:
+      account_id:
+        description: The category it was booked to when the expense was split.
+        type: integer
+      amount:
+        type: string
+      description:
+        type: string
+      quantity:
+        type: string
+      unit_price:
+        type: string
     type: object
   routes.TransactionPageDTO:
     properties:

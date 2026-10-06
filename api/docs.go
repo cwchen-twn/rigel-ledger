@@ -4036,6 +4036,10 @@ const docTemplate = `{
                     "items": {
                         "type": "integer"
                     }
+                },
+                "split": {
+                    "description": "Invoices: split the expense by the categories their items' rules give.",
+                    "type": "boolean"
                 }
             }
         },
@@ -5050,6 +5054,13 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
+                "items": {
+                    "description": "invoice rows: the lines, each with the category a rule gives it.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.InvoiceItemDTO"
+                    }
+                },
                 "kind": {
                     "type": "string"
                 },
@@ -5135,13 +5146,21 @@ const docTemplate = `{
                     "description": "The source's id for the row, stable across resends.",
                     "type": "string"
                 },
+                "items": {
+                    "description": "invoice rows: its lines. The row's amount is the invoice's total,\nsigned on the account that paid (a purchase \u003c 0); counterparty is\nthe seller.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.InvoiceItemDTO"
+                    }
+                },
                 "kind": {
                     "type": "string",
                     "enum": [
                         "transaction",
                         "balance",
                         "holding",
-                        "trade"
+                        "trade",
+                        "invoice"
                     ]
                 },
                 "pending": {
@@ -5276,6 +5295,27 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.InvoiceItemDTO": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "description": "In the queue: the category a rule gives the line.",
+                    "type": "integer"
+                },
+                "amount": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "string"
+                },
+                "unit_price": {
                     "type": "string"
                 }
             }
@@ -5949,6 +5989,13 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
+                "items": {
+                    "description": "The lines of the invoice it carries.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.TransactionItemDTO"
+                    }
+                },
                 "memo": {
                     "type": "string"
                 },
@@ -5999,6 +6046,27 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "routes.TransactionItemDTO": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "description": "The category it was booked to when the expense was split.",
+                    "type": "integer"
+                },
+                "amount": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "string"
+                },
+                "unit_price": {
+                    "type": "string"
                 }
             }
         },

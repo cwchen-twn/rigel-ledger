@@ -251,6 +251,90 @@ func (q *Queries) FindEstimate(ctx context.Context, arg FindEstimateParams) (int
 	return id, err
 }
 
+const findInvoiceMatch = `-- name: FindInvoiceMatch :one
+SELECT t.id FROM postings p
+JOIN transactions t ON t.id = p.transaction_id
+JOIN accounts a ON a.id = p.account_id
+WHERE t.book_id = $1 AND a.class IN ('asset', 'liability')
+  AND p.commodity = $2 AND p.amount = $3
+  AND t.date BETWEEN $4 AND $5
+  AND NOT EXISTS (SELECT 1 FROM transaction_items i WHERE i.transaction_id = t.id)
+  AND NOT EXISTS (SELECT 1 FROM import_rows o WHERE o.book_id = $1 AND o.kind = 'invoice' AND o.status = 'pending'
+                  AND o.match_transaction_id = t.id AND o.id <> $6)
+ORDER BY ($7::TEXT <> '' AND t.payee ILIKE '%' || $7::TEXT || '%') DESC, abs(t.date - $8::DATE), t.id
+LIMIT 1
+`
+
+type FindInvoiceMatchParams struct {
+	BookID   int64
+	Currency string
+	Amount   decimal.Decimal
+	FromDate time.Time
+	ToDate   time.Time
+	RowID    int64
+	Seller   string
+	OnDate   time.Time
+}
+
+// The booked payment an invoice belongs to: a card, bank or cash line of
+// its total, from two days before to five after (a card posts late), on a
+// transaction that has no invoice yet and that no other waiting invoice
+// claims. The seller's name in the payee wins a tie, then the nearest day.
+func (q *Queries) FindInvoiceMatch(ctx context.Context, arg FindInvoiceMatchParams) (int64, error) {
+	row := q.db.QueryRow(ctx, findInvoiceMatch,
+		arg.BookID,
+		arg.Currency,
+		arg.Amount,
+		arg.FromDate,
+		arg.ToDate,
+		arg.RowID,
+		arg.Seller,
+		arg.OnDate,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const findInvoiceRow = `-- name: FindInvoiceRow :one
+SELECT r.id FROM import_rows r
+WHERE r.book_id = $1 AND r.status = 'pending' AND r.kind = 'transaction'
+  AND r.currency = $2 AND r.amount = $3 AND r.date BETWEEN $4 AND $5
+  AND NOT EXISTS (SELECT 1 FROM import_rows o WHERE o.book_id = $1 AND o.kind = 'invoice' AND o.status = 'pending'
+                  AND o.match_row_id = r.id AND o.id <> $6)
+ORDER BY ($7::TEXT <> '' AND (r.description ILIKE '%' || $7::TEXT || '%' OR r.counterparty ILIKE '%' || $7::TEXT || '%')) DESC,
+         abs(r.date - $8::DATE), r.id
+LIMIT 1
+`
+
+type FindInvoiceRowParams struct {
+	BookID   int64
+	Currency string
+	Amount   decimal.Decimal
+	FromDate time.Time
+	ToDate   time.Time
+	RowID    int64
+	Seller   string
+	OnDate   time.Time
+}
+
+// A card or bank row still waiting in the queue that will pay for it.
+func (q *Queries) FindInvoiceRow(ctx context.Context, arg FindInvoiceRowParams) (int64, error) {
+	row := q.db.QueryRow(ctx, findInvoiceRow,
+		arg.BookID,
+		arg.Currency,
+		arg.Amount,
+		arg.FromDate,
+		arg.ToDate,
+		arg.RowID,
+		arg.Seller,
+		arg.OnDate,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const findTransferPartner = `-- name: FindTransferPartner :one
 SELECT r.id FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
 WHERE r.book_id = $1 AND r.status = 'pending' AND r.kind = 'transaction' AND r.id <> $2
@@ -293,7 +377,7 @@ func (q *Queries) FindTransferPartner(ctx context.Context, arg FindTransferPartn
 }
 
 const getImportRow = `-- name: GetImportRow :one
-SELECT r.id, r.book_id, r.batch_id, r.source_account_id, r.kind, r.external_id, r.date, r.amount, r.currency, r.description, r.counterparty, r.pending, r.raw, r.proposal, r.proposed_account_id, r.match_transaction_id, r.match_row_id, r.rule_id, r.status, r.transaction_id, r.decided_by, r.decided_at, r.created_at, r.attachment_id, r.security, r.units, r.price, r.cash, s.account_id, s.connector, s.settlement_account_id
+SELECT r.id, r.book_id, r.batch_id, r.source_account_id, r.kind, r.external_id, r.date, r.amount, r.currency, r.description, r.counterparty, r.pending, r.raw, r.proposal, r.proposed_account_id, r.match_transaction_id, r.match_row_id, r.rule_id, r.status, r.transaction_id, r.decided_by, r.decided_at, r.created_at, r.attachment_id, r.security, r.units, r.price, r.cash, r.items, s.account_id, s.connector, s.settlement_account_id
 FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
 WHERE r.book_id = $1 AND r.id = $2
 `
@@ -332,6 +416,7 @@ type GetImportRowRow struct {
 	Units               decimal.NullDecimal
 	Price               decimal.NullDecimal
 	Cash                decimal.NullDecimal
+	Items               []byte
 	AccountID           *int64
 	Connector           string
 	SettlementAccountID *int64
@@ -369,6 +454,7 @@ func (q *Queries) GetImportRow(ctx context.Context, arg GetImportRowParams) (Get
 		&i.Units,
 		&i.Price,
 		&i.Cash,
+		&i.Items,
 		&i.AccountID,
 		&i.Connector,
 		&i.SettlementAccountID,
@@ -421,9 +507,10 @@ func (q *Queries) GetSourceSecurity(ctx context.Context, arg GetSourceSecurityPa
 
 const insertImportRow = `-- name: InsertImportRow :one
 INSERT INTO import_rows (book_id, batch_id, source_account_id, kind, external_id, date, amount, currency,
-                         description, counterparty, pending, raw, security, units, price, cash)
+                         description, counterparty, pending, raw, security, units, price, cash, items)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
-        $9, $10, $11, $12, $13, $14, $15, $16)
+        $9, $10, $11, $12, $13, $14, $15, $16,
+        $17)
 ON CONFLICT (book_id, external_id) DO NOTHING
 RETURNING id
 `
@@ -445,6 +532,7 @@ type InsertImportRowParams struct {
 	Units           decimal.NullDecimal
 	Price           decimal.NullDecimal
 	Cash            decimal.NullDecimal
+	Items           []byte
 }
 
 // Nothing on a row already staged (the same external id): that is what
@@ -467,6 +555,7 @@ func (q *Queries) InsertImportRow(ctx context.Context, arg InsertImportRowParams
 		arg.Units,
 		arg.Price,
 		arg.Cash,
+		arg.Items,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -476,7 +565,7 @@ func (q *Queries) InsertImportRow(ctx context.Context, arg InsertImportRowParams
 const listQueue = `-- name: ListQueue :many
 SELECT r.id, r.kind, r.external_id, r.date, r.amount, r.currency, r.description, r.counterparty, r.pending,
        r.proposal, r.proposed_account_id, r.match_transaction_id, r.match_row_id, r.rule_id, r.attachment_id,
-       r.security, c.name AS security_name, r.units, r.price, r.cash,
+       r.security, c.name AS security_name, r.units, r.price, r.cash, r.items,
        s.id AS source_account_id, s.connector, s.label AS source_label, s.account_id, s.settlement_account_id
 FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
 LEFT JOIN commodities c ON c.code = r.security
@@ -511,6 +600,7 @@ type ListQueueRow struct {
 	Units               decimal.NullDecimal
 	Price               decimal.NullDecimal
 	Cash                decimal.NullDecimal
+	Items               []byte
 	SourceAccountID     int64
 	Connector           string
 	SourceLabel         string
@@ -549,6 +639,7 @@ func (q *Queries) ListQueue(ctx context.Context, arg ListQueueParams) ([]ListQue
 			&i.Units,
 			&i.Price,
 			&i.Cash,
+			&i.Items,
 			&i.SourceAccountID,
 			&i.Connector,
 			&i.SourceLabel,
@@ -687,6 +778,30 @@ func (q *Queries) MapSourceAccount(ctx context.Context, arg MapSourceAccountPara
 	return i, err
 }
 
+const pendingInvoiceRows = `-- name: PendingInvoiceRows :many
+SELECT id FROM import_rows WHERE book_id = $1 AND status = 'pending' AND kind = 'invoice' ORDER BY date, id LIMIT 500
+`
+
+func (q *Queries) PendingInvoiceRows(ctx context.Context, bookID int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, pendingInvoiceRows, bookID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const pendingRowsOfAccount = `-- name: PendingRowsOfAccount :many
 SELECT r.id FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
 WHERE r.book_id = $1 AND r.status = 'pending' AND r.kind = 'transaction'
@@ -786,6 +901,21 @@ func (q *Queries) SetPostingStatus(ctx context.Context, arg SetPostingStatusPara
 		arg.TransactionID,
 		arg.AccountID,
 	)
+	return err
+}
+
+const setRowItems = `-- name: SetRowItems :exec
+UPDATE import_rows SET items = $1 WHERE book_id = $2 AND id = $3
+`
+
+type SetRowItemsParams struct {
+	Items  []byte
+	BookID int64
+	ID     int64
+}
+
+func (q *Queries) SetRowItems(ctx context.Context, arg SetRowItemsParams) error {
+	_, err := q.db.Exec(ctx, setRowItems, arg.Items, arg.BookID, arg.ID)
 	return err
 }
 

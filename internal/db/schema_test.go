@@ -427,3 +427,22 @@ func TestImportRowShape(t *testing.T) {
 		t.Fatalf("a trade without cash yet: %v", err)
 	}
 }
+
+// Only an invoice row carries items, and an invoice always does (000011).
+func TestInvoiceRowItems(t *testing.T) {
+	f := setupSchema(t)
+	var src, batch int64
+	_ = f.store.Pool.QueryRow(f.ctx, `INSERT INTO source_accounts (book_id, connector, external_id) VALUES ($1, 'tw-einvoice', 'c') RETURNING id`, f.bookID).Scan(&src)
+	_ = f.store.Pool.QueryRow(f.ctx, `INSERT INTO import_batches (book_id, connector) VALUES ($1, 'tw-einvoice') RETURNING id`, f.bookID).Scan(&batch)
+	row := func(id, kind string, items any) error {
+		_, err := f.store.Pool.Exec(f.ctx, `INSERT INTO import_rows (book_id, batch_id, source_account_id, kind, external_id, date, amount, currency, items)
+			VALUES ($1, $2, $3, $4, $5, '2026-09-01', -100, 'TWD', $6)`, f.bookID, batch, src, kind, id, items)
+		return err
+	}
+	wantConstraint(t, row("a", "invoice", nil), "import_rows_items")
+	wantConstraint(t, row("b", "invoice", `{"not": "a list"}`), "import_rows_items")
+	wantConstraint(t, row("c", "transaction", `[]`), "import_rows_items")
+	if err := row("d", "invoice", `[{"description": "x", "amount": "100"}]`); err != nil {
+		t.Fatal(err)
+	}
+}

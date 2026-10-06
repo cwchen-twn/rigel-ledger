@@ -110,7 +110,7 @@ type ImportAccountDTO struct {
 }
 
 type ImportRowInDTO struct {
-	Kind    string `json:"kind" enums:"transaction,balance,holding,trade"`
+	Kind    string `json:"kind" enums:"transaction,balance,holding,trade,invoice"`
 	Account string `json:"account"`
 	// The source's id for the row, stable across resends.
 	ID           string          `json:"id"`
@@ -138,6 +138,21 @@ type ImportRowInDTO struct {
 	// What the trade settled for, signed on the settlement account (a buy
 	// < 0), when the source knows it; otherwise confirmed on accept.
 	Cash *decimal.Decimal `json:"cash,omitempty" swaggertype:"string"`
+	// invoice rows: its lines. The row's amount is the invoice's total,
+	// signed on the account that paid (a purchase < 0); counterparty is
+	// the seller.
+	Items []InvoiceItemDTO `json:"items,omitempty"`
+}
+
+// InvoiceItemDTO is one line of an invoice: what it cost (> 0; a discount
+// < 0), and its quantity and unit price when the invoice says.
+type InvoiceItemDTO struct {
+	Description string           `json:"description"`
+	Quantity    *decimal.Decimal `json:"quantity,omitempty" swaggertype:"string"`
+	UnitPrice   *decimal.Decimal `json:"unit_price,omitempty" swaggertype:"string"`
+	Amount      decimal.Decimal  `json:"amount" swaggertype:"string"`
+	// In the queue: the category a rule gives the line.
+	AccountID *int64 `json:"account_id,omitempty"`
 }
 
 // ImportFileDTO is evidence a batch carries: an image or a PDF, up to 10 MiB,
@@ -201,7 +216,7 @@ func importInput(req ImportBatchDTO) ledger.ImportInput {
 			Amount: row.Amount, Currency: row.Currency, Description: row.Description, Counterparty: row.Counterparty,
 			Pending: row.Pending, Raw: row.Raw, File: row.File,
 			Security: row.Security, SecurityName: row.SecurityName, QuoteCurrency: row.QuoteCurrency,
-			Units: row.Units, Price: row.Price, Cash: row.Cash})
+			Units: row.Units, Price: row.Price, Cash: row.Cash, Items: invoiceItems(row.Items)})
 	}
 	for _, f := range req.Files {
 		in.Files = append(in.Files, ledger.ImportFile{Ref: f.Ref, FileInput: ledger.FileInput{Filename: f.Filename, Bytes: f.Data}})
@@ -316,6 +331,8 @@ type ImportRowDTO struct {
 	Cash         *decimal.Decimal `json:"cash" swaggertype:"string"`
 	// The brokerage's settlement account; a trade waits for it.
 	SettlementAccountID *int64 `json:"settlement_account_id"`
+	// invoice rows: the lines, each with the category a rule gives it.
+	Items []InvoiceItemDTO `json:"items"`
 }
 
 // importQueue
@@ -340,7 +357,7 @@ func (h *handlers) importQueue(w http.ResponseWriter, r *http.Request) {
 			MatchRowID: q.MatchRowID, RuleID: q.RuleID, SourceAccountID: q.SourceAccountID, SourceLabel: q.SourceLabel,
 			Connector: q.Connector, AccountID: q.AccountID, AttachmentID: q.AttachmentID,
 			Security: q.Security, SecurityName: q.SecurityName, Units: decPtr(q.Units), Price: decPtr(q.Price), Cash: decPtr(q.Cash),
-			SettlementAccountID: q.SettlementAccountID}
+			SettlementAccountID: q.SettlementAccountID, Items: queueItems(q.Items)}
 	}
 	response.JSON(w, http.StatusOK, out)
 }
@@ -352,6 +369,8 @@ type AcceptRowsDTO struct {
 	// A trade's settled cash, by row id, signed on its settlement account
 	// (a buy < 0), when the source did not send it.
 	Cash map[string]decimal.Decimal `json:"cash,omitempty" swaggertype:"object,string"`
+	// Invoices: split the expense by the categories their items' rules give.
+	Split bool `json:"split,omitempty"`
 }
 
 type AcceptFailureDTO struct {
@@ -390,7 +409,7 @@ func (h *handlers) acceptRows(w http.ResponseWriter, r *http.Request) {
 	a := access(r)
 	out := AcceptResultDTO{Accepted: []int64{}, Transactions: []int64{}, Failed: []AcceptFailureDTO{}}
 	for _, id := range req.RowIDs {
-		in := ledger.AcceptInput{CategoryID: req.AccountID}
+		in := ledger.AcceptInput{CategoryID: req.AccountID, Split: req.Split}
 		if c, ok := req.Cash[strconv.FormatInt(id, 10)]; ok {
 			in.Cash = &c
 		}
@@ -565,4 +584,24 @@ func decPtr(d decimal.NullDecimal) *decimal.Decimal {
 		return nil
 	}
 	return &d.Decimal
+}
+
+func invoiceItems(in []InvoiceItemDTO) []ledger.InvoiceItem {
+	var out []ledger.InvoiceItem
+	for _, it := range in {
+		out = append(out, ledger.InvoiceItem{Description: it.Description, Quantity: it.Quantity, UnitPrice: it.UnitPrice, Amount: it.Amount})
+	}
+	return out
+}
+
+// queueItems reads a row's stored lines (the ledger's InvoiceItem JSON).
+func queueItems(raw []byte) []InvoiceItemDTO {
+	if len(raw) == 0 {
+		return nil
+	}
+	var items []InvoiceItemDTO
+	if err := json.Unmarshal(raw, &items); err != nil {
+		return nil
+	}
+	return items
 }

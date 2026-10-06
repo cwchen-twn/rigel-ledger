@@ -23,6 +23,7 @@ const BADGE: Record<Proposal, 'default' | 'secondary' | 'outline' | 'warning'> =
   duplicate: 'secondary',
   clears: 'secondary',
   transfer: 'outline',
+  enrich: 'secondary',
 };
 
 /** Pattern text a rule would start from: the counterparty, or the description without trailing digits (POS numbers, dates). */
@@ -44,6 +45,8 @@ export default function Imports() {
   const [chosen, setChosen] = createSignal<Record<number, number | null>>({});
   // A trade's settled cash as typed, unsigned: the trade's direction signs it.
   const [cashTyped, setCashTyped] = createSignal<Record<number, string>>({});
+  // Invoices: split by item category unless the person unticks it.
+  const [noSplit, setNoSplit] = createSignal<Set<number>>(new Set());
   const [selected, setSelected] = createSignal<Set<number>>(new Set());
   const [busy, setBusy] = createSignal(false);
   const [csvOpen, setCsvOpen] = createSignal(false);
@@ -83,10 +86,19 @@ export default function Imports() {
   // Shares are whole; fund units are not: as many places as the source sent.
   const units = (r: ImportRow) => new Intl.NumberFormat(intl(), { maximumFractionDigits: 8 }).format(abs(r.units ?? '0') as unknown as number);
 
+  // ---- invoices (#38) ----
+  /** Lines a rule gives another category: what a split would move. */
+  const splittable = (r: ImportRow) => (r.items ?? []).some((it) => it.account_id && it.account_id !== category(r));
+  const splitting = (r: ImportRow) => splittable(r) && !noSplit().has(r.id);
+
   const acceptable = (r: ImportRow) =>
     r.kind === 'trade'
       ? r.account_id !== null && r.settlement_account_id !== null && cashSigned(r) !== null
-      : r.kind === 'transaction' && r.account_id !== null;
+      : r.kind === 'invoice'
+        ? r.proposal === 'enrich'
+          ? r.match_transaction_id !== null
+          : r.account_id !== null
+        : r.kind === 'transaction' && r.account_id !== null;
   const unmapped = () =>
     (sources() ?? []).filter((s) => s.account_id === null || (s.kind === 'brokerage' && s.settlement_account_id === null));
 
@@ -100,7 +112,8 @@ export default function Imports() {
 
   /** Accept rows; a row whose category the person changed goes with that category. */
   const accept = async (ids: number[]) => {
-    const groups = new Map<number | null, number[]>();
+    // One request per (category, split): both apply to every row it carries.
+    const groups = new Map<string, { acct: number | null; split: boolean; ids: number[] }>();
     const cash: Record<number, string> = {};
     for (const id of ids) {
       const r = rowsById().get(id);
@@ -110,23 +123,30 @@ export default function Imports() {
         if (c !== null) cash[id] = c;
       }
       const override = r.id in chosen() && chosen()[r.id] !== r.proposed_account_id ? chosen()[r.id] : null;
-      groups.set(override ?? null, [...(groups.get(override ?? null) ?? []), id]);
+      const split = r.kind === 'invoice' && splitting(r);
+      const key = `${override ?? ''}|${split}`;
+      const g = groups.get(key) ?? { acct: override ?? null, split, ids: [] };
+      g.ids.push(id);
+      groups.set(key, g);
     }
     setBusy(true);
     let accepted = 0;
     let needCategory = 0;
+    let waiting = 0;
     let other = 0;
     try {
-      for (const [acct, rowIds] of groups) {
-        const res = await api.acceptRows(book.id(), rowIds, acct, cash);
+      for (const { acct, split, ids: rowIds } of groups.values()) {
+        const res = await api.acceptRows(book.id(), rowIds, acct, cash, split);
         accepted += res.accepted.length;
         for (const f of res.failed) {
           if (f.code === 'required') needCategory++;
+          else if (f.code === 'match_pending') waiting++;
           else other++;
         }
       }
       if (accepted) toast.success(t('imports.accepted', { count: accepted }));
       if (needCategory) toast.error(t('imports.need_category', { count: needCategory }));
+      if (waiting) toast.error(t('imports.invoice_waiting_toast', { count: waiting }));
       if (other) toast.error(t('imports.accept_failed', { count: other }));
     } catch (err) {
       toast.error(te(err));
@@ -167,6 +187,10 @@ export default function Imports() {
 
   const explain = (r: ImportRow) => {
     if (r.kind === 'balance') return t('imports.balance_row', { date: fmt(r.date) });
+    if (r.kind === 'invoice' && r.proposal === 'enrich') {
+      return r.match_transaction_id !== null ? t('imports.explain_enrich') : t('imports.explain_enrich_waiting');
+    }
+    if (r.kind === 'invoice' && r.account_id === null) return t('imports.invoice_unmapped');
     if (r.account_id === null) return t('imports.unmapped_row');
     if (r.kind === 'trade') {
       const at = r.price ? ` @ ${strip(r.price)}` : '';
@@ -336,8 +360,10 @@ export default function Imports() {
                                   ? tradeTitle(r)
                                   : r.counterparty || r.description || '—'}
                           </span>
-                          <Show when={r.kind === 'transaction' && r.account_id !== null}>
-                            <Badge variant={BADGE[r.proposal]}>{t(`imports.proposal_${r.proposal}`)}</Badge>
+                          <Show when={(r.kind === 'transaction' && r.account_id !== null) || r.kind === 'invoice'}>
+                            <Badge variant={BADGE[r.proposal]}>
+                              {r.kind === 'invoice' && r.proposal === 'new' ? t('imports.proposal_cash') : t(`imports.proposal_${r.proposal}`)}
+                            </Badge>
                           </Show>
                           <Show when={r.pending}><Badge variant="warning">{t('imports.pending')}</Badge></Show>
                           <Show when={r.attachment_id}>
@@ -358,9 +384,41 @@ export default function Imports() {
                         <div class="truncate text-xs text-muted-foreground">
                           {[r.counterparty ? r.description : '', accountName(r.account_id) || r.source_label, explain(r)].filter(Boolean).join(' · ')}
                         </div>
+                        <Show when={r.kind === 'invoice' && r.items?.length}>
+                          <details class="text-xs text-muted-foreground">
+                            <summary class="w-fit cursor-pointer select-none hover:text-foreground">
+                              {t('imports.invoice_items', { count: r.items!.length })}
+                            </summary>
+                            <ul class="mt-1 grid gap-0.5">
+                              <For each={r.items}>
+                                {(it) => (
+                                  <li class="flex min-w-0 items-baseline justify-between gap-3">
+                                    <span class="min-w-0 truncate">
+                                      {it.description}
+                                      <Show when={it.account_id}>{(acct) => <span class="text-foreground"> → {accountName(acct())}</span>}</Show>
+                                    </span>
+                                    <Money class="shrink-0" amount={it.amount} currency={r.currency} />
+                                  </li>
+                                )}
+                              </For>
+                            </ul>
+                          </details>
+                          <Show when={splittable(r) && book.canEdit()}>
+                            <Checkbox
+                              checked={splitting(r)}
+                              onChange={(e) => {
+                                const s = new Set(noSplit());
+                                if (e.currentTarget.checked) s.delete(r.id);
+                                else s.add(r.id);
+                                setNoSplit(s);
+                              }}
+                              label={t('imports.split_by_items')}
+                            />
+                          </Show>
+                        </Show>
                       </div>
                       <div class="min-w-0">
-                        <Show when={r.kind === 'transaction' && acceptable(r) && r.proposal === 'new'}>
+                        <Show when={(r.kind === 'transaction' || r.kind === 'invoice') && acceptable(r) && r.proposal === 'new'}>
                           <div class="flex items-center gap-1 lg:w-72">
                             <AccountCombobox
                               class="min-w-0 flex-1"

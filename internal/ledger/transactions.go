@@ -28,6 +28,8 @@ type TransactionView struct {
 	Postings    []db.Posting
 	Tags        []string
 	Attachments []Attachment
+	// The lines of the invoice it carries (#38).
+	Items []TransactionItem
 }
 
 func checkLock(book db.Book, dates ...time.Time) error {
@@ -220,6 +222,14 @@ func (s *Service) attach(ctx context.Context, ts []db.Transaction) ([]Transactio
 	if err != nil {
 		return nil, err
 	}
+	itemRows, err := s.store.ListTransactionItems(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	items := map[int64][]TransactionItem{}
+	for _, it := range itemRows {
+		items[it.TransactionID] = append(items[it.TransactionID], it)
+	}
 	tagsByTxn := map[int64][]string{}
 	for _, t := range tags {
 		tagsByTxn[t.TransactionID] = append(tagsByTxn[t.TransactionID], t.Name)
@@ -229,6 +239,10 @@ func (s *Service) attach(ctx context.Context, ts []db.Transaction) ([]Transactio
 		out[i] = TransactionView{Transaction: t, Postings: byTxn[t.ID], Tags: tagsByTxn[t.ID], Attachments: files[t.ID]}
 		if out[i].Attachments == nil {
 			out[i].Attachments = []Attachment{}
+		}
+		out[i].Items = items[t.ID]
+		if out[i].Items == nil {
+			out[i].Items = []TransactionItem{}
 		}
 		if out[i].Postings == nil {
 			out[i].Postings = []db.Posting{}

@@ -152,7 +152,8 @@
     "unit_cost": "Unit price",
     "cost_required": "Enter the cost (0 for miles earned)",
     "base_missing": "Some lines have no base amount yet",
-    "fill_remainder": "Put the remainder here"
+    "fill_remainder": "Put the remainder here",
+    "items": "Invoice items"
   },
   "attachments": {
     "title": "Receipts and files",
@@ -863,7 +864,15 @@
     "settlement_missing": "choose where its broker account settles, above",
     "securities_under": "Securities go under…",
     "settles_through": "Settles through…",
-    "brokerage": "Brokerage"
+    "brokerage": "Brokerage",
+    "proposal_enrich": "Adds detail",
+    "proposal_cash": "Cash purchase",
+    "explain_enrich": "the invoice for a payment in the books; accepting adds its items",
+    "explain_enrich_waiting": "waits for its card or bank row; accept that first",
+    "invoice_unmapped": "nothing paid for it yet; map the carrier above to book it as cash",
+    "invoice_items": "Items ({count})",
+    "split_by_items": "Split by item category",
+    "invoice_waiting_toast": "{count} invoice(s) wait for their card or bank row"
   },
   "tokens": {
     "title": "API tokens",

@@ -32,9 +32,10 @@ UPDATE import_batches SET received = @received, duplicates = @duplicates WHERE i
 -- Nothing on a row already staged (the same external id): that is what
 -- makes a re-sync harmless. The caller counts the missing RETURNING.
 INSERT INTO import_rows (book_id, batch_id, source_account_id, kind, external_id, date, amount, currency,
-                         description, counterparty, pending, raw, security, units, price, cash)
+                         description, counterparty, pending, raw, security, units, price, cash, items)
 VALUES (@book_id, @batch_id, @source_account_id, @kind, @external_id, @date, @amount, @currency,
-        @description, @counterparty, @pending, @raw, sqlc.narg(security), sqlc.narg(units), sqlc.narg(price), sqlc.narg(cash))
+        @description, @counterparty, @pending, @raw, sqlc.narg(security), sqlc.narg(units), sqlc.narg(price), sqlc.narg(cash),
+        sqlc.narg(items))
 ON CONFLICT (book_id, external_id) DO NOTHING
 RETURNING id;
 
@@ -42,7 +43,7 @@ RETURNING id;
 -- The review queue: pending rows with their source account's mapping.
 SELECT r.id, r.kind, r.external_id, r.date, r.amount, r.currency, r.description, r.counterparty, r.pending,
        r.proposal, r.proposed_account_id, r.match_transaction_id, r.match_row_id, r.rule_id, r.attachment_id,
-       r.security, c.name AS security_name, r.units, r.price, r.cash,
+       r.security, c.name AS security_name, r.units, r.price, r.cash, r.items,
        s.id AS source_account_id, s.connector, s.label AS source_label, s.account_id, s.settlement_account_id
 FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
 LEFT JOIN commodities c ON c.code = r.security
@@ -155,3 +156,37 @@ SELECT account_id FROM source_securities WHERE source_account_id = @source_accou
 INSERT INTO source_securities (source_account_id, commodity, account_id)
 VALUES (@source_account_id, @commodity, @account_id)
 ON CONFLICT (source_account_id, commodity) DO UPDATE SET account_id = EXCLUDED.account_id;
+
+-- name: FindInvoiceMatch :one
+-- The booked payment an invoice belongs to: a card, bank or cash line of
+-- its total, from two days before to five after (a card posts late), on a
+-- transaction that has no invoice yet and that no other waiting invoice
+-- claims. The seller's name in the payee wins a tie, then the nearest day.
+SELECT t.id FROM postings p
+JOIN transactions t ON t.id = p.transaction_id
+JOIN accounts a ON a.id = p.account_id
+WHERE t.book_id = @book_id AND a.class IN ('asset', 'liability')
+  AND p.commodity = @currency AND p.amount = @amount
+  AND t.date BETWEEN @from_date AND @to_date
+  AND NOT EXISTS (SELECT 1 FROM transaction_items i WHERE i.transaction_id = t.id)
+  AND NOT EXISTS (SELECT 1 FROM import_rows o WHERE o.book_id = @book_id AND o.kind = 'invoice' AND o.status = 'pending'
+                  AND o.match_transaction_id = t.id AND o.id <> @row_id)
+ORDER BY (@seller::TEXT <> '' AND t.payee ILIKE '%' || @seller::TEXT || '%') DESC, abs(t.date - @on_date::DATE), t.id
+LIMIT 1;
+
+-- name: FindInvoiceRow :one
+-- A card or bank row still waiting in the queue that will pay for it.
+SELECT r.id FROM import_rows r
+WHERE r.book_id = @book_id AND r.status = 'pending' AND r.kind = 'transaction'
+  AND r.currency = @currency AND r.amount = @amount AND r.date BETWEEN @from_date AND @to_date
+  AND NOT EXISTS (SELECT 1 FROM import_rows o WHERE o.book_id = @book_id AND o.kind = 'invoice' AND o.status = 'pending'
+                  AND o.match_row_id = r.id AND o.id <> @row_id)
+ORDER BY (@seller::TEXT <> '' AND (r.description ILIKE '%' || @seller::TEXT || '%' OR r.counterparty ILIKE '%' || @seller::TEXT || '%')) DESC,
+         abs(r.date - @on_date::DATE), r.id
+LIMIT 1;
+
+-- name: PendingInvoiceRows :many
+SELECT id FROM import_rows WHERE book_id = @book_id AND status = 'pending' AND kind = 'invoice' ORDER BY date, id LIMIT 500;
+
+-- name: SetRowItems :exec
+UPDATE import_rows SET items = @items WHERE book_id = @book_id AND id = @id;
