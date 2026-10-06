@@ -1,6 +1,7 @@
 /*
- * Reads a numeric CAPTCHA in the runner, so a bank's image check does not
- * need the person every time a session expires (永豐: six digits).
+ * Reads a CAPTCHA in the runner, so a bank's image check does not need the
+ * person every time a session expires (永豐: six digits, 兆豐: five; 將來:
+ * five letters and digits).
  *
  * The model is ddddocr's common_old.onnx (MIT, github.com/sml2h3/ddddocr),
  * a CNN + CTC recogniser trained on this kind of image. It is downloaded
@@ -8,8 +9,10 @@
  * DATA_DIR/models (RIGEL_SYNC_OCR_MODEL names a copy already on disk), and run
  * by onnxruntime's WebAssembly build: no native code, the same on every
  * architecture. The image is prepared the way ddddocr prepares it (Lanczos
- * to 64 px high, as Pillow computes it, then grey), and only blank and the
- * ten digits may win at each step. Nothing leaves the runner.
+ * to 64 px high, as Pillow computes it, then grey; a PNG first laid on white,
+ * as ddddocr's png_fix does), and only blank and the allowed characters
+ * (the ten digits, or digits and ASCII letters) may win at each step.
+ * Nothing leaves the runner.
  *
  * On 12 real 永豐 images it read 9 right; every miss came out short, so a
  * caller that wants six digits sees the miss before submitting it.
@@ -18,6 +21,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import jpeg from 'jpeg-js';
+import { PNG } from 'pngjs';
 import * as ort from 'onnxruntime-web';
 
 export const MODEL = {
@@ -26,11 +30,21 @@ export const MODEL = {
   file: 'ddddocr-common_old.onnx',
 };
 
-// The digits' places in the model's charset (ddddocr's CHARSET_OLD); 0 is blank.
+// The characters' places in the model's charset (ddddocr's CHARSET_OLD,
+// ddddocr/charsets.py); 0 is blank.
 const DIGITS = new Map([
   [6749, '0'], [4410, '1'], [78, '2'], [7721, '3'], [5806, '4'],
   [6977, '5'], [5961, '6'], [409, '7'], [6979, '8'], [2879, '9'],
 ]);
+const LETTERS = new Map([
+  [7198, 'a'], [1066, 'b'], [1107, 'c'], [5726, 'd'], [6257, 'e'], [1638, 'f'], [8119, 'g'], [8196, 'h'], [2041, 'i'],
+  [6185, 'j'], [3072, 'k'], [2089, 'l'], [4617, 'm'], [4050, 'n'], [6939, 'o'], [5027, 'p'], [7405, 'q'], [806, 'r'],
+  [3466, 's'], [7723, 't'], [2663, 'u'], [1769, 'v'], [7136, 'w'], [6736, 'x'], [6612, 'y'], [4730, 'z'],
+  [4771, 'A'], [2203, 'B'], [761, 'C'], [687, 'D'], [2525, 'E'], [357, 'F'], [4488, 'G'], [5554, 'H'], [1614, 'I'],
+  [1583, 'J'], [4666, 'K'], [6672, 'L'], [747, 'M'], [6216, 'N'], [5418, 'O'], [3930, 'P'], [6601, 'Q'], [7262, 'R'],
+  [6386, 'S'], [5046, 'T'], [7284, 'U'], [5734, 'V'], [4810, 'W'], [5225, 'X'], [821, 'Y'], [3963, 'Z'],
+]);
+const ALNUM = new Map([...DIGITS, ...LETTERS]);
 
 export function modelPath(): string {
   return process.env.RIGEL_SYNC_OCR_MODEL || join(process.env.DATA_DIR || '/data', 'models', MODEL.file);
@@ -74,8 +88,17 @@ function load(): Promise<ort.InferenceSession> {
   return session;
 }
 
-/** The digits read from a JPEG; shorter than asked when the model was unsure. */
+/** The digits read from a JPEG or PNG; shorter than asked when the model was unsure. */
 export async function readDigits(image: Uint8Array): Promise<string> {
+  return read(image, DIGITS);
+}
+
+/** Letters and digits (as the model sees their case), from a JPEG or PNG. */
+export async function readAlphanumeric(image: Uint8Array): Promise<string> {
+  return read(image, ALNUM);
+}
+
+async function read(image: Uint8Array, allowed: Map<number, string>): Promise<string> {
   const s = await load();
   const { grey, width, height } = prepare(image);
   const input = new ort.Tensor('float32', Float32Array.from(grey, (v) => v / 255), [1, 1, height, width]);
@@ -86,8 +109,8 @@ export async function readDigits(image: Uint8Array): Promise<string> {
   let prev = -1;
   for (let t = 0; t < steps; t++) {
     let best = 0; // blank
-    for (const c of DIGITS.keys()) if (scores[t * classes + c] > scores[t * classes + best]) best = c;
-    if (best !== prev && best !== 0) text += DIGITS.get(best);
+    for (const c of allowed.keys()) if (scores[t * classes + c] > scores[t * classes + best]) best = c;
+    if (best !== prev && best !== 0) text += allowed.get(best);
     prev = best;
   }
   return text;
@@ -117,8 +140,23 @@ function weights(from: number, to: number) {
 }
 const clip8 = (v: number) => Math.min(255, Math.max(0, Math.floor(v / (1 << BITS))));
 
+const isPng = (b: Uint8Array) => b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
+
+/** RGBA pixels of a JPEG, or of a PNG laid on white (ddddocr's png_fix). */
+function decode(image: Uint8Array): { width: number; height: number; data: Uint8Array } {
+  if (!isPng(image)) return jpeg.decode(image, { useTArray: true, formatAsRGBA: true });
+  const png = PNG.sync.read(Buffer.from(image));
+  const data = new Uint8Array(png.data.length);
+  for (let i = 0; i < png.data.length; i += 4) {
+    const a = png.data[i + 3];
+    for (let c = 0; c < 3; c++) data[i + c] = Math.round((png.data[i + c] * a + 255 * (255 - a)) / 255);
+    data[i + 3] = 255;
+  }
+  return { width: png.width, height: png.height, data };
+}
+
 export function prepare(image: Uint8Array): { grey: Uint8Array; width: number; height: number } {
-  const src = jpeg.decode(image, { useTArray: true, formatAsRGBA: true });
+  const src = decode(image);
   const height = 64;
   const width = Math.trunc(src.width * (height / src.height));
   const across = weights(src.width, width);
@@ -147,4 +185,18 @@ export function prepare(image: Uint8Array): { grey: Uint8Array; width: number; h
     }
   }
   return { grey, width, height };
+}
+
+/**
+ * With RIGEL_SYNC_KEEP_CAPTCHAS set to a directory, keeps each CAPTCHA a
+ * connector read, named by what was read and whether the bank took it,
+ * so the reader can be measured on real images. Off by default; the files
+ * stay on the runner.
+ */
+export async function keepCaptcha(bank: string, image: Uint8Array, read: string, outcome: 'accepted' | 'rejected' | 'unsure'): Promise<void> {
+  const dir = process.env.RIGEL_SYNC_KEEP_CAPTCHAS;
+  if (!dir) return;
+  const ext = isPng(image) ? 'png' : 'jpg';
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, `${bank}-${Date.now()}-${outcome}-${read.replace(/[^A-Za-z0-9]/g, '') || 'none'}.${ext}`), image);
 }

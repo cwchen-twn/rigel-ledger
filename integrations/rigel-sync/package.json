@@ -20,6 +20,7 @@
   "devDependencies": {
     "@types/mailparser": "3.9.0",
     "@types/node": "22.18.0",
+    "@types/pngjs": "6.0.5",
     "typescript": "7.0.2"
   },
   "dependencies": {
@@ -29,6 +30,7 @@
     "node-forge": "1.4.0",
     "onnxruntime-web": "1.30.0",
     "pdfjs-dist": "6.4.299",
+    "pngjs": "7.0.0",
     "puppeteer-core": "25.12.0",
     "zod": "4.6.5"
   }
