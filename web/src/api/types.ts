@@ -260,6 +260,15 @@ export interface Posting {
   memo: string;
 }
 
+/** A file on a transaction, without its bytes (api.fileUrl). */
+export interface Attachment {
+  id: number;
+  filename: string;
+  mime: 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf';
+  size: number;
+  created_at: string;
+}
+
 export interface Transaction {
   id: number;
   date: string;
@@ -268,6 +277,7 @@ export interface Transaction {
   source: string;
   postings: Posting[];
   tags: string[];
+  attachments: Attachment[];
   created_at: string;
   updated_at: string;
 }
@@ -511,6 +521,8 @@ export interface ImportRow {
   connector: string;
   /** The mapped account; null while its source account is unmapped. */
   account_id: number | null;
+  /** The row's evidence (api.fileUrl), attached to its transaction on accept. */
+  attachment_id: number | null;
 }
 
 export interface ImportRowInput {

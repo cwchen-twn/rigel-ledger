@@ -25,8 +25,9 @@ type TransactionInput struct {
 // TransactionView is a transaction with its postings and tag names.
 type TransactionView struct {
 	db.Transaction
-	Postings []db.Posting
-	Tags     []string
+	Postings    []db.Posting
+	Tags        []string
+	Attachments []Attachment
 }
 
 func checkLock(book db.Book, dates ...time.Time) error {
@@ -215,13 +216,20 @@ func (s *Service) attach(ctx context.Context, ts []db.Transaction) ([]Transactio
 	for _, p := range postings {
 		byTxn[p.TransactionID] = append(byTxn[p.TransactionID], p)
 	}
+	files, err := s.attachments(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
 	tagsByTxn := map[int64][]string{}
 	for _, t := range tags {
 		tagsByTxn[t.TransactionID] = append(tagsByTxn[t.TransactionID], t.Name)
 	}
 	out := make([]TransactionView, len(ts))
 	for i, t := range ts {
-		out[i] = TransactionView{Transaction: t, Postings: byTxn[t.ID], Tags: tagsByTxn[t.ID]}
+		out[i] = TransactionView{Transaction: t, Postings: byTxn[t.ID], Tags: tagsByTxn[t.ID], Attachments: files[t.ID]}
+		if out[i].Attachments == nil {
+			out[i].Attachments = []Attachment{}
+		}
 		if out[i].Postings == nil {
 			out[i].Postings = []db.Posting{}
 		}

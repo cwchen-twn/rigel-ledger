@@ -118,6 +118,17 @@ type ImportRowInDTO struct {
 	Pending      bool            `json:"pending"`
 	// The source record as it came, for the audit; never credentials.
 	Raw json.RawMessage `json:"raw,omitempty" swaggertype:"object"`
+	// The ref of the batch's file that is this row's evidence (an order
+	// email, an e-invoice, a statement); attached when the row is accepted.
+	File string `json:"file,omitempty"`
+}
+
+// ImportFileDTO is evidence a batch carries: an image or a PDF, up to 10 MiB,
+// counted in the batch's 16 MiB.
+type ImportFileDTO struct {
+	Ref      string `json:"ref"`
+	Filename string `json:"filename"`
+	Data     []byte `json:"data" swaggertype:"string" format:"base64"`
 }
 
 type ImportBatchDTO struct {
@@ -125,6 +136,7 @@ type ImportBatchDTO struct {
 	Label     string             `json:"label"`
 	Accounts  []ImportAccountDTO `json:"accounts"`
 	Rows      []ImportRowInDTO   `json:"rows"`
+	Files     []ImportFileDTO    `json:"files,omitempty"`
 }
 
 type ImportResultDTO struct {
@@ -170,7 +182,10 @@ func importInput(req ImportBatchDTO) ledger.ImportInput {
 	for _, row := range req.Rows {
 		in.Rows = append(in.Rows, ledger.ImportRowInput{Kind: row.Kind, Account: row.Account, ID: row.ID, Date: row.Date.Time,
 			Amount: row.Amount, Currency: row.Currency, Description: row.Description, Counterparty: row.Counterparty,
-			Pending: row.Pending, Raw: row.Raw})
+			Pending: row.Pending, Raw: row.Raw, File: row.File})
+	}
+	for _, f := range req.Files {
+		in.Files = append(in.Files, ledger.ImportFile{Ref: f.Ref, FileInput: ledger.FileInput{Filename: f.Filename, Bytes: f.Data}})
 	}
 	return in
 }
@@ -265,6 +280,8 @@ type ImportRowDTO struct {
 	Connector          string          `json:"connector"`
 	// The mapped account; null while the source account is unmapped.
 	AccountID *int64 `json:"account_id"`
+	// The row's evidence (GET /api/books/{bookID}/attachments/{id}).
+	AttachmentID *int64 `json:"attachment_id"`
 }
 
 // importQueue
@@ -287,7 +304,7 @@ func (h *handlers) importQueue(w http.ResponseWriter, r *http.Request) {
 			Currency: q.Currency, Description: q.Description, Counterparty: q.Counterparty, Pending: q.Pending,
 			Proposal: q.Proposal, ProposedAccountID: q.ProposedAccountID, MatchTransactionID: q.MatchTransactionID,
 			MatchRowID: q.MatchRowID, RuleID: q.RuleID, SourceAccountID: q.SourceAccountID, SourceLabel: q.SourceLabel,
-			Connector: q.Connector, AccountID: q.AccountID}
+			Connector: q.Connector, AccountID: q.AccountID, AttachmentID: q.AttachmentID}
 	}
 	response.JSON(w, http.StatusOK, out)
 }

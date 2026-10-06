@@ -188,15 +188,17 @@ type PostingDTO struct {
 }
 
 type TransactionDTO struct {
-	ID        int64        `json:"id"`
-	Date      Date         `json:"date" swaggertype:"string" format:"date"`
-	Payee     string       `json:"payee"`
-	Memo      string       `json:"memo"`
-	Source    string       `json:"source"`
-	Postings  []PostingDTO `json:"postings"`
-	Tags      []string     `json:"tags"`
-	CreatedAt time.Time    `json:"created_at"`
-	UpdatedAt time.Time    `json:"updated_at"`
+	ID       int64        `json:"id"`
+	Date     Date         `json:"date" swaggertype:"string" format:"date"`
+	Payee    string       `json:"payee"`
+	Memo     string       `json:"memo"`
+	Source   string       `json:"source"`
+	Postings []PostingDTO `json:"postings"`
+	Tags     []string     `json:"tags"`
+	// Files on the transaction, without their bytes (GET .../attachments/{id}).
+	Attachments []AttachmentDTO `json:"attachments"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
 func transactionDTO(v ledger.TransactionView) TransactionDTO {
@@ -213,7 +215,7 @@ func transactionDTO(v ledger.TransactionView) TransactionDTO {
 	}
 	return TransactionDTO{
 		ID: v.ID, Date: Date{v.Date}, Payee: v.Payee, Memo: v.Memo, Source: v.Source,
-		Postings: ps, Tags: v.Tags, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt,
+		Postings: ps, Tags: v.Tags, Attachments: attachmentDTOs(v.Attachments), CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt,
 	}
 }
 

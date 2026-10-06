@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -280,5 +281,111 @@ func TestPriceLockTrigger(t *testing.T) {
 		if _, err := f.store.Pool.Exec(f.ctx, q); err != nil {
 			t.Fatalf("%s: %v", q, err)
 		}
+	}
+}
+
+// Attachments stay in their book, keep their bytes out of the audit log, and
+// go when nothing points at them any more (000009).
+func TestAttachmentTriggers(t *testing.T) {
+	f := setupSchema(t)
+	txn := f.balancedTxn(t, "2026-09-01")
+	var other, oCash, oFood int64
+	_ = f.store.Pool.QueryRow(f.ctx, `INSERT INTO accounts (book_id, class, name, commodity) VALUES ($1, 'asset', 'Cash', 'TWD') RETURNING id`, f.otherBID).Scan(&oCash)
+	_ = f.store.Pool.QueryRow(f.ctx, `INSERT INTO accounts (book_id, class, name) VALUES ($1, 'expense', 'Food') RETURNING id`, f.otherBID).Scan(&oFood)
+	if err := f.run(func(tx pgx.Tx) error {
+		if err := tx.QueryRow(f.ctx, `INSERT INTO transactions (book_id, date) VALUES ($1, '2026-09-01') RETURNING id`, f.otherBID).Scan(&other); err != nil {
+			return err
+		}
+		if err := post(f.ctx, tx, other, oFood, "TWD", "100", "100"); err != nil {
+			return err
+		}
+		return post(f.ctx, tx, other, oCash, "TWD", "-100", "-100")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	newFile := func(tx pgx.Tx, content string) (int64, error) {
+		var id int64
+		err := tx.QueryRow(f.ctx, `INSERT INTO attachments (book_id, sha256, filename, mime, size, bytes)
+			VALUES ($1, sha256($2::BYTEA), 'receipt.jpg', 'image/jpeg', octet_length($2::BYTEA), $2::BYTEA) RETURNING id`,
+			f.bookID, []byte(content)).Scan(&id)
+		return id, err
+	}
+	link := func(tx pgx.Tx, book, txn, file int64) error {
+		_, err := tx.Exec(f.ctx, `INSERT INTO transaction_attachments (book_id, transaction_id, attachment_id) VALUES ($1, $2, $3)`, book, txn, file)
+		return err
+	}
+
+	// Not an image or a PDF: refused, whatever the client calls it.
+	wantConstraint(t, f.run(func(tx pgx.Tx) error {
+		_, err := tx.Exec(f.ctx, `INSERT INTO attachments (book_id, sha256, filename, mime, size, bytes)
+			VALUES ($1, sha256('x'::BYTEA), 'a.svg', 'image/svg+xml', 1, 'x'::BYTEA)`, f.bookID)
+		return err
+	}), "attachments_mime_check")
+
+	// Another book's transaction cannot take this book's file.
+	wantConstraint(t, f.run(func(tx pgx.Tx) error {
+		file, err := newFile(tx, "receipt")
+		if err != nil {
+			return err
+		}
+		return link(tx, f.otherBID, other, file)
+	}), "attachment_book")
+	wantConstraint(t, f.run(func(tx pgx.Tx) error {
+		file, err := newFile(tx, "receipt")
+		if err != nil {
+			return err
+		}
+		return link(tx, f.bookID, other, file)
+	}), "attachment_book")
+
+	var file int64
+	if err := f.run(func(tx pgx.Tx) error {
+		var err error
+		if file, err = newFile(tx, "the receipt's bytes"); err != nil {
+			return err
+		}
+		return link(tx, f.bookID, txn, file)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var audited string
+	if err := f.store.Pool.QueryRow(f.ctx, `SELECT new_values::TEXT FROM audit_log WHERE table_name = 'attachments' AND row_id = $1`, file).Scan(&audited); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(audited, "bytes") || !strings.Contains(audited, "receipt.jpg") {
+		t.Fatalf("audited %s: the metadata, never the bytes", audited)
+	}
+
+	// A staged row still holding the file keeps it when its last link goes.
+	var src, batch, row int64
+	if err := f.store.Pool.QueryRow(f.ctx, `INSERT INTO source_accounts (book_id, connector, external_id) VALUES ($1, 'csv', 'a') RETURNING id`, f.bookID).Scan(&src); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.store.Pool.QueryRow(f.ctx, `INSERT INTO import_batches (book_id, connector) VALUES ($1, 'csv') RETURNING id`, f.bookID).Scan(&batch); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.store.Pool.QueryRow(f.ctx, `INSERT INTO import_rows (book_id, batch_id, source_account_id, kind, external_id, date, amount, currency, attachment_id)
+		VALUES ($1, $2, $3, 'transaction', 'csv:1', '2026-09-01', -100, 'TWD', $4) RETURNING id`, f.bookID, batch, src, file).Scan(&row); err != nil {
+		t.Fatal(err)
+	}
+	count := func() int {
+		var n int
+		_ = f.store.Pool.QueryRow(f.ctx, `SELECT count(*) FROM attachments WHERE id = $1`, file).Scan(&n)
+		return n
+	}
+	if err := f.run(func(tx pgx.Tx) error {
+		_, err := tx.Exec(f.ctx, `DELETE FROM transactions WHERE id = $1`, txn)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if count() != 1 {
+		t.Fatal("the file went while a staged row still held it")
+	}
+	if _, err := f.store.Pool.Exec(f.ctx, `DELETE FROM import_rows WHERE id = $1`, row); err != nil {
+		t.Fatal(err)
+	}
+	if count() != 0 {
+		t.Fatal("a file nothing points at was kept")
 	}
 }

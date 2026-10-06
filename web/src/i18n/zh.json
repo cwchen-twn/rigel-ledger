@@ -154,6 +154,17 @@
     "base_missing": "部分行尚無本位幣金額",
     "fill_remainder": "將差額填入此行"
   },
+  "attachments": {
+    "title": "收據與檔案",
+    "add": "加入收據或檔案",
+    "uploading": "上傳中…",
+    "none": "還沒有收據。用手機時，可從這裡直接開相機拍照。",
+    "on_save": "儲存時會一併上傳。",
+    "remove": "移除 {name}",
+    "remove_confirm": "要從這筆交易移除 {name} 嗎？",
+    "too_large": "{name} 縮小後仍超過 10 MB。",
+    "has": "已附加 {count} 個檔案"
+  },
   "accounts": {
     "title": "科目",
     "new": "新增科目",
@@ -321,7 +332,9 @@
     "too_many": "數量過多",
     "too_long": "太長",
     "role": "你需要是此帳本的編輯者",
-    "stale": "同步程式的金鑰已更換，請重新輸入登入資料"
+    "stale": "同步程式的金鑰已更換，請重新輸入登入資料",
+    "unsupported_type": "只接受圖片（JPEG、PNG、WebP）與 PDF",
+    "too_large": "檔案太大"
   },
   "languages": {
     "en": "English",
@@ -838,7 +851,8 @@
     "csv_sign_hint": "存入帳戶顯示為正數，支出為負數。信用卡的消費為負數。",
     "csv_submit": "匯入 {rows} 列",
     "csv_done": "已暫存 {staged} 列，先前已匯入 {duplicates} 列",
-    "balance_title": "金融機構回報的餘額"
+    "balance_title": "金融機構回報的餘額",
+    "evidence": "來源附上的憑證（在新分頁開啟）"
   },
   "tokens": {
     "title": "API token",

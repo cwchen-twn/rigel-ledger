@@ -154,6 +154,17 @@
     "base_missing": "Algunas líneas aún no tienen importe base",
     "fill_remainder": "Poner aquí el resto"
   },
+  "attachments": {
+    "title": "Recibos y archivos",
+    "add": "Añadir un recibo o archivo",
+    "uploading": "Subiendo…",
+    "none": "Todavía no hay recibos. En el teléfono, desde aquí se abre la cámara.",
+    "on_save": "Se suben al guardar.",
+    "remove": "Quitar {name}",
+    "remove_confirm": "¿Quitar {name} de esta transacción?",
+    "too_large": "{name} supera los 10 MB, incluso reducido.",
+    "has": "{count} adjuntos"
+  },
   "accounts": {
     "title": "Cuentas",
     "new": "Nueva cuenta",
@@ -321,7 +332,9 @@
     "too_many": "Demasiados",
     "too_long": "Demasiado largo",
     "role": "Necesitas ser editor de este libro",
-    "stale": "La clave del sincronizador cambió; vuelve a introducir las credenciales"
+    "stale": "La clave del sincronizador cambió; vuelve a introducir las credenciales",
+    "unsupported_type": "Solo imágenes (JPEG, PNG, WebP) y PDF",
+    "too_large": "Demasiado grande"
   },
   "languages": {
     "en": "English",
@@ -838,7 +851,8 @@
     "csv_sign_hint": "El dinero que entra en la cuenta aparece positivo y el que sale, negativo. En una tarjeta, una compra es negativa.",
     "csv_submit": "Importar {rows} filas",
     "csv_done": "Preparadas {staged}, ya importadas {duplicates}",
-    "balance_title": "Saldo informado por la entidad"
+    "balance_title": "Saldo informado por la entidad",
+    "evidence": "Comprobante de la fuente (se abre en otra pestaña)"
   },
   "tokens": {
     "title": "Tokens de API",

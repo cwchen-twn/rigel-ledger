@@ -40,12 +40,14 @@ async function request<R>(method: string, path: string, body?: unknown): Promise
     // Required on every cookie-authenticated write: the server's CSRF check.
     headers['X-Rigel-Client'] = 'web';
   }
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  // A FormData body (a file upload) sets its own multipart Content-Type.
+  const form = body instanceof FormData;
+  if (body !== undefined && !form) headers['Content-Type'] = 'application/json';
   const res = await fetch(path, {
     method,
     headers,
     credentials: 'same-origin',
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? undefined : form ? body : JSON.stringify(body),
   });
   const build = res.headers.get('X-App-Build');
   if (build && loadedBuild && build !== loadedBuild && !newBuildSeen) {
@@ -200,6 +202,16 @@ export const api = {
   updateTransaction: (id: number, txnId: number, t: T.TransactionInput) =>
     put<T.Transaction>(`${book(id)}/transactions/${txnId}`, t),
   deleteTransaction: (id: number, txnId: number) => del(`${book(id)}/transactions/${txnId}`),
+  attachFile: (id: number, txnId: number, file: Blob, filename: string) => {
+    const form = new FormData();
+    form.append('file', file, filename);
+    return request<T.Attachment>('POST', `${book(id)}/transactions/${txnId}/attachments`, form);
+  },
+  detachFile: (id: number, txnId: number, attachmentId: number) =>
+    del(`${book(id)}/transactions/${txnId}/attachments/${attachmentId}`),
+  /** Where a file is read: shown inline, or saved with download. */
+  fileUrl: (id: number, attachmentId: number, download = false) =>
+    `${book(id)}/attachments/${attachmentId}${download ? '?download=1' : ''}`,
   tags: (id: number) => get<string[]>(`${book(id)}/tags`),
 
   balances: (id: number, asOf: string) => get<T.Balances>(`${book(id)}/balances${qs({ as_of: asOf })}`),

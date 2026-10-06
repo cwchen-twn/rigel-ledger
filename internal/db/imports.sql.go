@@ -293,7 +293,7 @@ func (q *Queries) FindTransferPartner(ctx context.Context, arg FindTransferPartn
 }
 
 const getImportRow = `-- name: GetImportRow :one
-SELECT r.id, r.book_id, r.batch_id, r.source_account_id, r.kind, r.external_id, r.date, r.amount, r.currency, r.description, r.counterparty, r.pending, r.raw, r.proposal, r.proposed_account_id, r.match_transaction_id, r.match_row_id, r.rule_id, r.status, r.transaction_id, r.decided_by, r.decided_at, r.created_at, s.account_id, s.connector
+SELECT r.id, r.book_id, r.batch_id, r.source_account_id, r.kind, r.external_id, r.date, r.amount, r.currency, r.description, r.counterparty, r.pending, r.raw, r.proposal, r.proposed_account_id, r.match_transaction_id, r.match_row_id, r.rule_id, r.status, r.transaction_id, r.decided_by, r.decided_at, r.created_at, r.attachment_id, s.account_id, s.connector
 FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
 WHERE r.book_id = $1 AND r.id = $2
 `
@@ -327,6 +327,7 @@ type GetImportRowRow struct {
 	DecidedBy          *int64
 	DecidedAt          *time.Time
 	CreatedAt          time.Time
+	AttachmentID       *int64
 	AccountID          *int64
 	Connector          string
 }
@@ -358,6 +359,7 @@ func (q *Queries) GetImportRow(ctx context.Context, arg GetImportRowParams) (Get
 		&i.DecidedBy,
 		&i.DecidedAt,
 		&i.CreatedAt,
+		&i.AttachmentID,
 		&i.AccountID,
 		&i.Connector,
 	)
@@ -437,7 +439,7 @@ func (q *Queries) InsertImportRow(ctx context.Context, arg InsertImportRowParams
 
 const listQueue = `-- name: ListQueue :many
 SELECT r.id, r.kind, r.external_id, r.date, r.amount, r.currency, r.description, r.counterparty, r.pending,
-       r.proposal, r.proposed_account_id, r.match_transaction_id, r.match_row_id, r.rule_id,
+       r.proposal, r.proposed_account_id, r.match_transaction_id, r.match_row_id, r.rule_id, r.attachment_id,
        s.id AS source_account_id, s.connector, s.label AS source_label, s.account_id
 FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
 WHERE r.book_id = $1 AND r.status = 'pending'
@@ -465,6 +467,7 @@ type ListQueueRow struct {
 	MatchTransactionID *int64
 	MatchRowID         *int64
 	RuleID             *int64
+	AttachmentID       *int64
 	SourceAccountID    int64
 	Connector          string
 	SourceLabel        string
@@ -496,6 +499,7 @@ func (q *Queries) ListQueue(ctx context.Context, arg ListQueueParams) ([]ListQue
 			&i.MatchTransactionID,
 			&i.MatchRowID,
 			&i.RuleID,
+			&i.AttachmentID,
 			&i.SourceAccountID,
 			&i.Connector,
 			&i.SourceLabel,

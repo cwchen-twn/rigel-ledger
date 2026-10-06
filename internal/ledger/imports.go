@@ -48,6 +48,14 @@ type ImportRowInput struct {
 	Counterparty string
 	Pending      bool
 	Raw          json.RawMessage
+	File         string // ImportFile.Ref: the row's evidence, attached when it is accepted
+}
+
+// ImportFile is evidence a batch carries (an order email, an e-invoice, a
+// statement), named by Ref for its rows.
+type ImportFile struct {
+	Ref string
+	FileInput
 }
 
 type ImportInput struct {
@@ -55,6 +63,7 @@ type ImportInput struct {
 	Label     string
 	Accounts  []ImportAccount
 	Rows      []ImportRowInput
+	Files     []ImportFile
 }
 
 type ImportResult struct {
@@ -115,7 +124,20 @@ func (s *Service) Import(ctx context.Context, a Access, in ImportInput) (ImportR
 			return err
 		}
 		res.BatchID = batch.ID
+		files := map[string]int{} // ref -> index in in.Files
+		for i, f := range in.Files {
+			ref := strings.TrimSpace(f.Ref)
+			if _, dup := files[ref]; ref == "" || dup {
+				return fieldError(idx("files", i, "ref"), "invalid", "every file needs its own ref")
+			}
+			files[ref] = i
+		}
+		stored := map[string]int64{} // ref -> attachment, kept only for a row that is new
 		for i, r := range in.Rows {
+			fi, hasFile := files[r.File]
+			if r.File != "" && !hasFile {
+				return fieldError(idx("rows", i, "file"), "unknown", "file %q is not in files", r.File)
+			}
 			sa, ok := sources[r.Account]
 			if !ok {
 				return fieldError(idx("rows", i, "account"), "unknown", "account %q is not in accounts", r.Account)
@@ -152,6 +174,18 @@ func (s *Service) Import(ctx context.Context, a Access, in ImportInput) (ImportR
 			}
 			if err != nil {
 				return err
+			}
+			if hasFile {
+				at, ok := stored[r.File]
+				if !ok {
+					if at, err = s.storeFile(ctx, q, a, in.Files[fi].FileInput, idx("files", fi, "data")); err != nil {
+						return err
+					}
+					stored[r.File] = at
+				}
+				if err := q.SetRowAttachment(ctx, db.SetRowAttachmentParams{BookID: a.Book.ID, ID: id, AttachmentID: &at}); err != nil {
+					return err
+				}
 			}
 			staged = append(staged, id)
 		}
@@ -350,6 +384,10 @@ func (s *Service) AcceptRow(ctx context.Context, a Access, rowID int64, category
 	}
 
 	var txnID int64
+	var evidence []int64
+	if r.AttachmentID != nil {
+		evidence = append(evidence, *r.AttachmentID)
+	}
 	err = s.store.WithTx(ctx, a.UserID, func(q *db.Queries) error {
 		switch proposal {
 		case "duplicate":
@@ -407,6 +445,9 @@ func (s *Service) AcceptRow(ctx context.Context, a Access, rowID int64, category
 			if _, err := q.DecideRow(ctx, db.DecideRowParams{ID: other.ID, Status: "accepted", TransactionID: &txnID, DecidedBy: &a.UserID}); err != nil {
 				return err
 			}
+			if other.AttachmentID != nil {
+				evidence = append(evidence, *other.AttachmentID)
+			}
 		default: // new
 			cat := categoryID
 			if cat == nil {
@@ -425,6 +466,12 @@ func (s *Service) AcceptRow(ctx context.Context, a Access, rowID int64, category
 				},
 			})
 			if err != nil {
+				return err
+			}
+		}
+		// The row's evidence (and a transfer's other side's) follows it.
+		for _, at := range evidence {
+			if err := q.LinkAttachment(ctx, db.LinkAttachmentParams{BookID: a.Book.ID, TransactionID: txnID, AttachmentID: at, CreatedBy: &a.UserID}); err != nil {
 				return err
 			}
 		}

@@ -1277,6 +1277,48 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/books/{bookID}/attachments/{attachmentID}": {
+            "get": {
+                "description": "Shown inline (an image, a PDF) unless download=1. Served with its stored type, nosniff, and a sandbox for images.",
+                "produces": [
+                    "image/jpeg",
+                    "image/png",
+                    "image/webp",
+                    "application/pdf"
+                ],
+                "tags": [
+                    "transactions"
+                ],
+                "summary": "A file of the book",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "attachment id",
+                        "name": "attachmentID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "as a download",
+                        "name": "download",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
         "/api/books/{bookID}/balances": {
             "get": {
                 "produces": [
@@ -2538,6 +2580,95 @@ const docTemplate = `{
                         "type": "integer",
                         "description": "transaction id",
                         "name": "transactionID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/transactions/{transactionID}/attachments": {
+            "post": {
+                "description": "A receipt photo or a PDF, up to 10 MiB, as the multipart field \"file\". Images, JPEG, PNG or WebP, are best downscaled first. The same content twice is kept once per book.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "transactions"
+                ],
+                "summary": "Attach a file to a transaction",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "transaction id",
+                        "name": "transactionID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "the file",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/routes.AttachmentDTO"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/transactions/{transactionID}/attachments/{attachmentID}": {
+            "delete": {
+                "description": "The file itself is deleted once nothing else points at it.",
+                "tags": [
+                    "transactions"
+                ],
+                "summary": "Take a file off a transaction",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "transaction id",
+                        "name": "transactionID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "attachment id",
+                        "name": "attachmentID",
                         "in": "path",
                         "required": true
                     }
@@ -4120,6 +4251,32 @@ const docTemplate = `{
                 }
             }
         },
+        "routes.AttachmentDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "filename": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "mime": {
+                    "type": "string",
+                    "enum": [
+                        "image/jpeg",
+                        "image/png",
+                        "image/webp",
+                        "application/pdf"
+                    ]
+                },
+                "size": {
+                    "type": "integer"
+                }
+            }
+        },
         "routes.AuthConfigDTO": {
             "type": "object",
             "properties": {
@@ -4788,6 +4945,12 @@ const docTemplate = `{
                 "connector": {
                     "type": "string"
                 },
+                "files": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.ImportFileDTO"
+                    }
+                },
                 "label": {
                     "type": "string"
                 },
@@ -4796,6 +4959,21 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/routes.ImportRowInDTO"
                     }
+                }
+            }
+        },
+        "routes.ImportFileDTO": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "string",
+                    "format": "base64"
+                },
+                "filename": {
+                    "type": "string"
+                },
+                "ref": {
+                    "type": "string"
                 }
             }
         },
@@ -4828,6 +5006,10 @@ const docTemplate = `{
                 },
                 "amount": {
                     "type": "string"
+                },
+                "attachment_id": {
+                    "description": "The row's evidence (GET /api/books/{bookID}/attachments/{id}).",
+                    "type": "integer"
                 },
                 "connector": {
                     "type": "string"
@@ -4904,6 +5086,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "description": {
+                    "type": "string"
+                },
+                "file": {
+                    "description": "The ref of the batch's file that is this row's evidence (an order\nemail, an e-invoice, a statement); attached when the row is accepted.",
                     "type": "string"
                 },
                 "id": {
@@ -5671,6 +5857,13 @@ const docTemplate = `{
         "routes.TransactionDTO": {
             "type": "object",
             "properties": {
+                "attachments": {
+                    "description": "Files on the transaction, without their bytes (GET .../attachments/{id}).",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/routes.AttachmentDTO"
+                    }
+                },
                 "created_at": {
                     "type": "string"
                 },

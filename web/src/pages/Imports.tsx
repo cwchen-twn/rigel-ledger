@@ -1,4 +1,4 @@
-import { Check, FileUp, Inbox, Trash2, WandSparkles, X } from 'lucide-solid';
+import { Check, FileUp, Inbox, Paperclip, Trash2, WandSparkles, X } from 'lucide-solid';
 import { createEffect, createMemo, createResource, createSignal, For, on, Show } from 'solid-js';
 import { api } from '~/api/client';
 import type { ImportRow, Proposal } from '~/api/types';
@@ -270,6 +270,20 @@ export default function Imports() {
                             <Badge variant={BADGE[r.proposal]}>{t(`imports.proposal_${r.proposal}`)}</Badge>
                           </Show>
                           <Show when={r.pending}><Badge variant="warning">{t('imports.pending')}</Badge></Show>
+                          <Show when={r.attachment_id}>
+                            {(id) => (
+                              <a
+                                href={api.fileUrl(book.id(), id())}
+                                target="_blank"
+                                rel="noopener"
+                                class="shrink-0 text-muted-foreground hover:text-foreground"
+                                aria-label={t('imports.evidence')}
+                                title={t('imports.evidence')}
+                              >
+                                <Paperclip class="size-3.5" />
+                              </a>
+                            )}
+                          </Show>
                         </div>
                         <div class="truncate text-xs text-muted-foreground">
                           {[r.counterparty ? r.description : '', accountName(r.account_id) || r.source_label, explain(r)].filter(Boolean).join(' · ')}

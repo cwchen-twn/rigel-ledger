@@ -2,8 +2,9 @@ import { Plus, Trash2 } from 'lucide-solid';
 import { batch, createEffect, createMemo, createSignal, For, on, Show } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 import { api } from '~/api/client';
-import type { Account, LineInput, Transaction } from '~/api/types';
+import type { Account, Attachment, LineInput, Transaction } from '~/api/types';
 import { AccountCombobox } from '~/components/AccountCombobox';
+import { Attachments } from '~/components/Attachments';
 import { Money, MoneyInput } from '~/components/Money';
 import { Button } from '~/components/ui/button';
 import { Sheet } from '~/components/ui/dialog';
@@ -12,6 +13,7 @@ import { SearchSelect } from '~/components/ui/search-select';
 import { commodityOptions } from '~/lib/options';
 import { toast } from '~/components/ui/toast';
 import { useI18n } from '~/i18n';
+import { MAX_FILE_BYTES, prepareFile } from '~/lib/attachments';
 import { cn } from '~/lib/cn';
 import { today } from '~/lib/dates';
 import { abs, cmp, div, isZero, minorUnit, mul, neg, parseAmount, round, strip, sub, sum } from '~/lib/money';
@@ -82,6 +84,10 @@ export function TransactionSheet(props: {
 
   const [errors, setErrors] = createSignal<Record<string, string>>({});
   const [busy, setBusy] = createSignal(false);
+  // Receipts and files: on the transaction, or chosen for one not saved yet.
+  const [files, setFiles] = createSignal<Attachment[]>([]);
+  const [queued, setQueued] = createSignal<File[]>([]);
+  const [uploading, setUploading] = createSignal(false);
   const [rates, setRates] = createSignal<Record<string, string | null>>({});
 
   const acct = (id: number | null): Account | undefined => (id ? book.byId().get(id) : undefined);
@@ -96,6 +102,8 @@ export function TransactionSheet(props: {
         const tx = props.transaction;
         batch(() => {
           setErrors({});
+          setFiles(tx?.attachments ?? []);
+          setQueued([]);
           setDate(tx?.date ?? today());
           setPayee(tx?.payee ?? '');
           setMemo(tx?.memo ?? '');
@@ -290,13 +298,62 @@ export function TransactionSheet(props: {
     }),
   });
 
+  // ---- receipts and files ----
+  /** Uploads files to a transaction; false when one failed (said in a toast). */
+  const upload = async (txnId: number, list: File[]): Promise<boolean> => {
+    setUploading(true);
+    let ok = true;
+    try {
+      for (const f of list) {
+        const { blob, name } = await prepareFile(f);
+        if (blob.size > MAX_FILE_BYTES) {
+          toast.error(t('attachments.too_large', { name: f.name }));
+          ok = false;
+          continue;
+        }
+        try {
+          const at = await api.attachFile(book.id(), txnId, blob, name);
+          setFiles((cur) => (cur.some((x) => x.id === at.id) ? cur : [...cur, at]));
+        } catch (err) {
+          toast.error(`${f.name}: ${fieldErrors(err).file ?? te(err)}`);
+          ok = false;
+        }
+      }
+    } finally {
+      setUploading(false);
+    }
+    return ok;
+  };
+  const addFiles = async (list: File[]) => {
+    if (!props.transaction) {
+      setQueued((cur) => [...cur, ...list]);
+      return;
+    }
+    await upload(props.transaction.id, list);
+    props.onSaved(); // the list shows the paperclip
+  };
+  const removeFile = async (a: Attachment) => {
+    if (!props.transaction || !confirm(t('attachments.remove_confirm', { name: a.filename }))) return;
+    try {
+      await api.detachFile(book.id(), props.transaction.id, a.id);
+      setFiles((cur) => cur.filter((x) => x.id !== a.id));
+      props.onSaved();
+    } catch (err) {
+      toast.error(te(err));
+    }
+  };
+
   const save = async (e: Event) => {
     e.preventDefault();
     setBusy(true);
     setErrors({});
     try {
       if (props.transaction) await api.updateTransaction(book.id(), props.transaction.id, payload());
-      else await api.createTransaction(book.id(), payload());
+      else {
+        const created = await api.createTransaction(book.id(), payload());
+        // Saved either way; a file that failed was named in its toast.
+        if (queued().length) await upload(created.id, queued());
+      }
       toast.success(t('common.saved'));
       props.onSaved();
       props.onOpenChange(false);
@@ -509,6 +566,17 @@ export function TransactionSheet(props: {
             <Input value={memo()} onInput={(e) => setMemo(e.currentTarget.value)} />
           </Field>
         </div>
+
+        <Attachments
+          bookId={book.id()}
+          attachments={files()}
+          queued={queued()}
+          canEdit={book.canEdit()}
+          busy={uploading()}
+          onAdd={(list) => void addFiles(list)}
+          onRemove={(a) => void removeFile(a)}
+          onUnqueue={(i) => setQueued((cur) => cur.filter((_, j) => j !== i))}
+        />
       </form>
     </Sheet>
   );

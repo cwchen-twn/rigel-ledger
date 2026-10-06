@@ -259,6 +259,9 @@ func New(d Deps) http.Handler {
 						r.Get("/transactions/{transactionID}", h.getTransaction)
 						r.Put("/transactions/{transactionID}", h.updateTransaction)
 						r.Delete("/transactions/{transactionID}", h.deleteTransaction)
+						r.Post("/transactions/{transactionID}/attachments", h.attachFile)
+						r.Delete("/transactions/{transactionID}/attachments/{attachmentID}", h.detachFile)
+						r.Get("/attachments/{attachmentID}", h.getFile)
 						r.Get("/tags", h.listTags)
 
 						r.Get("/balances", h.balances)

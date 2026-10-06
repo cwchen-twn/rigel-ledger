@@ -39,7 +39,7 @@ RETURNING id;
 -- name: ListQueue :many
 -- The review queue: pending rows with their source account's mapping.
 SELECT r.id, r.kind, r.external_id, r.date, r.amount, r.currency, r.description, r.counterparty, r.pending,
-       r.proposal, r.proposed_account_id, r.match_transaction_id, r.match_row_id, r.rule_id,
+       r.proposal, r.proposed_account_id, r.match_transaction_id, r.match_row_id, r.rule_id, r.attachment_id,
        s.id AS source_account_id, s.connector, s.label AS source_label, s.account_id
 FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
 WHERE r.book_id = @book_id AND r.status = 'pending'

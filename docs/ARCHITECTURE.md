@@ -167,7 +167,8 @@ postings(id, transaction_id, account_id, commodity_id, amount NUMERIC signed,
   -- trigger: commodity = account.commodity when set; date > book.lock_date
   -- prices trigger: no rate on or before the lock date of a book using it
 tags(id, book_id, name, kind);  transaction_tags(transaction_id, tag_id)
-attachments(id, book_id, sha256, filename, mime, bytes BYTEA, transaction_id NULL)
+attachments(id, book_id, sha256, filename, mime, size, bytes BYTEA)  -- 000009, linked by
+transaction_attachments(transaction_id, attachment_id) and import_rows.attachment_id
 -- P4a (migration 000005, implemented; see "The import core" below)
 source_accounts(book_id, connector, external_id, label, currency, account_id NULL)
 import_batches(id, book_id, connector, label, received, duplicates, created_by)
@@ -796,14 +797,30 @@ token kinds). Migration `000008`.
 
 - A receipt photo or PDF can be attached to a transaction when it is entered, or later.
   On a phone the file input opens the camera.
-- Storage is the planned `attachments` table:
-  - `bytea` in PostgreSQL, so the nightly `pg_dump` backs it up with the books;
-  - de-duplicated by SHA-256;
-  - images downscaled in the browser before upload, and a size cap per file.
+- Storage (#36, migration `000009`, `internal/ledger/attachments.go`):
+  - `attachments` holds the bytes as `bytea` in PostgreSQL, so the nightly `pg_dump`
+    backs them up with the books; one copy per book and SHA-256, however many
+    transactions link it (`transaction_attachments`). A file nothing links any more
+    (its last link removed, its transaction or staged row deleted) is deleted by a
+    trigger. The audit log records its metadata, never its bytes.
+  - Only JPEG, PNG, WebP and PDF, **decided from the bytes**, never the client's
+    type: HTML and SVG would run script from the app's origin. Served with that
+    type, `nosniff`, and a CSP sandbox for images; 10 MiB per file.
+  - Images are downscaled in the browser before upload (2048 px, JPEG 0.85): a 3.9 MB
+    camera photo arrives as about 430 KB.
+  - The lock date does not stop attaching or removing a file: a receipt changes no
+    figure.
+  - API: `POST|DELETE /api/books/{id}/transactions/{tid}/attachments[/{aid}]`
+    (multipart `file`) and `GET /api/books/{id}/attachments/{aid}`; transactions list
+    their attachments. Import tokens reach none of it.
 - **Optional local OCR** can suggest date, amount and seller for a new entry. It runs in
   the cluster; receipts never go to a cloud service.
 - Synced evidence attaches the same way: an order email, an e-invoice or a statement page
-  becomes an attachment of the transaction it matched.
+  becomes an attachment of the transaction it matched. A batch carries `files[{ref,
+  filename, data}]` (base64, inside its 16 MiB) and a row names its `file`; the file is
+  stored only for a row that is new, waits with it (`import_rows.attachment_id`, a
+  paperclip in the queue), and is linked to whatever transaction accepting the row
+  books or matches (a transfer takes both sides' evidence).
 
 ### Email (Gmail) as a source
 
@@ -1083,7 +1100,7 @@ builds images.
 | P2 | ~~Dockerfile, Gitea/GitHub CI and release; probes and the hcloud chart (tailnet-only ipAllowList, own Postgres role, nightly backup); release `v0.1.0` and deploy~~ (done, 2026-09-24) |
 | P2.5 | **Accounts and sign-in security.** a: first-login wizard, verified email, invitations, registration modes, bootstrap admin, the Administration page (users, requests, sign-in rules, defaults, SMTP), throttling and the sign-in audit, sessions (migration `000002`). b: ~~two-factor sign-in -- email codes, TOTP, passkeys, recovery codes, enforcement (`000003`)~~ (done). Both before any public exposure |
 | P3 | ~~Exchange-rate scheduler (open.er-api plus fawazahmed0 fallback, and every display currency)~~ (P3a, done); ~~the three statements bound to closing rates with `rates_used`, display-currency translation~~ (P3b, done); ~~book rebase, tag (trip) report~~ (P3c, done) |
-| P4 | **Sync and review**: ~~import API, runner tokens, `source_accounts`, review queue, rules, matching (duplicates, pending/posted, transfers), balance assertions and drift, CSV import~~ (P4a, done); ~~per-user Connections with credentials sealed to the runner, the runner protocol, challenges, the fake runner~~ (P4c-1, done); ~~server or client sync mode per person, device runners~~ (P4c-1.5, done); ~~one runner kind, every person links their own~~ (P4c-1.6, done); ~~the sync runner (then tw-sync, now rigel-sync): protocol, sealing, `try`~~ (P4c-2a, done); ~~vendored all-set-tw, the Chrome stand-in, 國泰世華~~ (P4c-2b, done); ~~永豐銀行 deposits and card, CAPTCHAs read in the runner~~ (P4c-2c, done); ~~rigel-sync, one container image for the cluster and for people's computers~~ (P4c-2d, done); `import_rows` kinds for invoices, holdings and trades, order emails, challenges; receipt attachments (upload, camera, optional local OCR); rigel-sync connectors (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
+| P4 | **Sync and review**: ~~import API, runner tokens, `source_accounts`, review queue, rules, matching (duplicates, pending/posted, transfers), balance assertions and drift, CSV import~~ (P4a, done); ~~per-user Connections with credentials sealed to the runner, the runner protocol, challenges, the fake runner~~ (P4c-1, done); ~~server or client sync mode per person, device runners~~ (P4c-1.5, done); ~~one runner kind, every person links their own~~ (P4c-1.6, done); ~~the sync runner (then tw-sync, now rigel-sync): protocol, sealing, `try`~~ (P4c-2a, done); ~~vendored all-set-tw, the Chrome stand-in, 國泰世華~~ (P4c-2b, done); ~~永豐銀行 deposits and card, CAPTCHAs read in the runner~~ (P4c-2c, done); ~~rigel-sync, one container image for the cluster and for people's computers~~ (P4c-2d, done); `import_rows` kinds for invoices, holdings and trades, order emails, challenges; ~~receipt attachments (upload, camera) and synced evidence~~ (#36, done); optional local OCR for receipts (#44); rigel-sync connectors (國泰世華, 永豐 card, 集保 e存摺, 電子發票, Gmail); CSV/PDF fallback, including Banco Continental's statement export |
 | P5 | Securities and futures: Shioaji (daily) and Firstrade in rigel-sync (their Python SDKs as subprocesses), quote scheduler, fair value and futures exposure in reports, futures margin postings, FIFO lots for tax. New connectors: 將來, 兆豐, Banco Continental (if its export is not enough). Recurring list and subscription templates. (Points, average cost and the security commodity itself are done.) |
 | P6 | PWA polish, then Flutter if a native feature is needed |
 | P7 | **Tax workbooks (TW, PY)**: `person` tags and `tax_profiles`; tax categories and account mappings per jurisdiction; `tax_withheld` accounts and foreign-tax-paid records; per-year rule files; workbook export (income by category, deductions with evidence, withholding, capital gains in the country's currency and rate). Needs P3 reports, P4 attachments and P5 lots. Prepares and cross-checks; does not file. |

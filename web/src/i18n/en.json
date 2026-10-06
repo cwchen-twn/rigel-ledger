@@ -154,6 +154,17 @@
     "base_missing": "Some lines have no base amount yet",
     "fill_remainder": "Put the remainder here"
   },
+  "attachments": {
+    "title": "Receipts and files",
+    "add": "Add a receipt or file",
+    "uploading": "Uploading…",
+    "none": "No receipt yet. On a phone, the camera opens from here.",
+    "on_save": "These are uploaded when you save.",
+    "remove": "Remove {name}",
+    "remove_confirm": "Remove {name} from this transaction?",
+    "too_large": "{name} is over 10 MB, even after shrinking.",
+    "has": "{count} attached"
+  },
   "accounts": {
     "title": "Accounts",
     "new": "New account",
@@ -321,7 +332,9 @@
     "too_many": "Too many",
     "too_long": "Too long",
     "role": "You need to be an editor of this book",
-    "stale": "The sync runner's key changed; enter the credentials again"
+    "stale": "The sync runner's key changed; enter the credentials again",
+    "unsupported_type": "Only images (JPEG, PNG, WebP) and PDFs",
+    "too_large": "Too large"
   },
   "languages": {
     "en": "English",
@@ -838,7 +851,8 @@
     "csv_sign_hint": "Money into the account shows positive, money out negative. For a card, a purchase is negative.",
     "csv_submit": "Import {rows} rows",
     "csv_done": "Staged {staged}, already imported {duplicates}",
-    "balance_title": "Balance reported by the institution"
+    "balance_title": "Balance reported by the institution",
+    "evidence": "Evidence from the source (opens in a new tab)"
   },
   "tokens": {
     "title": "API tokens",

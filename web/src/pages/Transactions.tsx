@@ -1,4 +1,4 @@
-import { Plus, ReceiptText, Search } from 'lucide-solid';
+import { Paperclip, Plus, ReceiptText, Search } from 'lucide-solid';
 import { createEffect, createResource, createSignal, For, on, Show } from 'solid-js';
 import { api } from '~/api/client';
 import type { Transaction } from '~/api/types';
@@ -132,6 +132,9 @@ export default function Transactions() {
                         <Badge variant="warning">{t('transactions.uncleared')}</Badge>
                       </Show>
                       <For each={tx.tags}>{(tg) => <Badge variant="outline">{tg}</Badge>}</For>
+                      <Show when={tx.attachments.length}>
+                        <Paperclip class="size-3.5 shrink-0 text-muted-foreground" aria-label={t('attachments.has', { count: tx.attachments.length })} />
+                      </Show>
                     </span>
                     <span class="truncate text-xs text-muted-foreground">
                       {/* The title already is the summary when there is no payee. */}

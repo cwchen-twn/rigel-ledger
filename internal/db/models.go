@@ -312,6 +312,18 @@ type Account struct {
 	UpdatedAt     time.Time
 }
 
+type Attachment struct {
+	ID        int64
+	BookID    int64
+	Sha256    []byte
+	Filename  string
+	Mime      string
+	Size      int32
+	Bytes     []byte
+	CreatedBy *int64
+	CreatedAt time.Time
+}
+
 type AuditLog struct {
 	ID        int64
 	BookID    *int64
@@ -469,6 +481,7 @@ type ImportRow struct {
 	DecidedBy          *int64
 	DecidedAt          *time.Time
 	CreatedAt          time.Time
+	AttachmentID       *int64
 }
 
 type ImportRule struct {
@@ -625,6 +638,15 @@ type Transaction struct {
 	UpdatedBy  *int64
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+}
+
+type TransactionAttachment struct {
+	ID            int64
+	BookID        int64
+	TransactionID int64
+	AttachmentID  int64
+	CreatedBy     *int64
+	CreatedAt     time.Time
 }
 
 type TransactionTag struct {
