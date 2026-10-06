@@ -233,6 +233,12 @@ run/livedebug: frontend/build/dev
 sqlc:
 	go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
 
+##db/check-dump dump=<file>: Restore a production backup into a throwaway database, migrate it with this build, check it starts and its books' totals hold (#45)
+.PHONY: db/check-dump
+db/check-dump:
+	@test -n "$(dump)" || (echo 'usage: make db/check-dump dump=<file>' && exit 2)
+	./scripts/check-dump.sh $(dump)
+
 ##db/reset: Drop every table in the dev database and re-apply migrations (destroys local data)
 .PHONY: db/reset
 db/reset:
