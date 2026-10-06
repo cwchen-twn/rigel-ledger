@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 RigelLedger is a personal and family finance web application built with Go (backend) and SolidJS (frontend): double-entry bookkeeping, multi-currency, IFRS-flavoured reports, statement imports and stock investments. It is deployed (ledger.chenantunez.com, tailnet-only), so **applied migrations are frozen**: schema changes are new migration pairs.
 
-**Read `docs/ARCHITECTURE.md` before designing anything.** It is the accepted target design and the roadmap P1-P7; P1, P2, P2.5 (accounts, administration, throttling, two-factor sign-in) and P3 (rates, statements, tags, rebase) are done; P4 (sync and review) is next.
+**Read `docs/ARCHITECTURE.md` before designing anything.** It is the accepted target design and the roadmap P1-P7; P1, P2, P2.5 (accounts, administration, throttling, two-factor sign-in) and P3 (rates, statements, tags, rebase) are done; P4 (sync and review) is all but done, and its end is the v1.0.0 milestone (#45: the first deploy since 2026-09-24).
 
 ## Common Commands
 
