@@ -1000,6 +1000,15 @@
         "mobile": "Número de móvil",
         "password": "Contraseña del portador (載具驗證碼)"
       }
+    },
+    "xx-mail": {
+      "name": "Correo (Gmail o cualquier IMAP)",
+      "field": {
+        "address": "Dirección de correo",
+        "password": "Contraseña de aplicación",
+        "folder": "Etiqueta o carpeta (por defecto: rigel)",
+        "host": "Servidor IMAP (por defecto: imap.gmail.com)"
+      }
     }
   },
   "runner": {

@@ -345,7 +345,7 @@ function CredentialsDialog(props: {
         <Show when={props.mode === 'add'}>
           <Field label={t('connections.connector')}>
             <Select value={connector()} onChange={(e) => { setConnector(e.currentTarget.value); setValues({}); }}>
-              <For each={props.connectors}>{(c) => <option value={c.id}>{label(`connector.${c.id}.name`, c.name)}{c.country ? ` (${c.country})` : ''}</option>}</For>
+              <For each={props.connectors}>{(c) => <option value={c.id}>{label(`connector.${c.id}.name`, c.name)}{c.country && c.country !== 'XX' ? ` (${c.country})` : ''}</option>}</For>
             </Select>
           </Field>
           <div class="grid gap-4 sm:grid-cols-2">

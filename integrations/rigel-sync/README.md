@@ -66,6 +66,7 @@ each connector lives in `src/connectors/<country>/`.
 | `tw-sinopac` | 永豐銀行 | 身分證字號, 使用者代碼, password | deposits in every currency (90 days) and the credit card (posted, and pending authorisations). Sign-in asks for a six-digit image CAPTCHA, which the runner reads itself (below); the session is kept and reused while the bank accepts it. When three images in a row are not read, the image goes to Connections ("Needs you") |
 | `tw-tdcc` | 集保 e存摺 | 身分證字號, e存摺 password | every broker account's holdings (shares, ETFs, funds), its movements (paged back over runs), and the settlement (交割) bank accounts with their balances and movements. The app's API, no browser. The first sign-in sends a code by email (sometimes then by SMS); the runner is then a trusted device. A trade's direction comes from its name (買進, 賣出, 配股, ...); a kind not recognised is logged (`集保 movements of a kind not recognised`) and left out. 集保 sends no cash for a trade: the queue asks for it |
 | `tw-einvoice` | 電子發票 | mobile number, carrier password (載具驗證碼) | the mobile barcode carrier's invoices for the last two periods (four months) and their lines, as `invoice` rows: each adds its lines to the payment it matches, and only one nothing paid for is booked, as a cash purchase. The e-invoice app's API, no browser and no code; its session is kept and reused. An invoice whose lines cannot be read still comes, as one line of its total |
+| `xx-mail` | Email | address, app password, label or folder (default `rigel`), IMAP server (default `imap.gmail.com`) | one folder, read-only. An order or receipt is an `invoice` row whose lines join the payment it matches, with the email printed to PDF as its evidence; a card alert (刷卡通知) is a pending card row. Parsed locally: schema.org Order and Invoice markup now, per-sender parsers as samples arrive. Each run rereads 14 days (120 the first time) |
 
 ## Trying a connector without the app
 
@@ -117,6 +118,20 @@ against a pretend bank site in Chrome (`test/fake-cathay.ts`, `test/fake-sinopac
 CI installs Chrome for it, and elsewhere it is skipped when no Chrome is found.
 npm packages the vendored code imports (zod, jpeg-js, node-forge) are left as
 imports, pinned in `package.json` at the versions upstream's lockfile resolves.
+
+### Email
+
+`xx-mail` reads one folder of a mailbox over IMAP (`src/mail/imap.ts`), opened
+read-only. For Gmail: turn on 2-Step Verification, make an app password
+(Google Account -> Security -> App passwords), and add a filter that labels the
+mails worth reading `rigel` (order confirmations, receipts, card alerts). The
+connector never marks, moves or deletes anything.
+
+`src/mail/parse.ts` tries per-sender parsers first, then schema.org markup
+(Order, Invoice); an email nothing recognises is left alone (the run logs how
+many were read and recognised, never their content). An order's PDF is printed
+by the runner's Chrome with script off and every request refused but inline
+`data:`, so a tracking pixel is never loaded (`src/mail/pdf.ts`).
 
 ### CAPTCHAs
 

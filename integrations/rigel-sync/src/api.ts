@@ -3,7 +3,7 @@
  * signed in with the person's runner token. Byte fields travel as base64,
  * as Go's encoding/json writes []byte.
  */
-import type { Account, Field, Row } from './connectors/types.ts';
+import type { Account, BatchFile, Field, Row } from './connectors/types.ts';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -71,7 +71,7 @@ export class RigelClient {
     return this.call<Job[]>('POST', '/api/runner/jobs/claim', { limit }, signal);
   }
 
-  importBatch(connection: number, batch: { connector: string; label: string; accounts: Account[]; rows: Row[] }) {
+  importBatch(connection: number, batch: { connector: string; label: string; accounts: Account[]; rows: Row[]; files?: BatchFile[] }) {
     return this.call<{ staged: number; duplicates: number }>('POST', `/api/runner/connections/${connection}/imports`, batch);
   }
 

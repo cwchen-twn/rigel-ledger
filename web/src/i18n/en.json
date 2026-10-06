@@ -1000,6 +1000,15 @@
         "mobile": "Mobile number",
         "password": "Carrier password (載具驗證碼)"
       }
+    },
+    "xx-mail": {
+      "name": "Email (Gmail, or any IMAP)",
+      "field": {
+        "address": "Email address",
+        "password": "App password",
+        "folder": "Label or folder (default: rigel)",
+        "host": "IMAP server (default: imap.gmail.com)"
+      }
     }
   },
   "runner": {

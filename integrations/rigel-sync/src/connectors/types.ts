@@ -47,6 +47,15 @@ export interface Row {
   // invoice rows (#38): amount is the total, signed on the account that paid
   // (a purchase < 0); counterparty the seller; items its lines.
   items?: InvoiceItem[];
+  /** BatchFile.ref: the row's evidence, attached to its transaction when accepted (#36). */
+  file?: string;
+}
+
+/** Evidence a batch carries: an image or a PDF, up to 10 MiB, inside the batch's 16 MiB. */
+export interface BatchFile {
+  ref: string;
+  filename: string;
+  data: string; // base64
 }
 
 /** A line of an invoice: what it cost (> 0; a discount < 0). */
@@ -61,6 +70,7 @@ export interface Batch {
   label: string;
   accounts: Account[];
   rows: Row[];
+  files?: BatchFile[];
 }
 
 export type ChallengeKind = 'otp' | 'captcha' | 'device';

@@ -1000,6 +1000,15 @@
         "mobile": "手機號碼",
         "password": "載具驗證碼"
       }
+    },
+    "xx-mail": {
+      "name": "電子郵件（Gmail 或任何 IMAP）",
+      "field": {
+        "address": "電子郵件地址",
+        "password": "應用程式密碼",
+        "folder": "標籤或資料夾（預設：rigel）",
+        "host": "IMAP 伺服器（預設：imap.gmail.com）"
+      }
     }
   },
   "runner": {
