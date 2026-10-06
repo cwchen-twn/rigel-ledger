@@ -249,6 +249,9 @@ db/reset:
 .PHONY: swag
 swag:
 	go run github.com/swaggo/swag/cmd/swag@latest init -g internal/routes/router.go -o ./api
+	@# swag leaves swagger.json without a final newline, which the end-of-file
+	@# hook then adds, failing the commit once; add it here instead.
+	@for f in api/docs.go api/swagger.json api/swagger.yaml; do [ -z "$$(tail -c1 $$f)" ] || echo >> $$f; done
 
 ##git/analyze: Analyze the git repository using git-of-theseus
 .PHONY: git/analyze
