@@ -141,6 +141,5 @@ func TestEvidenceRowsAreChecked(t *testing.T) {
 	bad = evidence("x", "2026-08-08", "Shop", "AB1")
 	_, err = f.svc.Import(f.ctx, f.acc, withFiles(mailBatch(bad)))
 	wantField(err, "rows[0].reference", "invalid")
-	_, err = f.svc.Import(f.ctx, f.acc, bankBatch(ImportRowInput{Kind: "transaction", Account: "card", ID: "t", Date: day("2026-08-08"), Amount: d("-1"), Reference: "AB12345678"}))
-	wantField(err, "rows[0].reference", "invalid")
+	// (A transaction's reference is its bank movement number: exchange_test.go.)
 }

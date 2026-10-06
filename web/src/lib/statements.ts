@@ -10,7 +10,7 @@
  * first time a PDF is chosen. The worker runs in this thread, which the CSP
  * allows without a worker-src.
  */
-import { monthRows, readMonth } from '@sync/statements/cathayfut.ts';
+import { readStatementLines, StatementUnbalanced } from '@sync/statements/index.ts';
 import { toLines } from '@sync/statements/lines.ts';
 import type { Account, Row } from '@sync/connectors/types.ts';
 import pdfUrl from 'pdfjs-dist/build/pdf.min.mjs?url';
@@ -75,12 +75,13 @@ export async function pdfLines(data: ArrayBuffer, password = ''): Promise<string
 /** The statement a PDF is, by the parsers known; the file's ref goes on its first row. */
 export async function readStatement(data: ArrayBuffer, password: string, file: string): Promise<Statement> {
   const lines = await pdfLines(data, password);
-  const month = readMonth(lines);
-  if (!month) throw new Error('unrecognised' satisfies StatementError);
+  let st;
   try {
-    const { account, rows } = monthRows(month, file);
-    return { name: `國泰期貨 月對帳單 ${month.to.slice(0, 7)}`, account, rows };
-  } catch {
-    throw new Error('unbalanced' satisfies StatementError);
+    st = readStatementLines(lines, file);
+  } catch (err) {
+    if (err instanceof StatementUnbalanced) throw new Error('unbalanced' satisfies StatementError);
+    throw err;
   }
+  if (!st) throw new Error('unrecognised' satisfies StatementError);
+  return st;
 }

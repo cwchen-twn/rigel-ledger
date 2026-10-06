@@ -887,7 +887,7 @@
     "amount_not_stated": "未載明金額",
     "pdf_open_dialog": "匯入 PDF",
     "pdf_title": "匯入對帳單 PDF",
-    "pdf_hint": "在你的瀏覽器中讀取：密碼不會送出，只會送出交易列與檔案。目前支援：國泰期貨 月對帳單。",
+    "pdf_hint": "在你的瀏覽器中讀取：密碼不會送出，只會送出交易列與檔案。目前支援：國泰期貨 月對帳單；Banco Continental 帳戶明細與信用卡對帳單。",
     "pdf_file": "對帳單 PDF",
     "pdf_password": "PDF 密碼",
     "pdf_password_hint": "台灣的對帳單常以身分證字號為密碼（英文字母大寫）",

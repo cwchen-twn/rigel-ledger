@@ -887,7 +887,7 @@
     "amount_not_stated": "importe no indicado",
     "pdf_open_dialog": "Importar PDF",
     "pdf_title": "Importar un extracto en PDF",
-    "pdf_hint": "Se lee aquí, en tu navegador: la contraseña nunca se envía, solo las filas y el archivo. Por ahora: 國泰期貨 月對帳單.",
+    "pdf_hint": "Se lee aquí, en tu navegador: la contraseña nunca se envía, solo las filas y el archivo. Por ahora: 國泰期貨 月對帳單; movimientos de cuenta y extractos de tarjeta de Banco Continental.",
     "pdf_file": "Extracto en PDF",
     "pdf_password": "Contraseña del PDF",
     "pdf_password_hint": "Los extractos de Taiwán suelen usar tu 身分證字號 (letra mayúscula)",

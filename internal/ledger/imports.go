@@ -256,8 +256,13 @@ func (s *Service) Import(ctx context.Context, a Access, in ImportInput) (ImportR
 				}
 			} else if len(r.Items) > 0 {
 				return fieldError(idx("rows", i, "items"), "invalid", "only an invoice has items")
-			} else if r.Reference != "" {
-				return fieldError(idx("rows", i, "reference"), "invalid", "only an invoice has a reference")
+			} else if ref := strings.TrimSpace(r.Reference); ref != "" {
+				// A transaction's reference is the bank's movement number, which
+				// pairs the two sides of an exchange between currencies.
+				if r.Kind != "transaction" || len(ref) > 64 {
+					return fieldError(idx("rows", i, "reference"), "invalid", "only an invoice or a transaction has a reference")
+				}
+				params.Reference = &ref
 			}
 			id, err := q.InsertImportRow(ctx, params)
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -399,6 +404,18 @@ func (s *Service) propose(ctx context.Context, a Access, rowID int64) (applied b
 		return false, s.store.SetRowProposal(ctx, db.SetRowProposalParams{ID: other, Proposal: "transfer", MatchRowID: &r.ID})
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return false, err
+	}
+	// An exchange between currencies: the bank's movement number pairs the sides.
+	if r.Reference != nil {
+		if other, err := s.store.FindTransferByReference(ctx, db.FindTransferByReferenceParams{BookID: a.Book.ID, RowID: r.ID,
+			AccountID: &acct, Reference: *r.Reference, Currency: r.Currency, Amount: r.Amount, FromDate: from, ToDate: to, OnDate: r.Date}); err == nil {
+			if err := set(db.SetRowProposalParams{Proposal: "transfer", MatchRowID: &other}); err != nil {
+				return false, err
+			}
+			return false, s.store.SetRowProposal(ctx, db.SetRowProposalParams{ID: other, Proposal: "transfer", MatchRowID: &r.ID})
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return false, err
+		}
 	}
 	// 5. New: the first rule whose pattern the text contains.
 	rules, err := s.store.ListRules(ctx, a.Book.ID)
@@ -593,12 +610,22 @@ func (s *Service) Accept(ctx context.Context, a Access, rowID int64, in AcceptIn
 				return conflict("transfer_gone", "the other side of the transfer is no longer waiting")
 			}
 			ext := r.ExternalID
+			lines := []LineInput{
+				{AccountID: acct, Commodity: r.Currency, Amount: r.Amount, Status: status, ClearedOn: clearedOn(status, r.Date)},
+				{AccountID: *other.AccountID, Commodity: other.Currency, Amount: other.Amount, Status: db.PostingStatusCleared, ClearedOn: &other.Date},
+			}
+			if other.Currency != r.Currency {
+				// An exchange: the bank's own rate is the two amounts, so one
+				// side's value in the base is the other's, not a second rate.
+				base, err := s.baseValue(ctx, q, a, r.Currency, r.Amount, r.Date, other.Currency, other.Amount)
+				if err != nil {
+					return err
+				}
+				neg := base.Neg()
+				lines[0].BaseAmount, lines[1].BaseAmount = &base, &neg
+			}
 			txnID, err = s.createTx(ctx, q, a, TransactionInput{
-				Date: minDate(r.Date, other.Date), Payee: payee, Memo: memo, Source: source, ExternalID: &ext,
-				Lines: []LineInput{
-					{AccountID: acct, Commodity: r.Currency, Amount: r.Amount, Status: status, ClearedOn: clearedOn(status, r.Date)},
-					{AccountID: *other.AccountID, Commodity: other.Currency, Amount: other.Amount, Status: db.PostingStatusCleared, ClearedOn: &other.Date},
-				},
+				Date: minDate(r.Date, other.Date), Payee: payee, Memo: memo, Source: source, ExternalID: &ext, Lines: lines,
 			})
 			if err != nil {
 				return err
@@ -831,4 +858,30 @@ func (s *Service) Drifts(ctx context.Context, a Access) ([]Drift, error) {
 		}
 	}
 	return out, nil
+}
+
+// baseValue is an amount's value in the book's base on a day: itself when
+// it is the base, the other side of an exchange when that one is, else at
+// the day's rate.
+func (s *Service) baseValue(ctx context.Context, q *db.Queries, a Access, cur string, amount decimal.Decimal, on time.Time,
+	otherCur string, otherAmount decimal.Decimal) (decimal.Decimal, error) {
+	base := a.Book.BaseCurrency
+	switch base {
+	case cur:
+		return amount, nil
+	case otherCur:
+		return otherAmount.Neg(), nil
+	}
+	rate, ok, err := RateOn(ctx, q, cur, base, on)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	if !ok {
+		return decimal.Zero, fieldError("base_amount", "rate_missing", "no exchange rate from %s to %s on or before %s", cur, base, on.Format(time.DateOnly))
+	}
+	decs, err := s.commodityDecimals(ctx)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	return amount.Mul(rate).Round(decs[base]), nil
 }

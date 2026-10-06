@@ -118,6 +118,19 @@ WHERE r.book_id = @book_id AND r.status = 'pending' AND r.kind = 'transaction' A
 ORDER BY abs(r.date - @on_date::DATE), r.id
 LIMIT 1;
 
+-- name: FindTransferByReference :one
+-- The other side of an exchange between two of the book's accounts in two
+-- currencies (USD sold, PYG bought): the bank gives both the same movement
+-- number. Opposite directions, a few days apart, not already paired.
+SELECT r.id FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
+WHERE r.book_id = @book_id AND r.status = 'pending' AND r.kind = 'transaction' AND r.id <> @row_id
+  AND s.account_id IS NOT NULL AND s.account_id <> @account_id
+  AND r.reference = @reference::TEXT AND r.currency <> @currency AND sign(r.amount) = -sign(@amount::NUMERIC)
+  AND r.date BETWEEN @from_date AND @to_date
+  AND r.proposal IN ('new', 'transfer') AND (r.match_row_id IS NULL OR r.match_row_id = @row_id)
+ORDER BY abs(r.date - @on_date::DATE), r.id
+LIMIT 1;
+
 -- name: ListRules :many
 SELECT * FROM import_rules WHERE book_id = @book_id ORDER BY priority, id;
 

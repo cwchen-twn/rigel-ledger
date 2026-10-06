@@ -751,6 +751,49 @@ func (q *Queries) FindSameInvoiceTx(ctx context.Context, arg FindSameInvoiceTxPa
 	return id, err
 }
 
+const findTransferByReference = `-- name: FindTransferByReference :one
+SELECT r.id FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
+WHERE r.book_id = $1 AND r.status = 'pending' AND r.kind = 'transaction' AND r.id <> $2
+  AND s.account_id IS NOT NULL AND s.account_id <> $3
+  AND r.reference = $4::TEXT AND r.currency <> $5 AND sign(r.amount) = -sign($6::NUMERIC)
+  AND r.date BETWEEN $7 AND $8
+  AND r.proposal IN ('new', 'transfer') AND (r.match_row_id IS NULL OR r.match_row_id = $2)
+ORDER BY abs(r.date - $9::DATE), r.id
+LIMIT 1
+`
+
+type FindTransferByReferenceParams struct {
+	BookID    int64
+	RowID     int64
+	AccountID *int64
+	Reference string
+	Currency  string
+	Amount    decimal.Decimal
+	FromDate  time.Time
+	ToDate    time.Time
+	OnDate    time.Time
+}
+
+// The other side of an exchange between two of the book's accounts in two
+// currencies (USD sold, PYG bought): the bank gives both the same movement
+// number. Opposite directions, a few days apart, not already paired.
+func (q *Queries) FindTransferByReference(ctx context.Context, arg FindTransferByReferenceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, findTransferByReference,
+		arg.BookID,
+		arg.RowID,
+		arg.AccountID,
+		arg.Reference,
+		arg.Currency,
+		arg.Amount,
+		arg.FromDate,
+		arg.ToDate,
+		arg.OnDate,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const findTransferPartner = `-- name: FindTransferPartner :one
 SELECT r.id FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
 WHERE r.book_id = $1 AND r.status = 'pending' AND r.kind = 'transaction' AND r.id <> $2
