@@ -816,6 +816,9 @@ definitions:
         - duplicate
         - clears
         - transfer
+        - enrich
+        - same_invoice
+        - waiting
         type: string
       proposed_account_id:
         type: integer

@@ -872,7 +872,14 @@
     "invoice_unmapped": "尚無對應付款；請在上方設定載具對應的帳戶，以現金消費入帳",
     "invoice_items": "{count} 個品項",
     "split_by_items": "依品項類別拆分",
-    "invoice_waiting_toast": "{count} 張發票在等待對應的信用卡或銀行交易"
+    "invoice_waiting_toast": "{count} 張發票在等待對應的信用卡或銀行交易",
+    "proposal_same_invoice": "同一筆消費",
+    "proposal_waiting": "等待付款紀錄",
+    "explain_same_invoice": "另一來源的發票已為這筆消費加入品項；接受後保留這張的檔案",
+    "explain_same_invoice_waiting": "與上方另一張發票是同一筆消費；請先接受那一張",
+    "explain_waiting": "尚無對應的信用卡或銀行付款，可能還會出現（至 {date}）。若是現金支付，選擇類別即可立即入帳",
+    "explain_duplicate_row": "與 {source} 是同一筆消費；接受那一筆時這筆會一併處理",
+    "proposal_same_charge": "同一筆款項"
   },
   "tokens": {
     "title": "API token",

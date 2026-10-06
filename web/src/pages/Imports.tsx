@@ -24,9 +24,14 @@ const BADGE: Record<Proposal, 'default' | 'secondary' | 'outline' | 'warning'> =
   clears: 'secondary',
   transfer: 'outline',
   enrich: 'secondary',
+  same_invoice: 'secondary',
+  waiting: 'outline',
 };
 
 /** Pattern text a rule would start from: the counterparty, or the description without trailing digits (POS numbers, dates). */
+/** YYYY-MM-DD plus n days. */
+const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+
 const suggestPattern = (r: ImportRow) => (r.counterparty || r.description).replace(/[\s\d#*/.-]+$/, '').trim();
 
 /**
@@ -95,10 +100,14 @@ export default function Imports() {
     r.kind === 'trade'
       ? r.account_id !== null && r.settlement_account_id !== null && cashSigned(r) !== null
       : r.kind === 'invoice'
-        ? r.proposal === 'enrich'
+        ? r.proposal === 'enrich' || r.proposal === 'same_invoice'
           ? r.match_transaction_id !== null
-          : r.account_id !== null
-        : r.kind === 'transaction' && r.account_id !== null;
+          : r.proposal === 'waiting'
+            ? r.account_id !== null && chosen()[r.id] != null // booked as cash only by choice
+            : r.account_id !== null
+        : r.kind === 'transaction' && r.account_id !== null &&
+          // the same charge as a waiting row: settled when that one is accepted
+          !(r.proposal === 'duplicate' && r.match_transaction_id === null && r.match_row_id !== null);
   const unmapped = () =>
     (sources() ?? []).filter((s) => s.account_id === null || (s.kind === 'brokerage' && s.settlement_account_id === null));
 
@@ -190,7 +199,13 @@ export default function Imports() {
     if (r.kind === 'invoice' && r.proposal === 'enrich') {
       return r.match_transaction_id !== null ? t('imports.explain_enrich') : t('imports.explain_enrich_waiting');
     }
+    if (r.kind === 'invoice' && r.proposal === 'same_invoice') {
+      return r.match_transaction_id !== null ? t('imports.explain_same_invoice') : t('imports.explain_same_invoice_waiting');
+    }
     if (r.kind === 'invoice' && r.account_id === null) return t('imports.invoice_unmapped');
+    if (r.kind === 'invoice' && r.proposal === 'waiting') {
+      return t('imports.explain_waiting', { date: fmt(addDays(r.date, 7)) });
+    }
     if (r.account_id === null) return t('imports.unmapped_row');
     if (r.kind === 'trade') {
       const at = r.price ? ` @ ${strip(r.price)}` : '';
@@ -199,8 +214,11 @@ export default function Imports() {
         : `${t('imports.trade_units', { units: units(r) })}${at} · ${t('imports.trade_cash_hint')}`;
     }
     switch (r.proposal) {
-      case 'duplicate':
-        return t('imports.explain_duplicate');
+      case 'duplicate': {
+        if (r.match_transaction_id !== null || r.match_row_id === null) return t('imports.explain_duplicate');
+        const other = rowsById().get(r.match_row_id);
+        return t('imports.explain_duplicate_row', { source: other ? `${other.connector} · ${other.counterparty || other.description}` : '?' });
+      }
       case 'clears':
         return t('imports.explain_clears');
       case 'transfer': {
@@ -362,7 +380,11 @@ export default function Imports() {
                           </span>
                           <Show when={(r.kind === 'transaction' && r.account_id !== null) || r.kind === 'invoice'}>
                             <Badge variant={BADGE[r.proposal]}>
-                              {r.kind === 'invoice' && r.proposal === 'new' ? t('imports.proposal_cash') : t(`imports.proposal_${r.proposal}`)}
+                              {r.kind === 'invoice' && r.proposal === 'new'
+                                ? t('imports.proposal_cash')
+                                : r.proposal === 'duplicate' && r.match_transaction_id === null && r.match_row_id !== null
+                                  ? t('imports.proposal_same_charge')
+                                  : t(`imports.proposal_${r.proposal}`)}
                             </Badge>
                           </Show>
                           <Show when={r.pending}><Badge variant="warning">{t('imports.pending')}</Badge></Show>
@@ -418,7 +440,12 @@ export default function Imports() {
                         </Show>
                       </div>
                       <div class="min-w-0">
-                        <Show when={(r.kind === 'transaction' || r.kind === 'invoice') && acceptable(r) && r.proposal === 'new'}>
+                        <Show
+                          when={
+                            (r.kind === 'transaction' || r.kind === 'invoice') && r.account_id !== null &&
+                            (r.proposal === 'new' || (r.kind === 'invoice' && r.proposal === 'waiting'))
+                          }
+                        >
                           <div class="flex items-center gap-1 lg:w-72">
                             <AccountCombobox
                               class="min-w-0 flex-1"

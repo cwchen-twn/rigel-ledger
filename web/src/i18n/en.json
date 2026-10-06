@@ -872,7 +872,14 @@
     "invoice_unmapped": "nothing paid for it yet; map the carrier above to book it as cash",
     "invoice_items": "Items ({count})",
     "split_by_items": "Split by item category",
-    "invoice_waiting_toast": "{count} invoice(s) wait for their card or bank row"
+    "invoice_waiting_toast": "{count} invoice(s) wait for their card or bank row",
+    "proposal_same_invoice": "Same purchase",
+    "proposal_waiting": "Waiting for payment",
+    "explain_same_invoice": "another source's invoice for this purchase already added its lines; accepting keeps this one's file",
+    "explain_same_invoice_waiting": "the same purchase as another invoice above; accept that one first",
+    "explain_waiting": "no card or bank payment for it yet; one may still come (until {date}). Choose a category to book it as cash now",
+    "explain_duplicate_row": "the same charge as {source}; accepting that one settles this",
+    "proposal_same_charge": "Same charge"
   },
   "tokens": {
     "title": "API tokens",

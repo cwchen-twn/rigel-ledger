@@ -311,7 +311,7 @@ type ImportRowDTO struct {
 	Description        string          `json:"description"`
 	Counterparty       string          `json:"counterparty"`
 	Pending            bool            `json:"pending"`
-	Proposal           string          `json:"proposal" enums:"new,duplicate,clears,transfer"`
+	Proposal           string          `json:"proposal" enums:"new,duplicate,clears,transfer,enrich,same_invoice,waiting"`
 	ProposedAccountID  *int64          `json:"proposed_account_id"`
 	MatchTransactionID *int64          `json:"match_transaction_id"`
 	MatchRowID         *int64          `json:"match_row_id"`

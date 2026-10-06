@@ -359,7 +359,23 @@ func (s *Service) propose(ctx context.Context, a Access, rowID int64) (applied b
 			return false, err
 		}
 	}
-	// 3. One side of a transfer between two of the book's accounts.
+	// 3. The same charge waiting from another source (a card alert and the
+	// statement's row; a 交割 movement from 集保 and from the bank): the
+	// posted one books, between two alike the first staged, and the other
+	// waits to be settled with it.
+	if other, err := s.store.FindDuplicateRow(ctx, db.FindDuplicateRowParams{BookID: a.Book.ID, RowID: r.ID, AccountID: &acct,
+		SourceAccountID: r.SourceAccountID, Currency: r.Currency, Amount: r.Amount, FromDate: from, ToDate: to, OnDate: r.Date}); err == nil {
+		mine := r.Pending && !other.Pending || r.Pending == other.Pending && r.ID > other.ID
+		if mine {
+			return false, set(db.SetRowProposalParams{Proposal: "duplicate", MatchRowID: &other.ID})
+		}
+		if err := s.store.SetRowProposal(ctx, db.SetRowProposalParams{ID: other.ID, Proposal: "duplicate", MatchRowID: &r.ID}); err != nil {
+			return false, err
+		}
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return false, err
+	}
+	// 4. One side of a transfer between two of the book's accounts.
 	from, to = window(transferWindow)
 	if other, err := s.store.FindTransferPartner(ctx, db.FindTransferPartnerParams{BookID: a.Book.ID, RowID: r.ID,
 		AccountID: &acct, Currency: r.Currency, Amount: r.Amount, FromDate: from, ToDate: to, OnDate: r.Date}); err == nil {
@@ -370,7 +386,7 @@ func (s *Service) propose(ctx context.Context, a Access, rowID int64) (applied b
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return false, err
 	}
-	// 4. New: the first rule whose pattern the text contains.
+	// 5. New: the first rule whose pattern the text contains.
 	rules, err := s.store.ListRules(ctx, a.Book.ID)
 	if err != nil {
 		return false, err
@@ -502,6 +518,9 @@ func (s *Service) Accept(ctx context.Context, a Access, rowID int64, in AcceptIn
 	if categoryID != nil {
 		proposal = "new" // the person chose a category: book it as new
 	}
+	if proposal == "duplicate" && r.MatchTransactionID == nil && r.MatchRowID != nil {
+		return 0, conflict("match_pending", "this is the same charge as another waiting row: accept that one, and this one goes with it")
+	}
 	// What it matched was deleted since (the FK set it to NULL): match again.
 	if (proposal == "duplicate" || proposal == "clears") && r.MatchTransactionID == nil ||
 		proposal == "transfer" && r.MatchRowID == nil {
@@ -607,7 +626,10 @@ func (s *Service) Accept(ctx context.Context, a Access, rowID int64, in AcceptIn
 		if err == nil && n == 0 {
 			return conflict("already_decided", "this row was already accepted or ignored")
 		}
-		return err
+		if err != nil {
+			return err
+		}
+		return settleDuplicates(ctx, q, a, r.ID, txnID)
 	})
 	if err != nil {
 		return 0, translate(err, "import row")
@@ -657,6 +679,10 @@ func (s *Service) IgnoreRow(ctx context.Context, a Access, rowID int64) error {
 	if err := a.require(db.MemberRoleEditor); err != nil {
 		return err
 	}
+	// The row is looked up in this book first: DecideRow knows only ids.
+	if _, err := s.store.GetImportRow(ctx, db.GetImportRowParams{BookID: a.Book.ID, ID: rowID}); err != nil {
+		return translate(err, "import row")
+	}
 	n, err := s.store.DecideRow(ctx, db.DecideRowParams{ID: rowID, Status: "ignored", DecidedBy: &a.UserID})
 	if err != nil {
 		return err
@@ -664,10 +690,50 @@ func (s *Service) IgnoreRow(ctx context.Context, a Access, rowID int64) error {
 	if n == 0 {
 		return conflict("already_decided", "this row was already accepted or ignored")
 	}
+	// What waited for it (its duplicate, an invoice) is matched again.
+	ids, err := s.store.RowsMatchingRow(ctx, db.RowsMatchingRowParams{BookID: a.Book.ID, RowID: &rowID})
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if _, err := s.propose(ctx, a, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// settleDuplicates decides the waiting rows that were the same charge as an
+// accepted row: they are that row's transaction.
+func settleDuplicates(ctx context.Context, q *db.Queries, a Access, rowID, txnID int64) error {
+	ids, err := q.RowsMatchingRow(ctx, db.RowsMatchingRowParams{BookID: a.Book.ID, RowID: &rowID})
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		o, err := q.GetImportRow(ctx, db.GetImportRowParams{BookID: a.Book.ID, ID: id})
+		if err != nil {
+			return err
+		}
+		if o.Kind != "transaction" || o.Proposal != "duplicate" {
+			continue // an invoice waiting for it is matched again afterwards
+		}
+		if _, err := q.DecideRow(ctx, db.DecideRowParams{ID: id, Status: "accepted", TransactionID: &txnID, DecidedBy: &a.UserID}); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 func (s *Service) Queue(ctx context.Context, a Access) ([]db.ListQueueRow, error) {
+	rows, err := s.store.ListQueue(ctx, db.ListQueueParams{BookID: a.Book.ID, Lim: 500})
+	if err != nil {
+		return nil, err
+	}
+	// Time alone changes a waiting invoice: a week on, it is a cash purchase.
+	if aged, err := s.matchAgedInvoices(ctx, a, rows); err != nil || !aged {
+		return rows, err
+	}
 	return s.store.ListQueue(ctx, db.ListQueueParams{BookID: a.Book.ID, Lim: 500})
 }
 

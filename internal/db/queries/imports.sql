@@ -190,3 +190,46 @@ SELECT id FROM import_rows WHERE book_id = @book_id AND status = 'pending' AND k
 
 -- name: SetRowItems :exec
 UPDATE import_rows SET items = @items WHERE book_id = @book_id AND id = @id;
+
+-- name: FindDuplicateRow :one
+-- The same charge waiting from another source: a pending transaction row
+-- on the same ledger account, the same amount and currency, a few days
+-- apart, from another source account (one source's two identical coffees
+-- are two), not already paired with a third.
+SELECT r.id, r.pending FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
+WHERE r.book_id = @book_id AND r.status = 'pending' AND r.kind = 'transaction' AND r.id <> @row_id
+  AND s.account_id = @account_id AND r.source_account_id <> @source_account_id
+  AND r.currency = @currency AND r.amount = @amount AND r.date BETWEEN @from_date AND @to_date
+  AND (r.match_row_id IS NULL OR r.match_row_id = @row_id)
+  AND NOT EXISTS (SELECT 1 FROM import_rows o WHERE o.book_id = @book_id AND o.status = 'pending' AND o.id <> @row_id
+                  AND o.proposal = 'duplicate' AND o.match_row_id = r.id)
+ORDER BY abs(r.date - @on_date::DATE), r.id
+LIMIT 1;
+
+-- name: RowsMatchingRow :many
+-- Waiting rows that point at a row: matched again once it is decided.
+SELECT id FROM import_rows WHERE book_id = @book_id AND status = 'pending' AND match_row_id = @row_id;
+
+-- name: FindSameInvoiceTx :one
+-- A payment another source's invoice already added its lines to: a card,
+-- bank or cash line of this total, in the window, carrying items from a
+-- connector that is not this one.
+SELECT t.id FROM postings p
+JOIN transactions t ON t.id = p.transaction_id
+JOIN accounts a ON a.id = p.account_id
+WHERE t.book_id = @book_id AND a.class IN ('asset', 'liability')
+  AND p.commodity = @currency AND p.amount = @amount
+  AND t.date BETWEEN @from_date AND @to_date
+  AND EXISTS (SELECT 1 FROM transaction_items i WHERE i.transaction_id = t.id AND i.source NOT LIKE @connector::TEXT || ':%')
+ORDER BY abs(t.date - @on_date::DATE), t.id
+LIMIT 1;
+
+-- name: FindSameInvoiceRow :one
+-- Another source's invoice for it, still waiting and staged earlier: the
+-- first keeps its proposal, so two never wait on each other.
+SELECT o.id FROM import_rows o JOIN source_accounts s ON s.id = o.source_account_id
+WHERE o.book_id = @book_id AND o.status = 'pending' AND o.kind = 'invoice' AND o.id < @row_id
+  AND s.connector <> @connector AND o.currency = @currency AND o.amount = @amount
+  AND o.date BETWEEN @from_date AND @to_date AND o.proposal IN ('enrich', 'new', 'waiting')
+ORDER BY abs(o.date - @on_date::DATE), o.id
+LIMIT 1;

@@ -504,7 +504,7 @@ export interface SourceAccount {
 }
 
 /** enrich: an invoice adds its items to what paid for it (match_transaction_id), or waits for its row (match_row_id). */
-export type Proposal = 'new' | 'duplicate' | 'clears' | 'transfer' | 'enrich';
+export type Proposal = 'new' | 'duplicate' | 'clears' | 'transfer' | 'enrich' | 'same_invoice' | 'waiting';
 
 /** A line of an invoice: what it cost (a discount < 0). */
 export interface InvoiceItem {

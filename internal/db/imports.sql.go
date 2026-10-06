@@ -209,6 +209,56 @@ func (q *Queries) FindDuplicate(ctx context.Context, arg FindDuplicateParams) (i
 	return id, err
 }
 
+const findDuplicateRow = `-- name: FindDuplicateRow :one
+SELECT r.id, r.pending FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
+WHERE r.book_id = $1 AND r.status = 'pending' AND r.kind = 'transaction' AND r.id <> $2
+  AND s.account_id = $3 AND r.source_account_id <> $4
+  AND r.currency = $5 AND r.amount = $6 AND r.date BETWEEN $7 AND $8
+  AND (r.match_row_id IS NULL OR r.match_row_id = $2)
+  AND NOT EXISTS (SELECT 1 FROM import_rows o WHERE o.book_id = $1 AND o.status = 'pending' AND o.id <> $2
+                  AND o.proposal = 'duplicate' AND o.match_row_id = r.id)
+ORDER BY abs(r.date - $9::DATE), r.id
+LIMIT 1
+`
+
+type FindDuplicateRowParams struct {
+	BookID          int64
+	RowID           int64
+	AccountID       *int64
+	SourceAccountID int64
+	Currency        string
+	Amount          decimal.Decimal
+	FromDate        time.Time
+	ToDate          time.Time
+	OnDate          time.Time
+}
+
+type FindDuplicateRowRow struct {
+	ID      int64
+	Pending bool
+}
+
+// The same charge waiting from another source: a pending transaction row
+// on the same ledger account, the same amount and currency, a few days
+// apart, from another source account (one source's two identical coffees
+// are two), not already paired with a third.
+func (q *Queries) FindDuplicateRow(ctx context.Context, arg FindDuplicateRowParams) (FindDuplicateRowRow, error) {
+	row := q.db.QueryRow(ctx, findDuplicateRow,
+		arg.BookID,
+		arg.RowID,
+		arg.AccountID,
+		arg.SourceAccountID,
+		arg.Currency,
+		arg.Amount,
+		arg.FromDate,
+		arg.ToDate,
+		arg.OnDate,
+	)
+	var i FindDuplicateRowRow
+	err := row.Scan(&i.ID, &i.Pending)
+	return i, err
+}
+
 const findEstimate = `-- name: FindEstimate :one
 SELECT t.id FROM postings p JOIN transactions t ON t.id = p.transaction_id
 WHERE t.book_id = $1 AND p.account_id = $2 AND p.status = 'uncleared'
@@ -328,6 +378,84 @@ func (q *Queries) FindInvoiceRow(ctx context.Context, arg FindInvoiceRowParams) 
 		arg.ToDate,
 		arg.RowID,
 		arg.Seller,
+		arg.OnDate,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const findSameInvoiceRow = `-- name: FindSameInvoiceRow :one
+SELECT o.id FROM import_rows o JOIN source_accounts s ON s.id = o.source_account_id
+WHERE o.book_id = $1 AND o.status = 'pending' AND o.kind = 'invoice' AND o.id < $2
+  AND s.connector <> $3 AND o.currency = $4 AND o.amount = $5
+  AND o.date BETWEEN $6 AND $7 AND o.proposal IN ('enrich', 'new', 'waiting')
+ORDER BY abs(o.date - $8::DATE), o.id
+LIMIT 1
+`
+
+type FindSameInvoiceRowParams struct {
+	BookID    int64
+	RowID     int64
+	Connector string
+	Currency  string
+	Amount    decimal.Decimal
+	FromDate  time.Time
+	ToDate    time.Time
+	OnDate    time.Time
+}
+
+// Another source's invoice for it, still waiting and staged earlier: the
+// first keeps its proposal, so two never wait on each other.
+func (q *Queries) FindSameInvoiceRow(ctx context.Context, arg FindSameInvoiceRowParams) (int64, error) {
+	row := q.db.QueryRow(ctx, findSameInvoiceRow,
+		arg.BookID,
+		arg.RowID,
+		arg.Connector,
+		arg.Currency,
+		arg.Amount,
+		arg.FromDate,
+		arg.ToDate,
+		arg.OnDate,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const findSameInvoiceTx = `-- name: FindSameInvoiceTx :one
+SELECT t.id FROM postings p
+JOIN transactions t ON t.id = p.transaction_id
+JOIN accounts a ON a.id = p.account_id
+WHERE t.book_id = $1 AND a.class IN ('asset', 'liability')
+  AND p.commodity = $2 AND p.amount = $3
+  AND t.date BETWEEN $4 AND $5
+  AND EXISTS (SELECT 1 FROM transaction_items i WHERE i.transaction_id = t.id AND i.source NOT LIKE $6::TEXT || ':%')
+ORDER BY abs(t.date - $7::DATE), t.id
+LIMIT 1
+`
+
+type FindSameInvoiceTxParams struct {
+	BookID    int64
+	Currency  string
+	Amount    decimal.Decimal
+	FromDate  time.Time
+	ToDate    time.Time
+	Connector string
+	OnDate    time.Time
+}
+
+// A payment another source's invoice already added its lines to: a card,
+// bank or cash line of this total, in the window, carrying items from a
+// connector that is not this one.
+func (q *Queries) FindSameInvoiceTx(ctx context.Context, arg FindSameInvoiceTxParams) (int64, error) {
+	row := q.db.QueryRow(ctx, findSameInvoiceTx,
+		arg.BookID,
+		arg.Currency,
+		arg.Amount,
+		arg.FromDate,
+		arg.ToDate,
+		arg.Connector,
 		arg.OnDate,
 	)
 	var id int64
@@ -849,6 +977,36 @@ SELECT id FROM import_rows WHERE source_account_id = $1 AND status = 'pending' O
 
 func (q *Queries) PendingRowsOfSource(ctx context.Context, sourceAccountID int64) ([]int64, error) {
 	rows, err := q.db.Query(ctx, pendingRowsOfSource, sourceAccountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const rowsMatchingRow = `-- name: RowsMatchingRow :many
+SELECT id FROM import_rows WHERE book_id = $1 AND status = 'pending' AND match_row_id = $2
+`
+
+type RowsMatchingRowParams struct {
+	BookID int64
+	RowID  *int64
+}
+
+// Waiting rows that point at a row: matched again once it is decided.
+func (q *Queries) RowsMatchingRow(ctx context.Context, arg RowsMatchingRowParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, rowsMatchingRow, arg.BookID, arg.RowID)
 	if err != nil {
 		return nil, err
 	}

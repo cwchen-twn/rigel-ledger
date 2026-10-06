@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
@@ -23,6 +24,9 @@ const (
 	invoiceBefore = 2 // days a payment may be dated before its invoice
 	invoiceAfter  = 5 // and after (a card posts late)
 	maxItems      = 500
+	// An invoice nothing paid for is a cash purchase only once a card
+	// charge has had time to come (#55): a statement lags the 電子發票.
+	invoiceWait = 7
 )
 
 // InvoiceItem is one line of an invoice. Amount is what the line cost
@@ -118,12 +122,58 @@ func (s *Service) proposeInvoice(ctx context.Context, a Access, r db.GetImportRo
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}
-	// Nothing paid for it: a cash purchase, categorised by its seller.
+	// Another source's invoice for the same purchase (an order email and
+	// its 電子發票) already added its lines, or waits to (#54).
+	if tx, err := s.store.FindSameInvoiceTx(ctx, db.FindSameInvoiceTxParams{BookID: a.Book.ID, Currency: r.Currency, Amount: r.Amount,
+		FromDate: from, ToDate: to, Connector: r.Connector, OnDate: r.Date}); err == nil {
+		return set(db.SetRowProposalParams{Proposal: "same_invoice", MatchTransactionID: &tx})
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	if other, err := s.store.FindSameInvoiceRow(ctx, db.FindSameInvoiceRowParams{BookID: a.Book.ID, RowID: r.ID, Connector: r.Connector,
+		Currency: r.Currency, Amount: r.Amount, FromDate: from, ToDate: to, OnDate: r.Date}); err == nil {
+		return set(db.SetRowProposalParams{Proposal: "same_invoice", MatchRowID: &other})
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	// Nothing paid for it: a cash purchase, categorised by its seller --
+	// but not before a card charge has had time to come.
 	p := db.SetRowProposalParams{Proposal: "new"}
 	if rule := ruleFor(rules, r.SourceAccountID, r.Counterparty+" "+r.Description); rule != nil {
 		p.ProposedAccountID, p.RuleID = &rule.AccountID, &rule.ID
 	}
+	if waiting(r.Date, now()) {
+		p.Proposal = "waiting"
+	}
 	return set(p)
+}
+
+// now is the clock invoices wait by; a test moves it.
+var now = time.Now
+
+// waiting says an invoice of this day may still see its payment come.
+func waiting(day, at time.Time) bool {
+	return at.Sub(day) < invoiceWait*24*time.Hour
+}
+
+// matchAgedInvoices proposes again the invoices that waited long enough to
+// be cash purchases; the queue calls it before it is read.
+func (s *Service) matchAgedInvoices(ctx context.Context, a Access, rows []db.ListQueueRow) (bool, error) {
+	aged := false
+	for _, r := range rows {
+		if r.Kind != "invoice" || r.Proposal != "waiting" || waiting(r.Date, now()) {
+			continue
+		}
+		row, err := s.store.GetImportRow(ctx, db.GetImportRowParams{BookID: a.Book.ID, ID: r.ID})
+		if err != nil {
+			return aged, err
+		}
+		if err := s.proposeInvoice(ctx, a, row); err != nil {
+			return aged, err
+		}
+		aged = true
+	}
+	return aged, nil
 }
 
 // rematchInvoices proposes every waiting invoice again: a card row staged
@@ -155,6 +205,37 @@ func (s *Service) acceptInvoice(ctx context.Context, a Access, r db.GetImportRow
 	proposal := r.Proposal
 	if in.CategoryID != nil {
 		proposal = "new" // the person chose a category: a cash purchase
+	}
+	switch {
+	case proposal == "waiting":
+		return 0, fieldError("account_id", "required", "a card charge may still come for this invoice; choose a category to book it as cash now")
+	case proposal == "same_invoice" && r.MatchTransactionID == nil:
+		if r.MatchRowID != nil {
+			return 0, conflict("match_pending", "accept the other invoice for this purchase first")
+		}
+		if err := s.proposeInvoice(ctx, a, r); err != nil {
+			return 0, err
+		}
+		return 0, conflict("match_gone", "what this invoice matched is gone; it was matched again")
+	case proposal == "same_invoice":
+		// The purchase has its lines already: this invoice adds its file.
+		txnID := *r.MatchTransactionID
+		err := s.store.WithTx(ctx, a.UserID, func(q *db.Queries) error {
+			if r.AttachmentID != nil {
+				if err := q.LinkAttachment(ctx, db.LinkAttachmentParams{BookID: a.Book.ID, TransactionID: txnID, AttachmentID: *r.AttachmentID, CreatedBy: &a.UserID}); err != nil {
+					return err
+				}
+			}
+			n, err := q.DecideRow(ctx, db.DecideRowParams{ID: r.ID, Status: "accepted", TransactionID: &txnID, DecidedBy: &a.UserID})
+			if err == nil && n == 0 {
+				return conflict("already_decided", "this row was already accepted or ignored")
+			}
+			return err
+		})
+		if err != nil {
+			return 0, translate(err, "import row")
+		}
+		return txnID, s.rematchInvoices(ctx, a)
 	}
 	if proposal == "enrich" && r.MatchTransactionID == nil {
 		if r.MatchRowID != nil {
@@ -241,7 +322,8 @@ func (s *Service) acceptInvoice(ctx context.Context, a Access, r db.GetImportRow
 	if err != nil {
 		return 0, translate(err, "import row")
 	}
-	return txnID, nil
+	// An invoice for the same purchase waiting for this one can now take its file to it.
+	return txnID, s.rematchInvoices(ctx, a)
 }
 
 type categoryAmount struct {

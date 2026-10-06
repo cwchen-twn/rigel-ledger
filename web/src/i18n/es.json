@@ -872,7 +872,14 @@
     "invoice_unmapped": "aún no hay pago; asigna arriba la cuenta del portador para registrarla en efectivo",
     "invoice_items": "Artículos ({count})",
     "split_by_items": "Dividir por categoría de artículo",
-    "invoice_waiting_toast": "{count} factura(s) esperan su movimiento de tarjeta o banco"
+    "invoice_waiting_toast": "{count} factura(s) esperan su movimiento de tarjeta o banco",
+    "proposal_same_invoice": "Misma compra",
+    "proposal_waiting": "Esperando el pago",
+    "explain_same_invoice": "la factura de otra fuente ya añadió los artículos de esta compra; al aceptar se guarda el archivo de esta",
+    "explain_same_invoice_waiting": "la misma compra que otra factura de arriba; acepta esa primero",
+    "explain_waiting": "aún no hay un pago con tarjeta o banco; puede llegar todavía (hasta {date}). Elige una categoría para registrarla en efectivo ahora",
+    "explain_duplicate_row": "el mismo cargo que {source}; al aceptar ese se resuelve este",
+    "proposal_same_charge": "Mismo cargo"
   },
   "tokens": {
     "title": "Tokens de API",

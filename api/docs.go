@@ -5082,7 +5082,10 @@ const docTemplate = `{
                         "new",
                         "duplicate",
                         "clears",
-                        "transfer"
+                        "transfer",
+                        "enrich",
+                        "same_invoice",
+                        "waiting"
                     ]
                 },
                 "proposed_account_id": {
