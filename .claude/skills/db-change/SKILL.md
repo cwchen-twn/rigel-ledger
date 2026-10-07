@@ -30,7 +30,8 @@ how to restore a replaced function). Add the pair to
 Before the deploy the rule was the opposite (one readable `000001`, edited in
 place, `make db/reset` after each change); that is history now.
 
-Keep the SQL PostgreSQL-14 compatible (local dev); CI and hcloud run 18.
+Local dev, CI and hcloud all run PostgreSQL 18 (local moved from 14 on 2026-10-07),
+so 18 features are fair game; `pg_dump` of production needs an 18 client.
 
 ## Steps
 

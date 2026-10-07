@@ -237,7 +237,7 @@ sqlc:
 .PHONY: db/check-dump
 db/check-dump:
 	@test -n "$(dump)" || (echo 'usage: make db/check-dump dump=<file>' && exit 2)
-	./scripts/check-dump.sh $(dump)
+	@TEST_DATABASE_URL="$(TEST_DATABASE_URL)" ./scripts/check-dump.sh $(dump)
 
 ##db/reset: Drop every table in the dev database and re-apply migrations (destroys local data)
 .PHONY: db/reset
