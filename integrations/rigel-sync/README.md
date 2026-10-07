@@ -141,16 +141,32 @@ runner's process with the `id_number` credential -- no temporary file, no
 password on another program's command line -- and `cathayfut.ts` books the
 month from its 保證金及權利金專戶餘額 table (docs/ARCHITECTURE.md, "Futures").
 
-### Capture runs (writing a new connector)
+### Banco Continental (ContiWeb)
 
-`py-continental` (#67) is, for now, a capture run: with
-`RIGEL_SYNC_EXPERIMENTAL=1` (and best `RIGEL_SYNC_HEADFUL=1`), `try
-py-continental` signs in to ContiWeb through its real form, leaves the
-second factor to the person in the window, opens the accounts and cards, and
-writes the JSON the page fetched to `DATA_DIR/captures` (sign-in and token
-calls left out, token-like fields dropped, numbers of ten or more digits
-masked to their last four). It sends no rows; the mapping is written from
-the capture.
+`py-continental` (#67) reads the month so far from ContiWeb; offered only with
+`RIGEL_SYNC_EXPERIMENTAL=1` until it has run for real. ContiWeb encrypts its
+API answers inside the page, so the connector works the page as a person
+does:
+
+- **Sign-in**: document number and password into the real form. The second
+  factor is a QR code to scan with Contimóvil: it is sent as a `device`
+  challenge with the QR's image (Connections shows it large enough to scan;
+  `try` writes it to `DATA_DIR`), and "Recordar este dispositivo" is ticked.
+  ContiWeb knows the device by its `_cdip` cookie, kept in the connection's
+  state, so the next runs are not asked. A code by SMS, when ContiWeb asks
+  for one instead, is an `otp` challenge.
+- **Accounts**: each account's "Descargar extracto: XLS" for this month and
+  the last, read by `src/util/xlsx.ts` (no dependency) and
+  `readContinentalSheet`: DEBE out, HABER in, every SALDO checked against the
+  next. Row ids are the PDF statements' (#43). ContiWeb shows the account
+  number without the two digits the PDF has after the first two, so the web
+  and the PDF are two sources to map to the same account; the import core
+  takes the overlap as duplicates.
+- **Cards**: each card's page, its movements since the last closing and
+  "Deuda actual" (the balance). The page has no coupon numbers; when the
+  month's statement PDF comes, its rows meet these as duplicates.
+- The session lives only in the page's memory and ends after 15 minutes
+  idle: sections are opened from the side menu, never by loading a URL.
 
 ### CAPTCHAs
 

@@ -11,6 +11,7 @@ import { Checkbox, Field, Input, Select } from '~/components/ui/input';
 import { Badge, EmptyState, Skeleton } from '~/components/ui/misc';
 import { toast } from '~/components/ui/toast';
 import { useI18n } from '~/i18n';
+import { cn } from '~/lib/cn';
 import { formatDateTime } from '~/lib/dates';
 import { aad, canSeal, seal } from '~/lib/seal';
 import { useSession } from '~/stores/session';
@@ -247,7 +248,9 @@ function ChallengeForm(props: { connection: Connection; challenge: NonNullable<C
       <p class="text-sm font-medium">{t(`connections.challenge_${props.challenge.kind}`)}</p>
       <Show when={props.challenge.prompt}><p class="text-sm text-muted-foreground">{props.challenge.prompt}</p></Show>
       <Show when={props.challenge.image}>
-        <img class="h-20 w-fit max-w-full rounded border bg-white" alt={t('connections.captcha_alt')} src={`data:image/png;base64,${props.challenge.image}`} />
+        {/* A CAPTCHA is a strip; a device check's image is a QR code to scan from the screen. */}
+        <img class={cn('w-fit max-w-full rounded border bg-white', props.challenge.kind === 'device' ? 'h-56 p-2' : 'h-20')}
+          alt={t('connections.captcha_alt')} src={`data:image/png;base64,${props.challenge.image}`} />
       </Show>
       <div class="flex flex-wrap items-end gap-2">
         <Show when={props.challenge.kind !== 'device'}>

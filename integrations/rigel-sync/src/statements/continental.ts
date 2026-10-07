@@ -199,3 +199,140 @@ export function readContinentalCard(lines: string[][]): ParsedStatement | null {
     rows,
   };
 }
+
+// ContiWeb itself (#67), for the month so far: an account's "Descargar
+// extracto: XLS" and the card page's movements since the last closing.
+
+/**
+ * An amount from a ContiWeb export: DEBE and HABER are the file's own
+ * numbers ("1830.5"); text is read the Paraguayan way ("1.830,50"). SALDO is
+ * always text, where "856.608" is 856608: read it with gs alone.
+ */
+const figure = (s: string | undefined) => {
+  const t = (s ?? '').trim();
+  if (!t) return undefined;
+  return /^-?\d+(\.\d+)?$/.test(t) ? plainDecimal(t) : gs(t);
+};
+
+/** An Excel day number (46302) or "07/10/2026", as YYYY-MM-DD. */
+const sheetDate = (s: string | undefined) => {
+  const t = (s ?? '').trim();
+  if (/^\d+(\.\d+)?$/.test(t)) return new Date(Date.UTC(1899, 11, 30) + Math.floor(Number(t)) * 86_400_000).toISOString().slice(0, 10);
+  return dmy(t);
+};
+
+export interface ContinentalAccountRef {
+  number: string; // as ContiWeb shows it: 140018535109
+  label: string; // "Cuenta De Ahorro Gs"
+  currency: 'PYG' | 'USD';
+}
+
+/** "Cuenta De Ahorro Gs" -> PYG, "Cuenta Corriente $" -> USD; undefined for anything else. */
+export function continentalCurrency(label: string): 'PYG' | 'USD' | undefined {
+  if (/\b(Gs|PYG)\b|Guaran/i.test(label)) return 'PYG';
+  if (/(U?\$|\bUSD\b|D[oó]lar)/i.test(label)) return 'USD';
+  return undefined;
+}
+
+/**
+ * An account's XLS export: DEBE (out) and HABER (in) say which way each row
+ * went, and every SALDO must follow from the next row's (the file is newest
+ * first; oldest first is accepted too). Ids are the PDF's (#43), so a month
+ * read here and later from the PDF of the same account number coincide. The
+ * newest SALDO is the balance on its day.
+ */
+export function readContinentalSheet(sheet: string[][], ref: ContinentalAccountRef): ParsedStatement {
+  const head = sheet.findIndex((r) => r.includes('MOVIMIENTO') && r.includes('SALDO'));
+  if (head < 0) throw new Unbalanced(`Continental ${ref.number}: not a ContiWeb export`);
+  const col = (name: string) => sheet[head].indexOf(name);
+  const [cTime, cMov, cDesc, cOut, cIn, cBal, cDate] = ['FECHA', 'MOVIMIENTO', 'DESCRIP', 'DEBE', 'HABER', 'SALDO', 'FECHACONT'].map(col);
+  const moves: Array<{ date: string; time: string; mov: string; description: string; amount: string; saldo: string }> = [];
+  for (const r of sheet.slice(head + 1)) {
+    const mov = (r[cMov] ?? '').trim();
+    if (!mov) continue; // the TOTAL line
+    const date = sheetDate(r[cDate]);
+    const out = figure(r[cOut]);
+    const inn = figure(r[cIn]);
+    const saldo = gs((r[cBal] ?? '').trim() || undefined);
+    if (!date || !saldo || (out === undefined) === (inn === undefined)) {
+      throw new Unbalanced(`Continental ${ref.number}: a row without its date, saldo or one amount`);
+    }
+    moves.push({ date, time: (r[cTime] ?? '').trim(), mov, description: (r[cDesc] ?? '').trim(), amount: out !== undefined ? neg(out) : inn!, saldo });
+  }
+  // Each saldo is the one before it plus its own amount.
+  const leads = (xs: typeof moves) => xs.every((m, i) => i === 0 || addDecimal(xs[i - 1].saldo, m.amount) === m.saldo);
+  const oldestFirst = leads(moves) ? moves : leads([...moves].reverse()) ? [...moves].reverse() : null;
+  if (!oldestFirst) throw new Unbalanced(`Continental ${ref.number}: a row does not lead to its Saldo`);
+
+  const id = `py-continental-${ref.number}`;
+  const rows: Row[] = [];
+  const seen = new Map<string, number>();
+  for (const m of oldestFirst) {
+    const parts = m.mov.split(/\s+/);
+    const key = `${ref.number}:${m.date}T${m.time}:${parts.slice(0, 2).join('-')}`;
+    const n = (seen.get(key) ?? 0) + 1;
+    seen.set(key, n);
+    const [description, counterparty] = m.description.split(' | ');
+    rows.push({
+      kind: 'transaction', account: id, id: n > 1 ? `${key}:${n}` : key, date: m.date, amount: m.amount, currency: ref.currency,
+      description: description.trim(), counterparty: counterparty?.trim() || undefined, reference: parts.slice(0, 2).join('-'),
+    });
+  }
+  const last = oldestFirst[oldestFirst.length - 1];
+  if (last) rows.push({ kind: 'balance', account: id, id: `${ref.number}:${last.date}:balance`, date: last.date, amount: last.saldo, currency: ref.currency });
+  return {
+    name: `ContiWeb ${ref.label}`,
+    account: { id, label: `Continental ${ref.label} ***${ref.number.slice(-4)}`, currency: ref.currency },
+    rows,
+  };
+}
+
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+/** "7 de octubre de 2026" -> 2026-10-07. */
+export function fechaLarga(s: string): string | undefined {
+  const m = /^(\d{1,2}) de ([a-záéíóú]+) de (\d{4})$/i.exec(s.trim());
+  const month = m ? MESES.indexOf(m[2].toLowerCase().replace('setiembre', 'septiembre')) + 1 : 0;
+  return m && month ? `${m[3]}-${String(month).padStart(2, '0')}-${m[1].padStart(2, '0')}` : undefined;
+}
+
+export interface CardScreen {
+  last4: string;
+  debt: string; // "Deuda actual": "2.387.335 Gs"
+  items: Array<{ description: string; date: string; amount: string }>; // "4 de octubre de 2026", "662.863 Gs" (a credit "-60.000 Gs")
+}
+
+/**
+ * The card page: its movements since the last closing (purchases shown
+ * positive, credits negative) and the current debt. The page gives no
+ * coupon number, so a row's id is its day, description and amount; when the
+ * month's statement comes (#43), its rows meet these as duplicates.
+ */
+export function readContinentalCardScreen(card: CardScreen, today: string): ParsedStatement {
+  const money = (s: string) => {
+    const m = /^(-?[\d.,]+)\s*(Gs|U\$|USD|\$)$/.exec(s.trim());
+    const v = m ? gs(m[1]) : undefined;
+    if (!m || v === undefined) throw new Unbalanced(`Continental card ${card.last4}: unreadable amount`);
+    return { v, currency: m[2] === 'Gs' ? 'PYG' : 'USD' };
+  };
+  const id = `py-continental-card-${card.last4}`;
+  const debt = money(card.debt);
+  const rows: Row[] = [];
+  const seen = new Map<string, number>();
+  for (const it of card.items) {
+    const date = fechaLarga(it.date);
+    if (!date) throw new Unbalanced(`Continental card ${card.last4}: unreadable date`);
+    const { v, currency } = money(it.amount);
+    const description = it.description.replace(/\s+/g, ' ').trim();
+    const key = `${card.last4}:${date}:web:${description.toLowerCase()}:${v}`;
+    const n = (seen.get(key) ?? 0) + 1;
+    seen.set(key, n);
+    rows.push({ kind: 'transaction', account: id, id: n > 1 ? `${key}:${n}` : key, date, amount: neg(v), currency, description });
+  }
+  rows.push({ kind: 'balance', account: id, id: `${card.last4}:${today}:balance:web`, date: today, amount: neg(debt.v), currency: debt.currency });
+  return {
+    name: `ContiWeb card ***${card.last4}`,
+    account: { id, label: `Continental card ***${card.last4}`, currency: debt.currency },
+    rows,
+  };
+}
