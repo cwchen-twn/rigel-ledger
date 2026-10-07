@@ -1036,6 +1036,15 @@
         "password": "載具驗證碼"
       }
     },
+    "us-firstrade": {
+      "name": "Firstrade 第一證券",
+      "field": {
+        "username": "使用者名稱",
+        "password": "密碼",
+        "pin": "PIN 碼（帳戶有設定時）",
+        "mfa_secret": "驗證器金鑰（選填：自動回答 App 的驗證碼）"
+      }
+    },
     "xx-mail": {
       "name": "電子郵件（Gmail 或任何 IMAP）",
       "field": {

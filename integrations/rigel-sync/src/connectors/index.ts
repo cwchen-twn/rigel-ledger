@@ -7,11 +7,12 @@ import { einvoice } from './tw/einvoice.ts';
 import { tdcc } from './tw/tdcc.ts';
 import { mail } from './xx/mail.ts';
 import { continental } from './py/continental.ts';
+import { firstrade } from './us/firstrade.ts';
 import type { Connector } from './types.ts';
 
 /** The connectors this runner offers; the fake one only when asked for. */
 export function connectors(opts: { fake: boolean }): Connector[] {
-  const all: Connector[] = [cathaybk, sinopac, megabank, nextbank, tdcc, einvoice, mail, continental];
+  const all: Connector[] = [cathaybk, sinopac, megabank, nextbank, tdcc, einvoice, mail, continental, firstrade];
   if (opts.fake) all.push(fake);
   return all;
 }

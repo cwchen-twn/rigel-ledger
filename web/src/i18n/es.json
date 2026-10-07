@@ -1036,6 +1036,15 @@
         "password": "Contraseña del portador (載具驗證碼)"
       }
     },
+    "us-firstrade": {
+      "name": "Firstrade",
+      "field": {
+        "username": "Usuario",
+        "password": "Contraseña",
+        "pin": "PIN (si tu cuenta usa uno)",
+        "mfa_secret": "Clave del autenticador (opcional: responde el código de la app por sí sola)"
+      }
+    },
     "xx-mail": {
       "name": "Correo (Gmail o cualquier IMAP)",
       "field": {

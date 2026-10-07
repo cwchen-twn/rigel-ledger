@@ -1036,6 +1036,15 @@
         "password": "Carrier password (載具驗證碼)"
       }
     },
+    "us-firstrade": {
+      "name": "Firstrade",
+      "field": {
+        "username": "Username",
+        "password": "Password",
+        "pin": "PIN (if your account uses one)",
+        "mfa_secret": "Authenticator secret (optional: answers the app's code by itself)"
+      }
+    },
     "xx-mail": {
       "name": "Email (Gmail, or any IMAP)",
       "field": {

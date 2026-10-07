@@ -488,7 +488,7 @@ Taiwan finance hub whose connectors this design reuses.
 | 9 | 兆豐銀行 | deposits, balances, transactions | all-set-tw `megabank` (the mobile app's API: CAPTCHA read in the runner, SMS on an unusual sign-in, the virtual device kept), as `tw-megabank` (#65); 月對帳單 PDFs come a month late | reuse |
 | 11 | 電子發票載具 | carrier invoices with line items | all-set-tw `einvoice` (app login). The MOF's own API route could not be verified | reuse |
 | 12 | 集保 e存摺 | settlement-bank balances; TW stocks, ETF and funds, holdings and trades across brokers | all-set-tw `tdcc` (device OTP on first login) | reuse; **source of truth for TW holdings** |
-| 13 | Firstrade | trades, positions, value, history | `MaxxRK/firstrade-api` (unofficial Python; TOTP, saved cookies); its CSV export is the fallback | new (Python) |
+| 13 | Firstrade | trades, positions, cash, history | `us-firstrade` (#82): the mobile app's JSON API, ported to TypeScript from `MaxxRK/firstrade-api` (unofficial; PIN, TOTP or emailed code, the device remembered 30 days); its CSV export is the fallback | new |
 | 14 | Banco Continental (Paraguay) | USD account, PYG account, PYG credit card | its online banking's PDF statements, uploaded on Imports (#43): Movimientos de Cuenta for each account, the card's monthly extracto; `py-continental` (#67) reads ContiWeb for the month so far: each account's XLS export and the card page, the Contimóvil QR as a device challenge, the device remembered by its `_cdip` cookie | PDF, browser |
 | 15 | Gmail | order confirmations, receipts, subscription renewals, bank/card alert emails | IMAP, read-only, one label (see Email below) | new |
 
@@ -604,11 +604,13 @@ key.
     transactions, card bills, invoices with items, positions, trades) to our import
     payload.
   - Upstream fixes arrive by bumping the pin. New connectors (將來, 兆豐) follow all-set-tw's connector contract, so they could be upstreamed.
-- **Shioaji and Firstrade are Python SDKs, but not a second runner.** A person links
-  one runner (`RegisterKeys` retires every key a runner does not list, so two would
-  retire each other's), so a Python SDK runs inside rigel-sync's image, called by
-  its connector as a subprocess (the protocol stays in Node). To be designed with
-  P5; this replaces the planned `integrations/py-sync`.
+- **No Python, and not a second runner** (decided 2026-10-07). A person links one
+  runner (`RegisterKeys` retires every key a runner does not list, so two would retire
+  each other's), so every institution is a connector in rigel-sync. Firstrade's
+  "Python SDK" is a thin wrapper over the mobile app's JSON API, ported to TypeScript
+  (#82). Shioaji 1.7 is a Rust core whose wheel carries a standalone `shioaji` binary
+  with a local REST server: the connector downloads it on first use and drives it over
+  HTTP (#83). This replaces the planned `integrations/py-sync`.
 
 The runner speaks the runner protocol (`/api/runner/*`, with the `runner` token its person
 made in Settings -> Sync runner): claim due
