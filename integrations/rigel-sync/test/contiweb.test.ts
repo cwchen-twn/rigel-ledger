@@ -142,10 +142,6 @@ test('Spanish dates and account currencies', () => {
   assert.equal(continentalCurrency('Cuenta en Euros'), undefined);
 });
 
-test('py-continental is offered only with RIGEL_SYNC_EXPERIMENTAL=1 until it has run for real', () => {
-  delete process.env.RIGEL_SYNC_EXPERIMENTAL;
-  assert.ok(!connectors({ fake: false }).some((c) => c.id === 'py-continental'));
-  process.env.RIGEL_SYNC_EXPERIMENTAL = '1';
+test('py-continental is offered like any connector', () => {
   assert.ok(connectors({ fake: false }).some((c) => c.id === 'py-continental'));
-  delete process.env.RIGEL_SYNC_EXPERIMENTAL;
 });

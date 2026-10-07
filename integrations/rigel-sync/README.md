@@ -143,8 +143,7 @@ month from its 保證金及權利金專戶餘額 table (docs/ARCHITECTURE.md, "F
 
 ### Banco Continental (ContiWeb)
 
-`py-continental` (#67) reads the month so far from ContiWeb; offered only with
-`RIGEL_SYNC_EXPERIMENTAL=1` until it has run for real. ContiWeb encrypts its
+`py-continental` (#67) reads the month so far from ContiWeb. ContiWeb encrypts its
 API answers inside the page, so the connector works the page as a person
 does:
 
