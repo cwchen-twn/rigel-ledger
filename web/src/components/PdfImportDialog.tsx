@@ -9,6 +9,8 @@ import { Field, Input } from '~/components/ui/input';
 import { Table, tdClass, thClass, trClass } from '~/components/ui/misc';
 import { toast } from '~/components/ui/toast';
 import { useI18n } from '~/i18n';
+import { prepareFile } from '~/lib/attachments';
+import { readReceipt } from '~/lib/receipts';
 import { readStatement, type Statement, type StatementError } from '~/lib/statements';
 import { useBook } from '~/stores/book';
 
@@ -19,17 +21,21 @@ const base64 = (buf: ArrayBuffer) => {
   return btoa(s);
 };
 
+type Problem = StatementError | 'unreadable' | 'other';
+const problems: Problem[] = ['password', 'unrecognised', 'unbalanced', 'unreadable'];
+
 /**
- * A statement PDF into the review queue (#42): read in this tab with its
- * password, which is never sent; the rows and the original file are.
+ * A statement PDF (#42) or a KuDE receipt (#44, a photo or a PDF) into the
+ * review queue: read in this tab, with a PDF's password, which is never
+ * sent; the rows and the original file are.
  */
 export function PdfImportDialog(props: { open: boolean; onOpenChange: (o: boolean) => void; onImported: () => void }) {
   const { t, te } = useI18n();
   const book = useBook();
-  const [file, setFile] = createSignal<{ name: string; buf: ArrayBuffer } | null>(null);
+  const [file, setFile] = createSignal<{ name: string; type: string; buf: ArrayBuffer; upload: { name: string; blob: Blob } } | null>(null);
   const [password, setPassword] = createSignal('');
   const [statement, setStatement] = createSignal<Statement | null>(null);
-  const [problem, setProblem] = createSignal<StatementError | 'other' | null>(null);
+  const [problem, setProblem] = createSignal<Problem | null>(null);
   const [busy, setBusy] = createSignal(false);
 
   createEffect(() => {
@@ -47,10 +53,20 @@ export function PdfImportDialog(props: { open: boolean; onOpenChange: (o: boolea
     setProblem(null);
     setStatement(null);
     try {
-      setStatement(await readStatement(f.buf, password(), 'statement'));
+      if (f.type !== 'application/pdf') {
+        setStatement(await readReceipt(f.buf, f.type, '', 'statement'));
+        return;
+      }
+      try {
+        setStatement(await readStatement(f.buf, password(), 'statement'));
+      } catch (err) {
+        // Not a statement: perhaps a KuDE someone saved as a PDF.
+        if (!(err instanceof Error && err.message === 'unrecognised')) throw err;
+        setStatement(await readReceipt(f.buf, f.type, password(), 'statement'));
+      }
     } catch (err) {
-      const m = err instanceof Error ? err.message : '';
-      setProblem(m === 'password' || m === 'unrecognised' || m === 'unbalanced' ? m : 'other');
+      const m = (err instanceof Error ? err.message : '') as Problem;
+      setProblem(problems.includes(m) ? m : 'other');
     } finally {
       setBusy(false);
     }
@@ -59,7 +75,10 @@ export function PdfImportDialog(props: { open: boolean; onOpenChange: (o: boolea
   const pick = async (input: HTMLInputElement) => {
     const f = input.files?.[0];
     if (!f) return;
-    setFile({ name: f.name, buf: await f.arrayBuffer() });
+    const pdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+    // The QR is read from the original; a photo is sent downscaled, as attachments are.
+    const upload = pdf ? { name: f.name, blob: f } : await prepareFile(f);
+    setFile({ name: f.name, type: pdf ? 'application/pdf' : f.type, buf: await f.arrayBuffer(), upload });
     await read();
   };
 
@@ -74,7 +93,7 @@ export function PdfImportDialog(props: { open: boolean; onOpenChange: (o: boolea
         label: st.name,
         accounts: [{ id: st.account.id, label: st.account.label, currency: st.account.currency }],
         rows: st.rows.map((r) => ({ ...r, kind: r.kind as ImportRowInput['kind'], amount: r.amount ?? '0' })),
-        files: [{ ref: 'statement', filename: f.name, data: base64(f.buf) }],
+        files: [{ ref: 'statement', filename: f.upload.name, data: base64(await f.upload.blob.arrayBuffer()) }],
       });
       toast.success(t('imports.csv_done', { staged: res.staged, duplicates: res.duplicates }));
       props.onImported();
@@ -91,7 +110,7 @@ export function PdfImportDialog(props: { open: boolean; onOpenChange: (o: boolea
       <div class="grid gap-4">
         <div class="grid gap-4 sm:grid-cols-2">
           <Field label={t('imports.pdf_file')}>
-            <Input type="file" accept=".pdf,application/pdf" onChange={(e) => pick(e.currentTarget)} />
+            <Input type="file" accept=".pdf,application/pdf,image/*" onChange={(e) => pick(e.currentTarget)} />
           </Field>
           <Field label={t('imports.pdf_password')} hint={t('imports.pdf_password_hint')}>
             <Input

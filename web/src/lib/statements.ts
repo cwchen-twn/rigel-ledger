@@ -16,16 +16,22 @@ import type { Account, Row } from '@sync/connectors/types.ts';
 import pdfUrl from 'pdfjs-dist/build/pdf.min.mjs?url';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
+export interface PdfPage {
+  getTextContent(): Promise<{ items: unknown[] }>;
+  getViewport(p: { scale: number }): { width: number; height: number };
+  render(p: { canvas: HTMLCanvasElement; viewport: { width: number; height: number } }): { promise: Promise<void> };
+}
+
 interface PdfJs {
   getDocument(p: { data: Uint8Array; password?: string; verbosity?: number; isEvalSupported?: boolean }): {
-    promise: Promise<{ numPages: number; getPage(n: number): Promise<{ getTextContent(): Promise<{ items: unknown[] }> }> }>;
+    promise: Promise<{ numPages: number; getPage(n: number): Promise<PdfPage> }>;
     destroy(): Promise<void>;
   };
 }
 
 let loading: Promise<PdfJs> | undefined;
 
-function script(src: string): Promise<void> {
+export function script(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const s = document.createElement('script');
     s.type = 'module';
@@ -56,14 +62,20 @@ export interface Statement {
 }
 
 /** A PDF's lines; throws 'password' when it needs one, or another. */
-export async function pdfLines(data: ArrayBuffer, password = ''): Promise<string[][]> {
-  const lib = await pdfjs();
-  const task = lib.getDocument({ data: new Uint8Array(data.slice(0)), password, verbosity: 0, isEvalSupported: false });
-  try {
-    const doc = await task.promise;
+export function pdfLines(data: ArrayBuffer, password = ''): Promise<string[][]> {
+  return withPdf(data, password, async (doc) => {
     const out: string[][] = [];
     for (let n = 1; n <= doc.numPages; n++) out.push(...toLines((await (await doc.getPage(n)).getTextContent()).items));
     return out;
+  });
+}
+
+/** fn on the open PDF; throws 'password' when it needs one. */
+export async function withPdf<T>(data: ArrayBuffer, password: string, fn: (doc: { numPages: number; getPage(n: number): Promise<PdfPage> }) => Promise<T>): Promise<T> {
+  const lib = await pdfjs();
+  const task = lib.getDocument({ data: new Uint8Array(data.slice(0)), password, verbosity: 0, isEvalSupported: false });
+  try {
+    return await fn(await task.promise);
   } catch (err) {
     if ((err as { name?: string }).name === 'PasswordException') throw new Error('password' satisfies StatementError);
     throw err;
