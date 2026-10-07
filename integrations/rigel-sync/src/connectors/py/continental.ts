@@ -18,7 +18,7 @@
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { HTTPResponse } from 'puppeteer-core';
+import type { HTTPResponse, Page } from 'puppeteer-core';
 import cloudflare, { closeSession } from '../../browser/cloudflare.ts';
 import type { Batch, Connector } from '../types.ts';
 import { SyncError } from '../types.ts';
@@ -28,7 +28,7 @@ const GATEWAY = /(^|\.)apibanking-gw\.bancontinental\.com\.py$|(^|\.)secure\.ban
 const SKIP_PATH = /auth|login|seguridad|segundo-?factor|token|autoriza|clave|otp|password/i;
 const SECRET_KEY = /token|jwt|secret|clave|password|passwd|pin|cvv|otp|cookie|session/i;
 const WAIT_SECOND_FACTOR_MS = 5 * 60_000;
-const BROWSE_MS = 90_000;
+const BROWSE_MS = 180_000;
 
 /** A JSON value with secrets dropped and long numbers masked. */
 export function scrub(v: unknown): unknown {
@@ -41,6 +41,8 @@ export function scrub(v: unknown): unknown {
   if (typeof v === 'number' && Number.isInteger(v) && Math.abs(v) >= 1e9) return `******${String(Math.abs(v)).slice(-4)}`;
   return v;
 }
+
+const signedOut = async (page: Page) => String(await page.evaluate('location.pathname').catch(() => '/auth/')).startsWith('/auth/');
 
 export function makeContinental(opts: { dataDir?: string } = {}): Connector {
   return {
@@ -82,19 +84,25 @@ export function makeContinental(opts: { dataDir?: string } = {}): Connector {
           throw new SyncError('verification_failed', `still on the sign-in page: ${text}`);
         }
         ctx.log.info('signed in; opening accounts and cards; open each account and the card statement in the window', { seconds: BROWSE_MS / 1000 });
+        // In the app, the way a click goes: the session lives only in the
+        // page's memory, so loading /cuentas afresh signed out (#67).
         for (const route of ['/cuentas', '/tarjetas']) {
-          await page.goto(new URL(route, LOGIN).href, { waitUntil: 'networkidle2', timeout: 60_000 }).catch(() => {});
+          await page.evaluate(`history.pushState({}, '', ${JSON.stringify(route)}); dispatchEvent(new PopStateEvent('popstate'))`);
+          await page.waitForNetworkIdle({ idleTime: 1500, timeout: 30_000 }).catch(() => {});
+          if (await signedOut(page)) throw new SyncError('verification_failed', `signed out on ${route}`);
         }
-        await new Promise((r) => setTimeout(r, BROWSE_MS));
+        // The person browses; closing the window ends it early.
+        await Promise.race([new Promise((r) => setTimeout(r, BROWSE_MS)), new Promise((r) => page.once('close', r))]);
       } finally {
         await browser.close().catch(() => {});
         await closeSession(browser.sessionId()).catch(() => {});
+        // Whatever was seen, even when the run failed part way.
+        const dir = join(opts.dataDir ?? process.env.DATA_DIR ?? '/data', 'captures');
+        await mkdir(dir, { recursive: true, mode: 0o700 });
+        const file = join(dir, `py-continental-${Date.now()}.json`);
+        await writeFile(file, JSON.stringify(captured, null, 2), { mode: 0o600 });
+        ctx.log.info('captured', { responses: captured.length, file });
       }
-      const dir = join(opts.dataDir ?? process.env.DATA_DIR ?? '/data', 'captures');
-      await mkdir(dir, { recursive: true, mode: 0o700 });
-      const file = join(dir, `py-continental-${Date.now()}.json`);
-      await writeFile(file, JSON.stringify(captured, null, 2), { mode: 0o600 });
-      ctx.log.info('captured', { responses: captured.length, file });
       return { label: 'ContiWeb capture', accounts: [], rows: [] } satisfies Batch;
     },
   };
