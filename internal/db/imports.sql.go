@@ -751,6 +751,116 @@ func (q *Queries) FindSameInvoiceTx(ctx context.Context, arg FindSameInvoiceTxPa
 	return id, err
 }
 
+const findSecurityChild = `-- name: FindSecurityChild :one
+SELECT id FROM accounts
+WHERE book_id = $1 AND parent_id = $2 AND commodity = $3
+  AND NOT is_placeholder AND archived_at IS NULL
+ORDER BY id
+LIMIT 1
+`
+
+type FindSecurityChildParams struct {
+	BookID    int64
+	ParentID  *int64
+	Commodity *string
+}
+
+// The account a parent already has for a security: another source of the
+// same broker account made it (集保 and Shioaji share "2330 台積電").
+func (q *Queries) FindSecurityChild(ctx context.Context, arg FindSecurityChildParams) (int64, error) {
+	row := q.db.QueryRow(ctx, findSecurityChild, arg.BookID, arg.ParentID, arg.Commodity)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const findTradeDuplicate = `-- name: FindTradeDuplicate :one
+SELECT t.id FROM postings p JOIN transactions t ON t.id = p.transaction_id
+WHERE t.book_id = $1 AND p.account_id = $2 AND p.amount = $3
+  AND t.date BETWEEN $4 AND $5
+  AND NOT EXISTS (SELECT 1 FROM import_rows r
+                  WHERE r.book_id = $1 AND r.kind = 'trade' AND r.status <> 'ignored' AND r.id <> $6
+                    AND (r.transaction_id = t.id OR r.match_transaction_id = t.id))
+ORDER BY abs(t.date - $7::DATE), t.id
+LIMIT 1
+`
+
+type FindTradeDuplicateParams struct {
+	BookID    int64
+	AccountID int64
+	Units     decimal.Decimal
+	FromDate  time.Time
+	ToDate    time.Time
+	RowID     int64
+	OnDate    time.Time
+}
+
+// A trade already in the books: the same units on the security's account,
+// within a few days, not already claimed by another trade row.
+func (q *Queries) FindTradeDuplicate(ctx context.Context, arg FindTradeDuplicateParams) (int64, error) {
+	row := q.db.QueryRow(ctx, findTradeDuplicate,
+		arg.BookID,
+		arg.AccountID,
+		arg.Units,
+		arg.FromDate,
+		arg.ToDate,
+		arg.RowID,
+		arg.OnDate,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const findTradeRow = `-- name: FindTradeRow :one
+SELECT r.id, (r.cash IS NOT NULL)::BOOLEAN AS has_cash FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
+WHERE r.book_id = $1 AND r.status = 'pending' AND r.kind = 'trade' AND r.id <> $2
+  AND s.account_id = $3 AND r.source_account_id <> $4
+  AND r.security = $5 AND r.units = $6 AND r.date BETWEEN $7 AND $8
+  AND (r.match_row_id IS NULL OR r.match_row_id = $2)
+  AND NOT EXISTS (SELECT 1 FROM import_rows o WHERE o.book_id = $1 AND o.status = 'pending' AND o.id <> $2
+                  AND o.proposal = 'duplicate' AND o.match_row_id = r.id)
+ORDER BY abs(r.date - $9::DATE), r.id
+LIMIT 1
+`
+
+type FindTradeRowParams struct {
+	BookID          int64
+	RowID           int64
+	AccountID       *int64
+	SourceAccountID int64
+	Security        *string
+	Units           decimal.NullDecimal
+	FromDate        time.Time
+	ToDate          time.Time
+	OnDate          time.Time
+}
+
+type FindTradeRowRow struct {
+	ID      int64
+	HasCash bool
+}
+
+// The same trade waiting from another source of the same broker account
+// (mapped to the same parent): the same security and units, a few days
+// apart, not already paired with a third.
+func (q *Queries) FindTradeRow(ctx context.Context, arg FindTradeRowParams) (FindTradeRowRow, error) {
+	row := q.db.QueryRow(ctx, findTradeRow,
+		arg.BookID,
+		arg.RowID,
+		arg.AccountID,
+		arg.SourceAccountID,
+		arg.Security,
+		arg.Units,
+		arg.FromDate,
+		arg.ToDate,
+		arg.OnDate,
+	)
+	var i FindTradeRowRow
+	err := row.Scan(&i.ID, &i.HasCash)
+	return i, err
+}
+
 const findTransferByReference = `-- name: FindTransferByReference :one
 SELECT r.id FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
 WHERE r.book_id = $1 AND r.status = 'pending' AND r.kind = 'transaction' AND r.id <> $2
@@ -836,7 +946,7 @@ func (q *Queries) FindTransferPartner(ctx context.Context, arg FindTransferPartn
 }
 
 const getImportRow = `-- name: GetImportRow :one
-SELECT r.id, r.book_id, r.batch_id, r.source_account_id, r.kind, r.external_id, r.date, r.amount, r.currency, r.description, r.counterparty, r.pending, r.raw, r.proposal, r.proposed_account_id, r.match_transaction_id, r.match_row_id, r.rule_id, r.status, r.transaction_id, r.decided_by, r.decided_at, r.created_at, r.attachment_id, r.security, r.units, r.price, r.cash, r.items, r.reference, s.account_id, s.connector, s.settlement_account_id
+SELECT r.id, r.book_id, r.batch_id, r.source_account_id, r.kind, r.external_id, r.date, r.amount, r.currency, r.description, r.counterparty, r.pending, r.raw, r.proposal, r.proposed_account_id, r.match_transaction_id, r.match_row_id, r.rule_id, r.status, r.transaction_id, r.decided_by, r.decided_at, r.created_at, r.attachment_id, r.security, r.units, r.price, r.cash, r.items, r.reference, s.account_id, s.connector, s.settlement_account_id, s.ignored AS source_ignored
 FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
 WHERE r.book_id = $1 AND r.id = $2
 `
@@ -880,6 +990,7 @@ type GetImportRowRow struct {
 	AccountID           *int64
 	Connector           string
 	SettlementAccountID *int64
+	SourceIgnored       bool
 }
 
 func (q *Queries) GetImportRow(ctx context.Context, arg GetImportRowParams) (GetImportRowRow, error) {
@@ -919,12 +1030,13 @@ func (q *Queries) GetImportRow(ctx context.Context, arg GetImportRowParams) (Get
 		&i.AccountID,
 		&i.Connector,
 		&i.SettlementAccountID,
+		&i.SourceIgnored,
 	)
 	return i, err
 }
 
 const getSourceAccount = `-- name: GetSourceAccount :one
-SELECT id, book_id, connector, external_id, label, currency, account_id, created_at, kind, settlement_account_id FROM source_accounts WHERE book_id = $1 AND id = $2
+SELECT id, book_id, connector, external_id, label, currency, account_id, created_at, kind, settlement_account_id, ignored FROM source_accounts WHERE book_id = $1 AND id = $2
 `
 
 type GetSourceAccountParams struct {
@@ -946,6 +1058,7 @@ func (q *Queries) GetSourceAccount(ctx context.Context, arg GetSourceAccountPara
 		&i.CreatedAt,
 		&i.Kind,
 		&i.SettlementAccountID,
+		&i.Ignored,
 	)
 	return i, err
 }
@@ -1169,7 +1282,7 @@ func (q *Queries) ListRules(ctx context.Context, bookID int64) ([]ImportRule, er
 }
 
 const listSourceAccounts = `-- name: ListSourceAccounts :many
-SELECT s.id, s.book_id, s.connector, s.external_id, s.label, s.currency, s.account_id, s.created_at, s.kind, s.settlement_account_id,
+SELECT s.id, s.book_id, s.connector, s.external_id, s.label, s.currency, s.account_id, s.created_at, s.kind, s.settlement_account_id, s.ignored,
        (SELECT count(*) FROM import_rows r WHERE r.source_account_id = s.id AND r.status = 'pending')::BIGINT AS pending
 FROM source_accounts s WHERE s.book_id = $1
 ORDER BY s.connector, s.label, s.id
@@ -1186,6 +1299,7 @@ type ListSourceAccountsRow struct {
 	CreatedAt           time.Time
 	Kind                string
 	SettlementAccountID *int64
+	Ignored             bool
 	Pending             int64
 }
 
@@ -1210,6 +1324,7 @@ func (q *Queries) ListSourceAccounts(ctx context.Context, bookID int64) ([]ListS
 			&i.CreatedAt,
 			&i.Kind,
 			&i.SettlementAccountID,
+			&i.Ignored,
 			&i.Pending,
 		); err != nil {
 			return nil, err
@@ -1223,13 +1338,15 @@ func (q *Queries) ListSourceAccounts(ctx context.Context, bookID int64) ([]ListS
 }
 
 const mapSourceAccount = `-- name: MapSourceAccount :one
-UPDATE source_accounts SET account_id = $1, settlement_account_id = $2
-WHERE book_id = $3 AND id = $4 RETURNING id, book_id, connector, external_id, label, currency, account_id, created_at, kind, settlement_account_id
+UPDATE source_accounts SET account_id = $1, settlement_account_id = $2,
+    ignored = $3
+WHERE book_id = $4 AND id = $5 RETURNING id, book_id, connector, external_id, label, currency, account_id, created_at, kind, settlement_account_id, ignored
 `
 
 type MapSourceAccountParams struct {
 	AccountID           *int64
 	SettlementAccountID *int64
+	Ignored             bool
 	BookID              int64
 	ID                  int64
 }
@@ -1238,6 +1355,7 @@ func (q *Queries) MapSourceAccount(ctx context.Context, arg MapSourceAccountPara
 	row := q.db.QueryRow(ctx, mapSourceAccount,
 		arg.AccountID,
 		arg.SettlementAccountID,
+		arg.Ignored,
 		arg.BookID,
 		arg.ID,
 	)
@@ -1253,6 +1371,7 @@ func (q *Queries) MapSourceAccount(ctx context.Context, arg MapSourceAccountPara
 		&i.CreatedAt,
 		&i.Kind,
 		&i.SettlementAccountID,
+		&i.Ignored,
 	)
 	return i, err
 }
@@ -1505,7 +1624,7 @@ ON CONFLICT (book_id, connector, external_id) DO UPDATE
     SET label = CASE WHEN EXCLUDED.label <> '' THEN EXCLUDED.label ELSE source_accounts.label END,
         currency = coalesce(source_accounts.currency, EXCLUDED.currency),
         kind = EXCLUDED.kind
-RETURNING id, book_id, connector, external_id, label, currency, account_id, created_at, kind, settlement_account_id
+RETURNING id, book_id, connector, external_id, label, currency, account_id, created_at, kind, settlement_account_id, ignored
 `
 
 type UpsertSourceAccountParams struct {
@@ -1538,6 +1657,7 @@ func (q *Queries) UpsertSourceAccount(ctx context.Context, arg UpsertSourceAccou
 		&i.CreatedAt,
 		&i.Kind,
 		&i.SettlementAccountID,
+		&i.Ignored,
 	)
 	return i, err
 }

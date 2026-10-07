@@ -500,6 +500,8 @@ export interface SourceAccount {
   kind: 'cash' | 'brokerage';
   account_id: number | null;
   settlement_account_id: number | null;
+  /** Set aside: another source brings this account, so its rows are ignored. */
+  ignored: boolean;
   pending: number;
 }
 

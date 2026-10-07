@@ -243,7 +243,9 @@ type SourceAccountDTO struct {
 	AccountID *int64 `json:"account_id"`
 	// For a brokerage, where its trades' cash goes.
 	SettlementAccountID *int64 `json:"settlement_account_id"`
-	Pending             int64  `json:"pending"`
+	// Set aside: another source brings this account, so its rows are ignored.
+	Ignored bool  `json:"ignored"`
+	Pending int64 `json:"pending"`
 }
 
 // listSources
@@ -263,7 +265,7 @@ func (h *handlers) listSources(w http.ResponseWriter, r *http.Request) {
 	out := make([]SourceAccountDTO, len(rows))
 	for i, s := range rows {
 		out[i] = SourceAccountDTO{ID: s.ID, Connector: s.Connector, ExternalID: s.ExternalID, Label: s.Label,
-			Currency: s.Currency, Kind: s.Kind, AccountID: s.AccountID, SettlementAccountID: s.SettlementAccountID, Pending: s.Pending}
+			Currency: s.Currency, Kind: s.Kind, AccountID: s.AccountID, SettlementAccountID: s.SettlementAccountID, Ignored: s.Ignored, Pending: s.Pending}
 	}
 	response.JSON(w, http.StatusOK, out)
 }
@@ -274,6 +276,9 @@ type MapSourceDTO struct {
 	AccountID *int64 `json:"account_id"`
 	// A brokerage only: the account its trades settle through.
 	SettlementAccountID *int64 `json:"settlement_account_id"`
+	// Don't import: another source brings this account. Its waiting rows
+	// are ignored now, and every row it sends later.
+	Ignored bool `json:"ignored"`
 }
 
 // mapSource
@@ -298,7 +303,7 @@ func (h *handlers) mapSource(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	if _, err := h.svc.MapSourceAccount(r.Context(), access(r), sid, ledger.SourceMapping{AccountID: req.AccountID, SettlementAccountID: req.SettlementAccountID}); err != nil {
+	if _, err := h.svc.MapSourceAccount(r.Context(), access(r), sid, ledger.SourceMapping{AccountID: req.AccountID, SettlementAccountID: req.SettlementAccountID, Ignored: req.Ignored}); err != nil {
 		h.fail(w, r, err)
 		return
 	}

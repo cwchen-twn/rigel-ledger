@@ -1,7 +1,7 @@
 import { Check, FileText, FileUp, Inbox, Paperclip, Trash2, WandSparkles, X } from 'lucide-solid';
 import { createEffect, createMemo, createResource, createSignal, For, on, Show } from 'solid-js';
 import { api } from '~/api/client';
-import type { ImportRow, Proposal } from '~/api/types';
+import type { ImportRow, Proposal, SourceAccount } from '~/api/types';
 import { AccountCombobox } from '~/components/AccountCombobox';
 import { PageHeader } from '~/components/AppShell';
 import { CsvImportDialog } from '~/components/CsvImportDialog';
@@ -106,9 +106,13 @@ export default function Imports() {
     !foreignMatch(r) && (r.items ?? []).some((it) => it.account_id && it.account_id !== category(r));
   const splitting = (r: ImportRow) => splittable(r) && !noSplit().has(r.id);
 
+  /** A trade another source of the same broker brings too (#81): settled with that one. */
+  const tradeDuplicate = (r: ImportRow) => r.kind === 'trade' && r.proposal === 'duplicate';
   const acceptable = (r: ImportRow) =>
     r.kind === 'trade'
-      ? r.account_id !== null && r.settlement_account_id !== null && cashSigned(r) !== null
+      ? tradeDuplicate(r)
+        ? r.match_transaction_id !== null
+        : r.account_id !== null && r.settlement_account_id !== null && cashSigned(r) !== null
       : r.kind === 'invoice'
         ? r.proposal === 'enrich' || r.proposal === 'same_invoice'
           ? r.match_transaction_id !== null
@@ -118,8 +122,8 @@ export default function Imports() {
         : r.kind === 'transaction' && r.account_id !== null &&
           // the same charge as a waiting row: settled when that one is accepted
           !(r.proposal === 'duplicate' && r.match_transaction_id === null && r.match_row_id !== null);
-  const unmapped = () =>
-    (sources() ?? []).filter((s) => s.account_id === null || (s.kind === 'brokerage' && s.settlement_account_id === null));
+  const sourceUnmapped = (s: SourceAccount) => !s.ignored && (s.account_id === null || (s.kind === 'brokerage' && s.settlement_account_id === null));
+  const unmapped = () => (sources() ?? []).filter(sourceUnmapped);
 
   const toggle = (id: number, on: boolean) => {
     const s = new Set(selected());
@@ -137,7 +141,7 @@ export default function Imports() {
     for (const id of ids) {
       const r = rowsById().get(id);
       if (!r) continue;
-      if (r.kind === 'trade') {
+      if (r.kind === 'trade' && !tradeDuplicate(r)) {
         const c = cashSigned(r);
         if (c !== null) cash[id] = c;
       }
@@ -186,10 +190,10 @@ export default function Imports() {
       reload();
     }
   };
-  const map = async (sourceId: number, accountId: number | null, settlementId: number | null = null) => {
+  const map = async (sourceId: number, accountId: number | null, settlementId: number | null = null, ignored = false) => {
     try {
-      await api.mapSource(book.id(), sourceId, accountId, settlementId);
-      toast.success(t('imports.mapped'));
+      await api.mapSource(book.id(), sourceId, accountId, settlementId, ignored);
+      toast.success(t(ignored ? 'imports.source_ignored' : 'imports.mapped'));
     } catch (err) {
       toast.error(te(err));
     }
@@ -218,6 +222,11 @@ export default function Imports() {
       return t('imports.explain_waiting', { date: fmt(addDays(r.date, 7)) });
     }
     if (r.account_id === null) return t('imports.unmapped_row');
+    if (tradeDuplicate(r)) {
+      if (r.match_transaction_id !== null || r.match_row_id === null) return t('imports.explain_trade_duplicate');
+      const other = rowsById().get(r.match_row_id);
+      return t('imports.explain_trade_duplicate_row', { source: other ? `${other.connector} · ${other.source_label}` : '?' });
+    }
     if (r.kind === 'trade') {
       const at = r.price ? ` @ ${strip(r.price)}` : '';
       return r.settlement_account_id === null
@@ -299,8 +308,11 @@ export default function Imports() {
                     <div class="min-w-0">
                       <div class="flex items-center gap-2 truncate text-sm font-medium">
                         {s.label || s.external_id}
-                        <Show when={s.account_id === null || (s.kind === 'brokerage' && s.settlement_account_id === null)}>
+                        <Show when={sourceUnmapped(s)}>
                           <Badge variant="warning">{t('imports.unmapped')}</Badge>
+                        </Show>
+                        <Show when={s.ignored}>
+                          <Badge variant="outline">{t('imports.not_imported')}</Badge>
                         </Show>
                         <Show when={s.kind === 'brokerage'}><Badge variant="outline">{t('imports.brokerage')}</Badge></Show>
                       </div>
@@ -310,32 +322,59 @@ export default function Imports() {
                       </div>
                     </div>
                     <Show
-                      when={s.kind === 'brokerage'}
+                      when={!s.ignored}
                       fallback={
-                        <AccountCombobox
-                          value={s.account_id}
-                          onChange={(id) => book.canEdit() && map(s.id, id)}
-                          filter={(a) => a.class === 'asset' || a.class === 'liability'}
-                          placeholder={t('imports.map_to')}
-                        />
+                        <div class="flex items-center justify-between gap-2 sm:justify-end">
+                          <span class="text-xs text-muted-foreground">{t('imports.not_imported_hint')}</span>
+                          <Show when={book.canEdit()}>
+                            <Button size="sm" variant="outline" onClick={() => map(s.id, null)}>
+                              {t('imports.import_again')}
+                            </Button>
+                          </Show>
+                        </div>
                       }
                     >
-                      <div class="grid min-w-0 gap-2">
-                        <AccountCombobox
-                          value={s.account_id}
-                          onChange={(id) => book.canEdit() && map(s.id, id, s.settlement_account_id)}
-                          filter={(a) => a.class === 'asset'}
-                          allowPlaceholders
-                          placeholder={t('imports.securities_under')}
-                          aria-label={t('imports.securities_under')}
-                        />
-                        <AccountCombobox
-                          value={s.settlement_account_id}
-                          onChange={(id) => book.canEdit() && map(s.id, s.account_id, id)}
-                          filter={(a) => a.class === 'asset'}
-                          placeholder={t('imports.settles_through')}
-                          aria-label={t('imports.settles_through')}
-                        />
+                      <div class="grid min-w-0 gap-1">
+                        <Show
+                          when={s.kind === 'brokerage'}
+                          fallback={
+                            <AccountCombobox
+                              value={s.account_id}
+                              onChange={(id) => book.canEdit() && map(s.id, id)}
+                              filter={(a) => a.class === 'asset' || a.class === 'liability'}
+                              placeholder={t('imports.map_to')}
+                            />
+                          }
+                        >
+                          <div class="grid min-w-0 gap-2">
+                            <AccountCombobox
+                              value={s.account_id}
+                              onChange={(id) => book.canEdit() && map(s.id, id, s.settlement_account_id)}
+                              filter={(a) => a.class === 'asset'}
+                              allowPlaceholders
+                              placeholder={t('imports.securities_under')}
+                              aria-label={t('imports.securities_under')}
+                            />
+                            <AccountCombobox
+                              value={s.settlement_account_id}
+                              onChange={(id) => book.canEdit() && map(s.id, s.account_id, id)}
+                              filter={(a) => a.class === 'asset'}
+                              placeholder={t('imports.settles_through')}
+                              aria-label={t('imports.settles_through')}
+                            />
+                          </div>
+                        </Show>
+                        <Show when={book.canEdit()}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            class="justify-self-end text-muted-foreground"
+                            title={t('imports.dont_import_hint')}
+                            onClick={() => map(s.id, null, null, true)}
+                          >
+                            {t('imports.dont_import')}
+                          </Button>
+                        </Show>
                       </div>
                     </Show>
                   </div>
@@ -394,12 +433,12 @@ export default function Imports() {
                                   ? tradeTitle(r)
                                   : r.counterparty || r.description || '—'}
                           </span>
-                          <Show when={(r.kind === 'transaction' && r.account_id !== null) || r.kind === 'invoice'}>
+                          <Show when={(r.kind === 'transaction' && r.account_id !== null) || r.kind === 'invoice' || tradeDuplicate(r)}>
                             <Badge variant={BADGE[r.proposal]}>
                               {r.kind === 'invoice' && r.proposal === 'new'
                                 ? t('imports.proposal_cash')
                                 : r.proposal === 'duplicate' && r.match_transaction_id === null && r.match_row_id !== null
-                                  ? t('imports.proposal_same_charge')
+                                  ? t(r.kind === 'trade' ? 'imports.proposal_same_trade' : 'imports.proposal_same_charge')
                                   : t(`imports.proposal_${r.proposal}`)}
                             </Badge>
                           </Show>
@@ -479,10 +518,10 @@ export default function Imports() {
                       </div>
                       <div class="flex items-center justify-between gap-2 lg:justify-end">
                         <Show
-                          when={r.kind === 'trade'}
+                          when={r.kind === 'trade' && !tradeDuplicate(r)}
                           fallback={
                             <Show
-                              when={r.kind === 'holding'}
+                              when={r.kind === 'holding' || tradeDuplicate(r)}
                               fallback={
                                 <span class="flex flex-col items-end">
                                   <Show when={!evidence(r)} fallback={<span class="text-sm text-muted-foreground">{t('imports.amount_not_stated')}</span>}>

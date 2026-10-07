@@ -237,8 +237,9 @@ export const api = {
 
   importBatch: (id: number, b: T.ImportBatch) => post<T.ImportResult>(`${book(id)}/imports`, b),
   importSources: (id: number) => get<T.SourceAccount[]>(`${book(id)}/imports/sources`),
-  mapSource: (id: number, sourceId: number, account_id: number | null, settlement_account_id: number | null = null) =>
-    patch<void>(`${book(id)}/imports/sources/${sourceId}`, { account_id, settlement_account_id }),
+  /** ignored: don't import this source account, another brings the same one (#81). */
+  mapSource: (id: number, sourceId: number, account_id: number | null, settlement_account_id: number | null = null, ignored = false) =>
+    patch<void>(`${book(id)}/imports/sources/${sourceId}`, { account_id, settlement_account_id, ignored }),
   importQueue: (id: number) => get<T.ImportRow[]>(`${book(id)}/imports/queue`),
   /** cash: a trade's settled cash by row id, signed on its settlement account. */
   acceptRows: (id: number, row_ids: number[], account_id: number | null = null, cash?: Record<number, string>, split = false) =>

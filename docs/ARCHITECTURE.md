@@ -702,6 +702,16 @@ implementation against one pretend institution, for development and end-to-end t
     - Units that move with no cash -- a transfer between brokers, a stock dividend
       (taxed at par in Taiwan) -- are refused on accept: ignore the row and enter them by
       hand. Dividends paid in cash arrive as the bank's own rows.
+    - **One broker account, several sources** (#81, migration `000015`). 集保 sees every
+      broker; Shioaji sees 永豐's with the cash, fees and tax. Map both broker source
+      accounts to the same parent and settlement account: they share each security's
+      account (a parent's child holding the commodity is reused before one is made), and
+      a trade is matched like a charge -- a posting of the same units on the security's
+      account within 3 days is its `duplicate`; the same security and units waiting from
+      another source of the same parent pairs with it (`match_row_id`), **the row with
+      cash books** (between two alike, the first staged) and the other is settled with
+      it. The window also covers a trade dated by its settlement day (T+2) on one side
+      and its trade day on the other (unconfirmed for 集保's `txnDate`).
   - **Futures.**
     - Daily settle P&L from `margin()` becomes margin-account ↔ futures P&L postings.
     - Equity is an assertion.
@@ -779,6 +789,14 @@ contract to target. Migration `000005`; `internal/ledger/imports.go`,
   for CSV; `external_id` = the row's key) only when accepted. Ignored rows stay on
   record so they are never staged again. If what a row matched has been deleted, the
   accept re-matches it and answers `match_gone`.
+- **Many sources, one account** (#81). Several source accounts may map to one ledger
+  account (a card's statement and its alerts; a broker and the bank it settles
+  through); Accounts names the connectors that feed each. A source account whose
+  account another source already brings is set aside with **Don't import**
+  (`source_accounts.ignored`, migration `000015`): its waiting rows are ignored now and
+  every row it sends later is staged straight as ignored (kept, so never staged again).
+  Import again affects only what comes next. An expense account is reached through
+  rules and invoices, never mapped.
 - **Balance rows become assertions** as soon as their account is mapped. Drift is each
   account's newest assertion against the books' sum on that date, in the account's
   commodity; it shows on Imports and as a badge on Accounts. Nothing is overwritten.

@@ -166,3 +166,128 @@ func TestSecurityRowsAreChecked(t *testing.T) {
 		}
 	}
 }
+
+// One broker account, two sources (#81): 集保 sends each trade's units a
+// settlement day late and without cash, Shioaji the same trade with its
+// cash. The one with cash books, 集保's goes with it, both share one
+// security account, and once 集保's view is set aside it imports nothing.
+func TestTradesFromTwoSources(t *testing.T) {
+	f := setup(t)
+	inv, checking := f.keys["investments"], f.keys["bank_checking"]
+	tdcc := func(rows ...ImportRowInput) ImportInput {
+		return ImportInput{Connector: "tw-tdcc", Accounts: []ImportAccount{{ExternalID: "9A9c-0000001", Currency: "TWD", Kind: KindBrokerage}}, Rows: rows}
+	}
+	trade := func(acct, id, date, units string, cash *decimal.Decimal) ImportRowInput {
+		return ImportRowInput{Kind: "trade", Account: acct, ID: id, Date: day(date), Security: "XTAI:2330", Units: dp2(units), Cash: cash}
+	}
+	if _, err := f.svc.Import(f.ctx, f.acc, tdcc(
+		trade("9A9c-0000001", "t1", "2026-09-04", "1000", nil),
+		trade("9A9c-0000001", "t2", "2026-09-22", "-400", nil),
+	)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Import(f.ctx, f.acc, ImportInput{Connector: "tw-shioaji",
+		Accounts: []ImportAccount{{ExternalID: "sinopac-stock-0001", Currency: "TWD", Kind: KindBrokerage}},
+		Rows: []ImportRowInput{
+			trade("sinopac-stock-0001", "s1", "2026-09-02", "1000", dp2("-580826")),
+			trade("sinopac-stock-0001", "s2", "2026-09-20", "-400", dp2("239000")),
+		}}); err != nil {
+		t.Fatal(err)
+	}
+	srcs, _ := f.svc.SourceAccounts(f.ctx, f.acc)
+	ids := map[string]int64{}
+	for _, s := range srcs {
+		ids[s.Connector] = s.ID
+	}
+	for _, c := range []string{"tw-tdcc", "tw-shioaji"} {
+		if _, err := f.svc.MapSourceAccount(f.ctx, f.acc, ids[c], SourceMapping{AccountID: &inv, SettlementAccountID: &checking}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// 集保's rows wait for Shioaji's, which carry the cash.
+	q := f.queue(t)
+	for tdccID, shioajiID := range map[string]string{"tw-tdcc:t1": "tw-shioaji:s1", "tw-tdcc:t2": "tw-shioaji:s2"} {
+		r, other := q[tdccID], q[shioajiID]
+		if r.Proposal != "duplicate" || r.MatchRowID == nil || *r.MatchRowID != other.ID || other.Proposal != "new" {
+			t.Fatalf("%s = %s %v, %s = %s", tdccID, r.Proposal, r.MatchRowID, shioajiID, other.Proposal)
+		}
+	}
+	_, err := f.svc.Accept(f.ctx, f.acc, q["tw-tdcc:t1"].ID, AcceptInput{})
+	wantCode(t, err, "match_pending")
+
+	// Accepting Shioaji's books it once; 集保's goes with it.
+	buy, err := f.svc.Accept(f.ctx, f.acc, q["tw-shioaji:s1"].ID, AcceptInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Accept(f.ctx, f.acc, q["tw-shioaji:s2"].ID, AcceptInput{}); err != nil {
+		t.Fatal(err)
+	}
+	q = f.queue(t)
+	if len(q) != 0 {
+		t.Fatalf("still waiting: %v", q)
+	}
+	v, _ := f.svc.GetTransaction(f.ctx, f.acc, buy)
+	if !v.Postings[0].Amount.Equal(d("1000")) || !v.Postings[0].BaseAmount.Equal(d("580826")) {
+		t.Fatalf("buy = %+v", v.Postings)
+	}
+
+	// 集保's units still land on the same account: one "2330" for both.
+	if _, err := f.svc.Import(f.ctx, f.acc, tdcc(ImportRowInput{Kind: "holding", Account: "9A9c-0000001", ID: "h1",
+		Date: day("2026-09-30"), Security: "XTAI:2330", Units: dp2("600")})); err != nil {
+		t.Fatal(err)
+	}
+	var sec int64
+	accts, _ := f.svc.ListAccounts(f.ctx, f.acc)
+	for _, a := range accts {
+		if a.Commodity != nil && *a.Commodity == "XTAI:2330" {
+			if sec != 0 {
+				t.Fatal("two accounts for one security")
+			}
+			sec = a.ID
+		}
+	}
+	if drifts, err := f.svc.Drifts(f.ctx, f.acc); err != nil || len(drifts) != 0 {
+		t.Fatalf("drifts = %+v %v", drifts, err)
+	}
+
+	// A trade typed in by hand: 集保's row for it is a duplicate of it.
+	typed := f.post(t, "2026-10-05",
+		LineInput{AccountID: sec, Amount: d("50"), BaseAmount: dp2("30000")},
+		LineInput{AccountID: checking, Amount: d("-30000")})
+	if _, err := f.svc.Import(f.ctx, f.acc, tdcc(trade("9A9c-0000001", "t3", "2026-10-07", "50", nil))); err != nil {
+		t.Fatal(err)
+	}
+	r := f.queue(t)["tw-tdcc:t3"]
+	if r.Proposal != "duplicate" || r.MatchTransactionID == nil || *r.MatchTransactionID != typed.ID {
+		t.Fatalf("t3 = %s %v", r.Proposal, r.MatchTransactionID)
+	}
+	if got, err := f.svc.Accept(f.ctx, f.acc, r.ID, AcceptInput{}); err != nil || got != typed.ID {
+		t.Fatalf("accept t3 = %d %v", got, err)
+	}
+
+	// 集保's view of this broker set aside: what waits and what comes is ignored.
+	if _, err := f.svc.Import(f.ctx, f.acc, tdcc(trade("9A9c-0000001", "t4", "2026-10-08", "10", nil))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.MapSourceAccount(f.ctx, f.acc, ids["tw-tdcc"], SourceMapping{Ignored: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, waiting := f.queue(t)["tw-tdcc:t4"]; waiting {
+		t.Fatal("an ignored source's row still waits")
+	}
+	res, err := f.svc.Import(f.ctx, f.acc, tdcc(trade("9A9c-0000001", "t5", "2026-10-09", "10", nil)))
+	if err != nil || res.Staged != 1 {
+		t.Fatalf("import = %+v %v", res, err)
+	}
+	if len(f.queue(t)) != 0 {
+		t.Fatalf("an ignored source's new row waits: %v", f.queue(t))
+	}
+	srcs, _ = f.svc.SourceAccounts(f.ctx, f.acc)
+	for _, s := range srcs {
+		if s.ID == ids["tw-tdcc"] && (!s.Ignored || s.Pending != 0) {
+			t.Fatalf("source = %+v", s)
+		}
+	}
+}

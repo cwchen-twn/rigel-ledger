@@ -325,6 +325,11 @@ func (s *Service) propose(ctx context.Context, a Access, rowID int64) (applied b
 		// Matched whether or not its source is mapped: only a cash purchase needs that.
 		return false, s.proposeInvoice(ctx, a, r)
 	}
+	if r.Status == "pending" && r.SourceIgnored {
+		// Set aside: another source brings this account (#81).
+		_, err := s.store.DecideRow(ctx, db.DecideRowParams{ID: r.ID, Status: "ignored"})
+		return false, err
+	}
 	if r.Status != "pending" || r.AccountID == nil {
 		return false, nil // unmapped: waits for its source account to be mapped
 	}
@@ -333,7 +338,7 @@ func (s *Service) propose(ctx context.Context, a Access, rowID int64) (applied b
 	case "holding":
 		return true, s.applyHolding(ctx, a, r)
 	case "trade":
-		return false, nil // no match to look for: the person confirms the cash
+		return false, s.proposeTrade(ctx, a, r)
 	}
 	if r.Kind == "balance" {
 		err := s.store.WithTx(ctx, a.UserID, func(q *db.Queries) error {
@@ -436,10 +441,13 @@ func (s *Service) propose(ctx context.Context, a Access, rowID int64) (applied b
 
 // SourceMapping is where a source account's rows go: one ledger account; for
 // a brokerage, the parent its securities' accounts are made under, and the
-// account its trades settle through.
+// account its trades settle through. Ignored sets the source account aside
+// (#81): its waiting rows and every row it sends later are ignored, because
+// another source brings the same account.
 type SourceMapping struct {
 	AccountID           *int64
 	SettlementAccountID *int64
+	Ignored             bool
 }
 
 // MapSourceAccount ties a source account to a ledger account and re-runs
@@ -473,9 +481,12 @@ func (s *Service) MapSourceAccount(ctx context.Context, a Access, sourceID int64
 		}
 	}
 	sa, err = s.store.MapSourceAccount(ctx, db.MapSourceAccountParams{BookID: a.Book.ID, ID: sourceID, AccountID: accountID,
-		SettlementAccountID: m.SettlementAccountID})
+		SettlementAccountID: m.SettlementAccountID, Ignored: m.Ignored})
 	if err != nil {
 		return db.SourceAccount{}, translate(err, "source account")
+	}
+	if m.Ignored {
+		return sa, s.ignoreSource(ctx, a, sa.ID)
 	}
 	if accountID != nil {
 		ids, err := s.store.PendingRowsOfSource(ctx, sa.ID)
@@ -527,6 +538,9 @@ func (s *Service) Accept(ctx context.Context, a Access, rowID int64, in AcceptIn
 		return 0, invalid("unmapped", "map the row's source account to an account first")
 	}
 	if r.Kind == "trade" {
+		if r.Proposal == "duplicate" {
+			return s.acceptTradeDuplicate(ctx, a, r)
+		}
 		return s.acceptTrade(ctx, a, r, in.Cash)
 	}
 	if r.Kind != "transaction" {
@@ -744,6 +758,34 @@ func (s *Service) IgnoreRow(ctx context.Context, a Access, rowID int64) error {
 	return nil
 }
 
+// ignoreSource ignores a set-aside source account's waiting rows, as the
+// person, and matches again what waited for them.
+func (s *Service) ignoreSource(ctx context.Context, a Access, sourceID int64) error {
+	ids, err := s.store.PendingRowsOfSource(ctx, sourceID)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		n, err := s.store.DecideRow(ctx, db.DecideRowParams{ID: id, Status: "ignored", DecidedBy: &a.UserID})
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			continue
+		}
+		waiting, err := s.store.RowsMatchingRow(ctx, db.RowsMatchingRowParams{BookID: a.Book.ID, RowID: &id})
+		if err != nil {
+			return err
+		}
+		for _, w := range waiting {
+			if _, err := s.propose(ctx, a, w); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // settleDuplicates decides the waiting rows that were the same charge as an
 // accepted row: they are that row's transaction.
 func settleDuplicates(ctx context.Context, q *db.Queries, a Access, rowID, txnID int64) error {
@@ -756,7 +798,7 @@ func settleDuplicates(ctx context.Context, q *db.Queries, a Access, rowID, txnID
 		if err != nil {
 			return err
 		}
-		if o.Kind != "transaction" || o.Proposal != "duplicate" {
+		if o.Kind != "transaction" && o.Kind != "trade" || o.Proposal != "duplicate" {
 			continue // an invoice waiting for it is matched again afterwards
 		}
 		if _, err := q.DecideRow(ctx, db.DecideRowParams{ID: id, Status: "accepted", TransactionID: &txnID, DecidedBy: &a.UserID}); err != nil {

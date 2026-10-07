@@ -2,7 +2,7 @@ import { A, useSearchParams } from '@solidjs/router';
 import { Archive, ArchiveRestore, Ellipsis, Pencil, Plus, Trash2 } from 'lucide-solid';
 import { batch, createEffect, createMemo, createResource, createSignal, For, on, Show } from 'solid-js';
 import { api } from '~/api/client';
-import type { Account, AccountClass, CfClass } from '~/api/types';
+import type { Account, AccountClass, CfClass, SourceAccount } from '~/api/types';
 import { PageHeader } from '~/components/AppShell';
 import { NewAccountDialog, QUICK_KINDS, type QuickKind } from '~/components/NewAccountDialog';
 import { MoneyInput } from '~/components/Money';
@@ -212,6 +212,18 @@ export default function Accounts() {
   // Accounts whose institution's last reported balance disagrees with the books.
   const [drift] = createResource(book.id, (id) => api.drift(id).catch(() => []));
   const drifting = createMemo(() => new Set((drift() ?? []).map((d) => d.account_id)));
+  // What feeds each account (#81): a card and its 發票載具, a broker and the bank it settles through.
+  const [sources] = createResource(book.id, (id) => api.importSources(id).catch(() => []));
+  const fedBy = createMemo(() => {
+    const m = new Map<number, SourceAccount[]>();
+    for (const s of sources() ?? []) {
+      if (s.ignored) continue;
+      for (const id of new Set([s.account_id, s.settlement_account_id])) {
+        if (id !== null) m.set(id, [...(m.get(id) ?? []), s]);
+      }
+    }
+    return m;
+  });
   const [showArchived, setShowArchived] = createSignal(false);
   const [dialog, setDialog] = createSignal<{ account: Account | null; parent: Account | null; cls: AccountClass } | null>(null);
 
@@ -246,6 +258,13 @@ export default function Accounts() {
           <span class={cn('min-w-0 flex-1 truncate', a().is_placeholder && 'font-medium')}>
             <Show when={a().code}><span class="mr-2 text-muted-foreground tabular-nums">{a().code}</span></Show>
             {book.name(a())}
+            <Show when={fedBy().get(a().id)}>
+              {(list) => (
+                <span class="ml-2 text-xs font-normal text-muted-foreground" title={list().map((s) => `${s.connector} · ${s.label || s.external_id}`).join('\n')}>
+                  {t('accounts.fed_by', { sources: [...new Set(list().map((s) => s.connector))].join(', ') })}
+                </span>
+              )}
+            </Show>
           </span>
           <Show when={a().is_cash}><Badge variant="outline">{t('accounts.cash')}</Badge></Show>
           <Show when={a().is_placeholder}><Badge variant="outline">{t('accounts.group')}</Badge></Show>

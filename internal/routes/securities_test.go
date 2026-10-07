@@ -53,6 +53,18 @@ func TestBrokerageOverTheAPI(t *testing.T) {
 	if len(out.Accepted) != 1 {
 		t.Fatalf("accept = %+v", out)
 	}
+
+	// Set aside (#81): its next rows are ignored, and the source says so.
+	alice.json("PATCH", fmt.Sprintf("%s/imports/sources/%d", base, srcs[0].ID), map[string]any{"ignored": true}, 204, nil)
+	alice.json("POST", base+"/imports", map[string]any{
+		"connector": "tw-tdcc", "accounts": []map[string]any{{"id": "9800-1234567", "currency": "TWD", "kind": "brokerage"}},
+		"rows": []map[string]any{{"kind": "trade", "account": "9800-1234567", "id": "t2", "date": "2026-10-02", "security": "XTAI:0050", "units": "100"}},
+	}, 201, &res)
+	alice.json("GET", base+"/imports/queue", nil, 200, &queue)
+	alice.json("GET", base+"/imports/sources", nil, 200, &srcs)
+	if len(queue) != 0 || !srcs[0].Ignored || srcs[0].AccountID != nil {
+		t.Fatalf("ignored source: queue %+v, sources %+v", queue, srcs)
+	}
 	var txn TransactionDTO
 	alice.json("GET", fmt.Sprintf("%s/transactions/%d", base, out.Transactions[0]), nil, 200, &txn)
 	if txn.Postings[0].Commodity != "XTAI:0050" || txn.Postings[0].BaseAmount.String() != "361515" {

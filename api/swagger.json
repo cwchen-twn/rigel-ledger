@@ -5434,6 +5434,10 @@
                     "description": "The account rows book to; for a brokerage, the parent of its securities.",
                     "type": "integer"
                 },
+                "ignored": {
+                    "description": "Don't import: another source brings this account. Its waiting rows\nare ignored now, and every row it sends later.",
+                    "type": "boolean"
+                },
                 "settlement_account_id": {
                     "description": "A brokerage only: the account its trades settle through.",
                     "type": "integer"
@@ -5844,6 +5848,10 @@
                 },
                 "id": {
                     "type": "integer"
+                },
+                "ignored": {
+                    "description": "Set aside: another source brings this account, so its rows are ignored.",
+                    "type": "boolean"
                 },
                 "kind": {
                     "type": "string",

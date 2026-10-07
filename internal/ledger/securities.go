@@ -74,15 +74,37 @@ func (s *Service) ensureSecurities(ctx context.Context, in []securityInput) erro
 	return nil
 }
 
-// securityAccount is the account holding a security for a broker account,
-// made under its parent the first time.
-func (s *Service) securityAccount(ctx context.Context, q *db.Queries, a Access, sourceID, parentID int64, code string) (int64, error) {
-	id, err := q.GetSourceSecurity(ctx, db.GetSourceSecurityParams{SourceAccountID: sourceID, Commodity: code})
+// findSecurityAccount is the account already holding a security for a
+// broker account: its own (source_securities), or the one another source
+// of the same broker made under the same parent. ok is false when there is
+// none yet.
+func findSecurityAccount(ctx context.Context, q *db.Queries, a Access, sourceID, parentID int64, code string) (id int64, own, ok bool, err error) {
+	id, err = q.GetSourceSecurity(ctx, db.GetSourceSecurityParams{SourceAccountID: sourceID, Commodity: code})
 	if err == nil {
-		return id, nil
+		return id, true, true, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
+		return 0, false, false, err
+	}
+	id, err = q.FindSecurityChild(ctx, db.FindSecurityChildParams{BookID: a.Book.ID, ParentID: &parentID, Commodity: &code})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, false, false, nil
+	}
+	return id, false, err == nil, err
+}
+
+// securityAccount is the account holding a security for a broker account,
+// made under its parent the first time no source of it has one.
+func (s *Service) securityAccount(ctx context.Context, q *db.Queries, a Access, sourceID, parentID int64, code string) (int64, error) {
+	id, own, ok, err := findSecurityAccount(ctx, q, a, sourceID, parentID, code)
+	if err != nil {
 		return 0, err
+	}
+	if ok {
+		if !own {
+			err = q.SetSourceSecurity(ctx, db.SetSourceSecurityParams{SourceAccountID: sourceID, Commodity: code, AccountID: id})
+		}
+		return id, err
 	}
 	parent, err := q.GetAccount(ctx, db.GetAccountParams{BookID: a.Book.ID, ID: parentID})
 	if err != nil {
@@ -282,6 +304,72 @@ func (s *Service) checkBrokerageMapping(ctx context.Context, a Access, sa db.Sou
 	return nil
 }
 
+// proposeTrade matches a trade against what other sources of the same
+// broker account brought (#81): 集保 sends a trade's units with no cash,
+// Shioaji the same trade with its cash.
+//
+//  1. Already in the books: the same units on the security's account, a
+//     few days apart, is a duplicate of that transaction.
+//  2. Waiting from another source: the one with cash books (between two
+//     alike, the first staged), and the other waits to go with it.
+//
+// Otherwise it is new, booked at the cash the person confirms.
+func (s *Service) proposeTrade(ctx context.Context, a Access, r db.GetImportRowRow) error {
+	set := func(id int64, p db.SetRowProposalParams) error {
+		p.ID = id
+		return s.store.SetRowProposal(ctx, p)
+	}
+	from, to := r.Date.AddDate(0, 0, -duplicateWindow), r.Date.AddDate(0, 0, duplicateWindow)
+	sec, _, ok, err := findSecurityAccount(ctx, s.store.Queries, a, r.SourceAccountID, *r.AccountID, *r.Security)
+	if err != nil {
+		return err
+	}
+	if ok {
+		tx, err := s.store.FindTradeDuplicate(ctx, db.FindTradeDuplicateParams{BookID: a.Book.ID, AccountID: sec, Units: r.Units.Decimal,
+			FromDate: from, ToDate: to, RowID: r.ID, OnDate: r.Date})
+		if err == nil {
+			return set(r.ID, db.SetRowProposalParams{Proposal: "duplicate", MatchTransactionID: &tx})
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+	}
+	other, err := s.store.FindTradeRow(ctx, db.FindTradeRowParams{BookID: a.Book.ID, RowID: r.ID, AccountID: r.AccountID,
+		SourceAccountID: r.SourceAccountID, Security: r.Security, Units: r.Units, FromDate: from, ToDate: to, OnDate: r.Date})
+	if err == nil {
+		mine := !r.Cash.Valid && other.HasCash || r.Cash.Valid == other.HasCash && r.ID > other.ID
+		if mine {
+			return set(r.ID, db.SetRowProposalParams{Proposal: "duplicate", MatchRowID: &other.ID})
+		}
+		if err := set(other.ID, db.SetRowProposalParams{Proposal: "duplicate", MatchRowID: &r.ID}); err != nil {
+			return err
+		}
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	return set(r.ID, db.SetRowProposalParams{Proposal: "new"})
+}
+
+// acceptTradeDuplicate settles a trade the books already have: the row
+// becomes that transaction's, and nothing is booked twice.
+func (s *Service) acceptTradeDuplicate(ctx context.Context, a Access, r db.GetImportRowRow) (int64, error) {
+	if r.MatchTransactionID == nil {
+		if r.MatchRowID != nil {
+			return 0, conflict("match_pending", "this is the same trade as another waiting row: accept that one, and this one goes with it")
+		}
+		if err := s.proposeTrade(ctx, a, r); err != nil {
+			return 0, err
+		}
+		return 0, conflict("match_gone", "what this row matched is gone; it was matched again")
+	}
+	txnID := *r.MatchTransactionID
+	n, err := s.store.DecideRow(ctx, db.DecideRowParams{ID: r.ID, Status: "accepted", TransactionID: &txnID, DecidedBy: &a.UserID})
+	if err == nil && n == 0 {
+		return 0, conflict("already_decided", "this row was already accepted or ignored")
+	}
+	return txnID, err
+}
+
 // acceptTrade books a trade at the cash the source sent or the person
 // confirmed, then matches the settlement account's waiting rows again.
 func (s *Service) acceptTrade(ctx context.Context, a Access, r db.GetImportRowRow, cash *decimal.Decimal) (int64, error) {
@@ -306,7 +394,11 @@ func (s *Service) acceptTrade(ctx context.Context, a Access, r db.GetImportRowRo
 		if err == nil && n == 0 {
 			return conflict("already_decided", "this row was already accepted or ignored")
 		}
-		return err
+		if err != nil {
+			return err
+		}
+		// The same trade from another source (集保's, without cash) goes with it.
+		return settleDuplicates(ctx, q, a, r.ID, txnID)
 	})
 	if err != nil {
 		return 0, translate(err, "import row")

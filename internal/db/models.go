@@ -597,6 +597,7 @@ type SourceAccount struct {
 	CreatedAt           time.Time
 	Kind                string
 	SettlementAccountID *int64
+	Ignored             bool
 }
 
 type SourceSecurity struct {

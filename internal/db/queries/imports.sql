@@ -18,7 +18,8 @@ ORDER BY s.connector, s.label, s.id;
 SELECT * FROM source_accounts WHERE book_id = @book_id AND id = @id;
 
 -- name: MapSourceAccount :one
-UPDATE source_accounts SET account_id = sqlc.narg(account_id), settlement_account_id = sqlc.narg(settlement_account_id)
+UPDATE source_accounts SET account_id = sqlc.narg(account_id), settlement_account_id = sqlc.narg(settlement_account_id),
+    ignored = @ignored
 WHERE book_id = @book_id AND id = @id RETURNING *;
 
 -- name: CreateImportBatch :one
@@ -60,7 +61,7 @@ ORDER BY r.date DESC, r.id DESC
 LIMIT @lim;
 
 -- name: GetImportRow :one
-SELECT r.*, s.account_id, s.connector, s.settlement_account_id
+SELECT r.*, s.account_id, s.connector, s.settlement_account_id, s.ignored AS source_ignored
 FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
 WHERE r.book_id = @book_id AND r.id = @id;
 
@@ -177,6 +178,41 @@ SELECT account_id FROM source_securities WHERE source_account_id = @source_accou
 INSERT INTO source_securities (source_account_id, commodity, account_id)
 VALUES (@source_account_id, @commodity, @account_id)
 ON CONFLICT (source_account_id, commodity) DO UPDATE SET account_id = EXCLUDED.account_id;
+
+-- name: FindSecurityChild :one
+-- The account a parent already has for a security: another source of the
+-- same broker account made it (集保 and Shioaji share "2330 台積電").
+SELECT id FROM accounts
+WHERE book_id = @book_id AND parent_id = @parent_id AND commodity = @commodity
+  AND NOT is_placeholder AND archived_at IS NULL
+ORDER BY id
+LIMIT 1;
+
+-- name: FindTradeDuplicate :one
+-- A trade already in the books: the same units on the security's account,
+-- within a few days, not already claimed by another trade row.
+SELECT t.id FROM postings p JOIN transactions t ON t.id = p.transaction_id
+WHERE t.book_id = @book_id AND p.account_id = @account_id AND p.amount = @units
+  AND t.date BETWEEN @from_date AND @to_date
+  AND NOT EXISTS (SELECT 1 FROM import_rows r
+                  WHERE r.book_id = @book_id AND r.kind = 'trade' AND r.status <> 'ignored' AND r.id <> @row_id
+                    AND (r.transaction_id = t.id OR r.match_transaction_id = t.id))
+ORDER BY abs(t.date - @on_date::DATE), t.id
+LIMIT 1;
+
+-- name: FindTradeRow :one
+-- The same trade waiting from another source of the same broker account
+-- (mapped to the same parent): the same security and units, a few days
+-- apart, not already paired with a third.
+SELECT r.id, (r.cash IS NOT NULL)::BOOLEAN AS has_cash FROM import_rows r JOIN source_accounts s ON s.id = r.source_account_id
+WHERE r.book_id = @book_id AND r.status = 'pending' AND r.kind = 'trade' AND r.id <> @row_id
+  AND s.account_id = @account_id AND r.source_account_id <> @source_account_id
+  AND r.security = @security AND r.units = @units AND r.date BETWEEN @from_date AND @to_date
+  AND (r.match_row_id IS NULL OR r.match_row_id = @row_id)
+  AND NOT EXISTS (SELECT 1 FROM import_rows o WHERE o.book_id = @book_id AND o.status = 'pending' AND o.id <> @row_id
+                  AND o.proposal = 'duplicate' AND o.match_row_id = r.id)
+ORDER BY abs(r.date - @on_date::DATE), r.id
+LIMIT 1;
 
 -- name: FindInvoiceMatch :one
 -- The booked payment an invoice belongs to: a card, bank or cash line of
