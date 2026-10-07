@@ -1022,6 +1022,20 @@
         "password": "Contraseña"
       }
     },
+    "tw-shioaji": {
+      "name": "Sinopac Securities (Shioaji)",
+      "field": {
+        "api_key": "Clave API (solo permiso de cuentas)",
+        "secret_key": "Clave secreta",
+        "environment": "Entorno"
+      },
+      "option": {
+        "environment": {
+          "production": "Producción",
+          "simulation": "Simulación (claves de prueba)"
+        }
+      }
+    },
     "tw-tdcc": {
       "name": "TDCC ePassbook (集保 e存摺)",
       "field": {

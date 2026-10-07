@@ -70,6 +70,7 @@ each connector lives in `src/connectors/<country>/`.
 | `tw-einvoice` | 電子發票 | mobile number, carrier password (載具驗證碼) | the mobile barcode carrier's invoices for the last two periods (four months) and their lines, as `invoice` rows: each adds its lines to the payment it matches, and only one nothing paid for is booked, as a cash purchase. The e-invoice app's API, no browser and no code; its session is kept and reused. An invoice whose lines cannot be read still comes, as one line of its total |
 | `xx-mail` | Email | address, app password, label or folder (default `rigel`), IMAP server (default `imap.gmail.com`), optional 身分證字號 (opens encrypted statements) and read-back day (restores history once) | one folder, read-only. An order or receipt is an `invoice` row that joins the payment it matches, with the PDF it attaches (or the email printed to PDF) as evidence; one stating no amount is evidence matched by seller or by the 電子發票 number it names; a card alert (刷卡通知) is a pending card row; a 國泰期貨 月對帳單 becomes the month's rows on the margin account. Parsed locally (`src/mail/senders.ts`, schema.org). Each run rereads 14 days (120 the first time) |
 | `us-firstrade` | Firstrade | username, password, optional PIN, optional authenticator secret | holdings, trades with their cash, the cash balance and its history (below) |
+| `tw-shioaji` | 永豐金證券 Shioaji | API key, secret key, environment (production or simulation) | the stock account's holdings and trades with their cash, the futures account's realised P&L, fees, tax and balance (below) |
 
 ## Trying a connector without the app
 
@@ -194,6 +195,39 @@ change shows in `try`.
   with the cash Firstrade states (commission included); anything else with an
   amount is a cash transaction; an entry with neither (a split) is logged by
   kind and skipped.
+
+### 永豐金證券 (Shioaji)
+
+`tw-shioaji` (#83) uses Shioaji, Sinopac's official API, read-only. Make the
+API key in Sinopac's 個人化 API 管理 with **the Account (帳務) permission only**
+and bind it to the IP the runner signs in from; the CA certificate is not
+needed (it is for orders). The `simulation` environment takes the test keys
+and returns empty accounts: it checks the plumbing, nothing else.
+
+- **No Python.** Shioaji 1.7 is a Rust core whose wheel carries a standalone
+  `shioaji` binary with a local HTTP server. The first run downloads the
+  pinned wheel from PyPI (`src/util/shioaji.ts`: version and SHA-256 per
+  platform; linux and macOS, x64 and arm64), keeps the binary in
+  `DATA_DIR/bin`, and every run starts it on a free localhost port with an
+  environment of its own, asks it, and stops it. `SHIOAJI_BIN` names a copy
+  already on disk. Its home, with the login it reuses, is
+  `DATA_DIR/shioaji/<key>`; its output is never logged (it names the person).
+- **Trades are rebuilt from lots.** Shioaji lists today's fills only, but
+  keeps an open position's lots and every closed sale with the buys it
+  closed. A day's buys of a security are one trade with their cash (cost,
+  fees included), a day's sales one with theirs (the legs' cost plus the
+  realised P&L, so the sale's fee and tax are in). Margin and short trades
+  are left out (logged); so is a position whose lots do not add up.
+- **After the close.** Before 15:00 in Taipei today's trades and the holdings
+  wait for the next run, so a day is never sent half done.
+- **Futures**: each closed position's P&L, fee and tax as rows, the day's
+  `today_balance` as the balance (open positions' unrealised P&L is not
+  booked), and the day's deposits or withdrawals for the bank's side to
+  pair with.
+- 複委託 accounts are not in Shioaji's portfolio API and are skipped.
+- 集保 sees the same broker account: map both to the same parent and
+  settlement account, and 集保's cashless trades wait for these (#81), or set
+  集保's view of it aside with Don't import.
 
 ### CAPTCHAs
 

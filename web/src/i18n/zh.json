@@ -1022,6 +1022,20 @@
         "password": "網路銀行密碼"
       }
     },
+    "tw-shioaji": {
+      "name": "永豐金證券 Shioaji",
+      "field": {
+        "api_key": "API Key（僅勾選帳務權限）",
+        "secret_key": "Secret Key",
+        "environment": "環境"
+      },
+      "option": {
+        "environment": {
+          "production": "正式環境",
+          "simulation": "模擬環境（測試金鑰）"
+        }
+      }
+    },
     "tw-tdcc": {
       "name": "集保 e存摺",
       "field": {
