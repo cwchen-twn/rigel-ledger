@@ -37,42 +37,41 @@ const DOWNLOAD_MS = 30_000;
 
 // In-page code is text: the runner is compiled without the DOM's types.
 
+/**
+ * The card holding a leaf: the nearest ancestor whose text has a line that
+ * test() accepts. (Cursor is no guide: every child of a clickable card
+ * inherits its pointer.)
+ */
+const CARD_OF = `(e, test) => { let c = e; for (let i = 0; c && i < 8; i++, c = c.parentElement) if (c.innerText.split('\\n').some((s) => test(s.trim()))) return c; return null; }`;
+
 /** The account cards on /cuentas: [{number, label}]. */
 const ACCOUNTS = `(() => [...document.querySelectorAll('body *')]
   .filter((e) => e.children.length === 0 && /^\\d{8,14}$/.test(e.textContent.trim()))
   .map((e) => {
-    let c = e;
-    for (let i = 0; i < 5 && c.parentElement && getComputedStyle(c).cursor !== 'pointer'; i++) c = c.parentElement;
-    return { number: e.textContent.trim(), label: (c.innerText.split('\\n').map((s) => s.trim()).find((s) => /^Cuenta/i.test(s)) || '') };
+    const c = (${CARD_OF})(e, (s) => /^Cuenta/i.test(s));
+    return { number: e.textContent.trim(), label: c ? c.innerText.split('\\n').map((s) => s.trim()).find((s) => /^Cuenta/i.test(s)) : '' };
   }))()`;
 
-/** Click the card of account number n (on /cuentas). */
-const openAccount = (n: string) => `(() => {
+/** The card of account number n (on /cuentas), to click. */
+const accountCard = (n: string) => `(() => {
   const e = [...document.querySelectorAll('body *')].find((x) => x.children.length === 0 && x.textContent.trim() === ${JSON.stringify(n)});
-  let c = e;
-  for (let i = 0; c && i < 5 && getComputedStyle(c).cursor !== 'pointer'; i++) c = c.parentElement;
-  if (!c) return false;
-  c.click();
-  return true;
+  return e ? (${CARD_OF})(e, (s) => /^Cuenta/i.test(s)) : null;
 })()`;
 
 const MONTH = '/^(Enero|Febrero|Marzo|Abril|Mayo|Junio|Julio|Agosto|Septiembre|Setiembre|Octubre|Noviembre|Diciembre) \\d{4}$/';
 const MONTH_TABS = `[...document.querySelectorAll('button')].filter((b) => ${MONTH}.test(b.innerText.trim()))`;
 
-/** The XLS icon: the second of "Descargar extracto:"'s icons (PDF, XLS). */
-const CLICK_XLS = `(() => {
+/** The XLS icon: the last of "Descargar extracto:"'s two icons (PDF, XLS); null without both. */
+const XLS_ICON = `(() => {
   const b = [...document.querySelectorAll('button')].find((x) => /Descargar extracto/.test(x.innerText));
-  const icons = b ? [...b.querySelectorAll('div')].filter((d) => getComputedStyle(d).cursor === 'pointer' && d.querySelector('svg,img')) : [];
-  const xls = icons[icons.length - 1];
-  if (!xls || icons.length < 2) return false;
-  xls.click();
-  return true;
+  const icons = b ? [...b.querySelectorAll('div')].filter((d) => d.querySelector('svg,img') && !d.querySelector('div svg, div img')) : [];
+  return icons.length >= 2 ? icons[icons.length - 1] : null;
 })()`;
 
-/** The card tiles on /tarjetas, clicked by index. */
+/** The card tiles on /tarjetas: the box, at least 100 px tall, around each "Pago Mínimo". */
 const CARD_TILES = `[...document.querySelectorAll('body *')]
   .filter((e) => e.children.length === 0 && /^Pago M[ií]nimo/i.test(e.textContent.trim()))
-  .map((e) => { let c = e; for (let i = 0; c && i < 6 && getComputedStyle(c).cursor !== 'pointer'; i++) c = c.parentElement; return c; })
+  .map((e) => { let c = e; for (let i = 0; c && i < 8 && c.getBoundingClientRect().height < 100; i++) c = c.parentElement; return c; })
   .filter(Boolean)`;
 
 /** A card's page: last four, debt, and the movements listed. */
@@ -125,6 +124,15 @@ async function go(page: Page, menu: string, route: string) {
   await page.waitForFunction(`location.pathname === ${JSON.stringify(route)}`, { timeout: 15_000 }).catch(() => {});
   await settle(page);
   if (!(await signedIn(page))) throw new SyncError('verification_failed', `signed out on ${route}`);
+}
+
+/** Click, with the mouse, the middle of the element an expression finds. */
+async function clickOn(page: Page, expr: string): Promise<boolean> {
+  const el = (await page.evaluateHandle(expr)).asElement();
+  if (!el) return false;
+  await el.scrollIntoView().catch(() => {});
+  await el.click();
+  return true;
 }
 
 const settle = (page: Page) => page.waitForNetworkIdle({ idleTime: 1200, timeout: 30_000 }).catch(() => {});
@@ -229,7 +237,7 @@ export function makeContinental(): Connector {
           const ref = { number: a.number, label: a.label, currency };
           await go(page, 'Cuentas', '/cuentas');
           await page.waitForFunction(`[...document.querySelectorAll('body *')].some((e) => e.children.length === 0 && e.textContent.trim() === ${JSON.stringify(a.number)})`, { timeout: 20_000 }).catch(() => {});
-          if (!(await page.evaluate(openAccount(a.number)))) throw new SyncError('institution_down', 'account card not found');
+          if (!(await clickOn(page, accountCard(a.number)))) throw new SyncError('institution_down', 'account card not found');
           await page.waitForFunction(`location.pathname === '/extracto-cuenta' && ${MONTH_TABS}.length > 0`, { timeout: 30_000 });
           await settle(page);
           let n = 0;
@@ -238,7 +246,7 @@ export function makeContinental(): Connector {
             if (tab > 0 && !(await page.evaluate(`(() => { const t = ${MONTH_TABS}[${tab}]; if (t) t.click(); return !!t; })()`))) break;
             await settle(page);
             const before = new Set(await readdir(downloads));
-            if (!(await page.evaluate(CLICK_XLS))) throw new SyncError('institution_down', 'no XLS download on the account page');
+            if (!(await clickOn(page, XLS_ICON))) throw new SyncError('institution_down', 'no XLS download on the account page');
             const file = await nextFile(downloads, before);
             if (!file) {
               // A month with no movements may give no file at all.
@@ -260,7 +268,7 @@ export function makeContinental(): Connector {
         for (let i = 0; i < tiles; i++) {
           await go(page, 'Tarjetas', '/tarjetas');
           await page.waitForFunction(`${CARD_TILES}.length > ${i}`, { timeout: 20_000 }).catch(() => {});
-          await page.evaluate(`${CARD_TILES}[${i}]?.click()`);
+          if (!(await clickOn(page, `${CARD_TILES}[${i}] || null`))) throw new SyncError('institution_down', 'card tile not found');
           await page.waitForFunction(`location.pathname === '/extracto-tarjeta' && document.body.innerText.includes('Deuda actual')`, { timeout: 30_000 });
           await settle(page);
           const screen = (await page.evaluate(CARD_SCREEN)) as CardScreen;
