@@ -952,7 +952,7 @@ token kinds). Migration `000008`.
 - **KuDE receipts (Paraguay, #44)** are read from their QR code, not by OCR: the code is
   a link to `ekuatia.set.gov.py` whose query carries the e-invoice (the CDC, which
   holds the seller's RUC, the number and the date; the total; the number of lines).
-  Imports -> "Import PDF or receipt" takes a photo or a PDF, finds the QR in the tab
+  Imports -> "Import statement files" takes a photo or a PDF, finds the QR in the tab
   (jsQR, loaded on first use like pdf.js) and stages one `invoice` row on the `kude`
   source: the CDC as id and reference, the total in guaranies as one line, the photo
   (downscaled like any attachment) as its file. It then matches the card or bank
@@ -1054,6 +1054,16 @@ Email is **evidence**, like e-invoices: it enriches and proposes, it does not po
     same rows. pdf.js is not in the bundle: its two prebuilt files load as module
     scripts when a PDF is chosen, the worker in the page's thread (no `worker-src`).
     The original file is kept in `attachments`. Known statements: 國泰期貨 月對帳單; Banco Continental's Movimientos de Cuenta (USD, PYG) and credit card extracto (#43).
+  - **Many files at once** (#88). Imports -> "Import statement files" takes any number
+    of PDFs, ContiWeb XLS exports and receipt photos (pick or drop), reads them one at
+    a time in the tab, and tries one password on every locked PDF (another password
+    retries the ones still locked). Each recognised file is staged as its own batch, so
+    a file imported twice stages nothing and says so. An .xlsx is unzipped with the
+    browser's `DecompressionStream` and read by the runner's own sheet reader
+    (`src/util/sheet.ts`). A ContiWeb export does not name its account, so the person
+    picks it among the Continental accounts already known (from a sync or a PDF); its
+    ids are the PDF's, so the same month from both coincides. An XLS original is not
+    attached: attachments are images and PDFs only.
 
 ### Card purchases: record now, settle later
 

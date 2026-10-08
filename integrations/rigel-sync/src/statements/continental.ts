@@ -287,6 +287,23 @@ export function readContinentalSheet(sheet: string[][], ref: ContinentalAccountR
   };
 }
 
+/** Whether rows are a ContiWeb account export (its MOVIMIENTO / SALDO header). */
+export function isContinentalSheet(sheet: string[][]): boolean {
+  return sheet.some((r) => r.includes('MOVIMIENTO') && r.includes('SALDO'));
+}
+
+/**
+ * The account number a ContiWeb export names above its header, when it
+ * names exactly one; the web app asks the person otherwise (the runner
+ * knows it from the page it downloaded from).
+ */
+export function continentalSheetNumber(sheet: string[][]): string | undefined {
+  const head = sheet.findIndex((r) => r.includes('MOVIMIENTO') && r.includes('SALDO'));
+  const found = new Set<string>();
+  for (const r of sheet.slice(0, Math.max(0, head))) for (const c of r) for (const m of c.matchAll(/\b\d{9,14}\b/g)) found.add(m[0]);
+  return found.size === 1 ? [...found][0] : undefined;
+}
+
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
 /** "7 de octubre de 2026" -> 2026-10-07. */

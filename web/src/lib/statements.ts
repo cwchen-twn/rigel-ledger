@@ -11,6 +11,7 @@
  * allows without a worker-src.
  */
 import { readStatementLines, StatementUnbalanced } from '@sync/statements/index.ts';
+import { ContinentalUnbalanced, readContinentalSheet, type ContinentalAccountRef } from '@sync/statements/continental.ts';
 import { toLines } from '@sync/statements/lines.ts';
 import type { Account, Row } from '@sync/connectors/types.ts';
 import pdfUrl from 'pdfjs-dist/build/pdf.min.mjs?url';
@@ -95,5 +96,17 @@ export async function readStatement(data: ArrayBuffer, password: string, file: s
     throw err;
   }
   if (!st) throw new Error('unrecognised' satisfies StatementError);
+  return st;
+}
+
+/** A ContiWeb XLS export's statement (#88), for the account the person named. Nothing is attached: only images and PDFs can be. */
+export function readSheetStatement(sheet: string[][], ref: ContinentalAccountRef): Statement {
+  let st;
+  try {
+    st = readContinentalSheet(sheet, ref);
+  } catch (err) {
+    if (err instanceof ContinentalUnbalanced) throw new Error('unbalanced' satisfies StatementError);
+    throw err;
+  }
   return st;
 }

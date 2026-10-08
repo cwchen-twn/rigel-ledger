@@ -6,7 +6,7 @@ import { AccountCombobox } from '~/components/AccountCombobox';
 import { PageHeader } from '~/components/AppShell';
 import { BalanceDialog } from '~/components/BalanceDialog';
 import { CsvImportDialog } from '~/components/CsvImportDialog';
-import { PdfImportDialog } from '~/components/PdfImportDialog';
+import { StatementsDialog } from '~/components/StatementsDialog';
 import { Money, MoneyInput } from '~/components/Money';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
@@ -260,7 +260,7 @@ export default function Imports() {
           <Show when={book.canEdit()}>
             <div class="flex flex-wrap gap-2">
               <Button variant="outline" onClick={() => setPdfOpen(true)}>
-                <FileText /> {t('imports.pdf_open_dialog')}
+                <FileText /> {t('imports.files_open_dialog')}
               </Button>
               <Button onClick={() => setCsvOpen(true)}>
                 <FileUp /> {t('imports.csv_open')}
@@ -620,7 +620,7 @@ export default function Imports() {
         known={adjusting() ?? undefined}
         onDone={reload}
       />
-      <PdfImportDialog open={pdfOpen()} onOpenChange={setPdfOpen} onImported={reload} />
+      <StatementsDialog open={pdfOpen()} onOpenChange={setPdfOpen} onImported={reload} />
       <RuleDialog
         row={ruleFor()}
         category={ruleFor() ? category(ruleFor()!) : null}

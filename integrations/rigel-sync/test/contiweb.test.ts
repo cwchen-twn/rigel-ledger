@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { crc32, deflateRawSync } from 'node:zlib';
 import { connectors } from '../src/connectors/index.ts';
-import { continentalCurrency, fechaLarga, readContinentalCardScreen, readContinentalSheet } from '../src/statements/continental.ts';
+import { continentalCurrency, continentalSheetNumber, fechaLarga, isContinentalSheet, readContinentalCardScreen, readContinentalSheet } from '../src/statements/continental.ts';
+import { sheetRows } from '../src/util/sheet.ts';
 import { readXlsx } from '../src/util/xlsx.ts';
 
 /** A zip of the given files, deflated (as ContiWeb's are) unless stored. */
@@ -144,4 +145,24 @@ test('Spanish dates and account currencies', () => {
 
 test('py-continental is offered like any connector', () => {
   assert.ok(connectors({ fake: false }).some((c) => c.id === 'py-continental'));
+});
+
+// #88: the web app reads an export it was handed, with no page to say which account.
+test('a ContiWeb export is recognised, and names its account only when one number stands above the header', () => {
+  const sheet = readXlsx(contiweb([['02/10/2026', '10:00', '123 456', 'Compra | Tienda', '1000', '', '9.000', 46297]]));
+  assert.ok(isContinentalSheet(sheet));
+  assert.equal(continentalSheetNumber(sheet), undefined);
+  assert.ok(!isContinentalSheet([['Fecha', 'Monto']]));
+  const ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"';
+  const titled = sheetRows(
+    new Map([
+      [
+        'xl/worksheets/sheet1.xml',
+        `<worksheet ${ns}><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Cuenta 100200300400</t></is></c></row>` +
+          `<row r="2"><c r="A2" t="inlineStr"><is><t>MOVIMIENTO</t></is></c><c r="B2" t="inlineStr"><is><t>SALDO</t></is></c></row></sheetData></worksheet>`,
+      ],
+    ]),
+  );
+  assert.deepEqual(titled[1], ['MOVIMIENTO', 'SALDO']);
+  assert.equal(continentalSheetNumber(titled), '100200300400');
 });

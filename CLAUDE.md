@@ -123,7 +123,7 @@ components/  ui/ -- shadcn-style kit (tokens only, cva variants, Kobalte where a
 pages/       Login, Register, RequestAccess, Invite, VerifyLink, Welcome (wizard), SetupMFA, Onboarding (new book),
              Overview (balances), Transactions, Accounts, Reports (3 statements), Imports (review queue), Connections, BookSettings, UserSettings, admin/ (tabs)
 i18n/        en.json, zh.json (Traditional), es.json -- same keys; account names under account.template.*
-lib/         money.ts (decimal strings via js-big-decimal), dates.ts, csv.ts (statement parsing), statements.ts (PDF statements via pdf.js and @sync parsers), receipts.ts (KuDE QR codes via jsQR), seal.ts (sealing to the runner), cn.ts
+lib/         money.ts (decimal strings via js-big-decimal), dates.ts, csv.ts (statement parsing), statements.ts (PDF statements via pdf.js and @sync parsers), xlsx.ts (XLS exports, unzipped in the tab), receipts.ts (KuDE QR codes via jsQR), seal.ts (sealing to the runner), cn.ts
 ```
 
 Routes: signed out `/login`, `/register`, `/request-access`, `/invite/:token`, `/verify?token=`; `/welcome` (first-login wizard); `/onboarding` (new book), `/settings`, `/connections`, `/admin/:tab`, `/b/:bookId/{,transactions,accounts,reports/:tab,imports,settings}`; `/` redirects to the default book.
