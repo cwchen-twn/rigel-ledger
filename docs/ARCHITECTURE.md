@@ -739,9 +739,18 @@ implementation against one pretend institution, for development and end-to-end t
       first month needs an opening balance entered by hand, or it shows as drift.
 - **Assertions.** `balance_assertions(account_id, date, amount, source)` hold bank
   balances, card outstanding, and units per security.
-  - A mismatch shows as drift on the account, with the date it began.
+  - A mismatch shows as drift on the account, with the date it began: the newest
+    earlier assertion that still agreed and the first one after it that did not, so a
+    month of statements with closing balances points at the one that is missing.
   - Nothing is overwritten. This replaces "statement closing balance" as the general
     reconciliation.
+  - **Closing the gap** (#87). Any money or unit account takes a balance stated by hand
+    ("Set balance": cash counted in a wallet, a balance read off a paper statement), an
+    assertion of source `manual`. "Book the difference" then books what separates the
+    books from it on that day as one transaction of source `adjustment` (migration
+    000016) against an account the person picks: other expenses for cash spent that no
+    source saw, opening balances for history from before the books began. Money only;
+    shares and points need their cost.
 - **Challenges** (implemented in P4c-1).
   - When a CAPTCHA defeats local OCR, or an OTP or new-device check appears, the runner
     raises a challenge (`otp`, `captcha` with its image, `device`) with a TTL of at most

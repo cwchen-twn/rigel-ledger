@@ -153,7 +153,8 @@
     "cost_required": "請輸入成本（賺取的哩程填 0）",
     "base_missing": "部分行尚無本位幣金額",
     "fill_remainder": "將差額填入此行",
-    "items": "發票品項"
+    "items": "發票品項",
+    "adjustment": "餘額調整"
   },
   "attachments": {
     "title": "收據與檔案",
@@ -218,7 +219,22 @@
     "quick_owed": "目前欠款",
     "quick_balance_hint": "以今日為日期記為期初餘額",
     "quick_save_another": "儲存並新增下一筆",
-    "quick_added": "已新增 {name}"
+    "quick_added": "已新增 {name}",
+    "balance_set": "設定餘額",
+    "balance_title": "{account} 的餘額",
+    "balance_hint": "該帳戶某日結束時的實際餘額，例如點算錢包裡的現金，或對帳單上的餘額。",
+    "balance_date": "日期",
+    "balance_amount": "實際餘額",
+    "balance_save": "與帳本比較",
+    "balance_stated": "實際：",
+    "balance_books": "帳本：",
+    "balance_difference": "差額：",
+    "balance_agrees": "帳本當日餘額一致。",
+    "balance_counter": "差額記入",
+    "balance_counter_hint": "沒有任何來源記錄到的現金支出記入費用；帳本開始前的歷史差額記入期初餘額。",
+    "balance_book": "記錄差額",
+    "balance_booked": "已記錄差額",
+    "balance_money_only": "只有金額可以調整；股票與點數需要成本。"
   },
   "book": {
     "title": "帳本設定",
@@ -336,7 +352,8 @@
     "role": "你需要是此帳本的編輯者",
     "stale": "同步程式的金鑰已更換，請重新輸入登入資料",
     "unsupported_type": "只接受圖片（JPEG、PNG、WebP）與 PDF",
-    "too_large": "檔案太大"
+    "too_large": "檔案太大",
+    "no_balance": "該日沒有已知的餘額。"
   },
   "languages": {
     "en": "English",
@@ -405,7 +422,8 @@
     "challenge_gone": "此驗證已過期或已回覆",
     "disabled": "請先啟用此連結",
     "no_access": "連結擁有者已無此帳本的權限",
-    "amount_unknown": "此郵件未載明金額，只能併入它所屬的付款。"
+    "amount_unknown": "此郵件未載明金額，只能併入它所屬的付款。",
+    "nothing_to_adjust": "帳本當日餘額已一致。"
   },
   "profile": {
     "username_hint": "用於登入：a-z、0-9、點、連字號、底線"
@@ -907,7 +925,11 @@
     "pdf_error_unbalanced": "這份對帳單的餘額表加總不符，因此未讀取任何資料。",
     "pdf_error_other": "無法讀取這個檔案。",
     "pdf_error_unreadable": "這個瀏覽器無法開啟這張圖片（Safari 以外的 iPhone HEIC）：請存成 JPEG 再試一次。",
-    "pdf_error_password": "這份 PDF 有密碼：請輸入密碼後再開啟。"
+    "pdf_error_password": "這份 PDF 有密碼：請輸入密碼後再開啟。",
+    "drift_since": "{since} 仍一致，{first} 起不符",
+    "drift_never": "從未一致；最早的餘額在 {first}",
+    "drift_adjust": "記錄差額",
+    "drift_line_manual": "{date} 實際："
   },
   "tokens": {
     "title": "API token",

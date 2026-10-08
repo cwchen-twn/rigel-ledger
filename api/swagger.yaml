@@ -175,6 +175,13 @@ definitions:
       template_key:
         type: string
     type: object
+  routes.AdjustRequest:
+    properties:
+      counter_id:
+        type: integer
+      date:
+        type: string
+    type: object
   routes.AdminSettingsDTO:
     properties:
       default_date_format:
@@ -301,6 +308,20 @@ definitions:
       user_id:
         type: integer
       username:
+        type: string
+    type: object
+  routes.BalanceDTO:
+    properties:
+      asserted:
+        type: string
+      booked:
+        type: string
+    type: object
+  routes.BalanceRequest:
+    properties:
+      amount:
+        type: string
+      date:
         type: string
     type: object
   routes.BalanceSheetDTO:
@@ -677,6 +698,13 @@ definitions:
       booked:
         type: string
       date:
+        type: string
+      first:
+        type: string
+      since:
+        description: |-
+          The newest earlier balance that still agreed (absent when none did),
+          and the first one after it that did not: the gap opened in between.
         type: string
       source:
         type: string
@@ -2727,6 +2755,40 @@ paths:
       summary: Replace an account's editable fields (class and commodity are fixed)
       tags:
       - accounts
+  /api/books/{bookID}/accounts/{accountID}/adjust:
+    post:
+      consumes:
+      - application/json
+      description: One transaction of source "adjustment" on that day, against counter_id
+        (other expenses for unseen cash spending, opening balances for history before
+        the books). Money accounts only.
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: account id
+        in: path
+        name: accountID
+        required: true
+        type: integer
+      - description: day and counter account
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.AdjustRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/routes.TransactionDTO'
+      summary: Book the difference between the books and a stated balance
+      tags:
+      - accounts
   /api/books/{bookID}/accounts/{accountID}/archive:
     post:
       consumes:
@@ -2756,6 +2818,39 @@ paths:
           schema:
             $ref: '#/definitions/routes.AccountDTO'
       summary: Archive or restore an account
+      tags:
+      - accounts
+  /api/books/{bookID}/accounts/{accountID}/balance:
+    post:
+      consumes:
+      - application/json
+      description: Stored as a balance assertion of source "manual"; answers the books'
+        balance that day beside it. Signed like postings (a card's debt is negative).
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      - description: account id
+        in: path
+        name: accountID
+        required: true
+        type: integer
+      - description: day and balance
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/routes.BalanceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/routes.BalanceDTO'
+      summary: State what an account really held at the end of a day
       tags:
       - accounts
   /api/books/{bookID}/accounts/{accountID}/cost:

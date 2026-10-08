@@ -573,6 +573,10 @@ type DriftDTO struct {
 	Asserted  decimal.Decimal `json:"asserted" swaggertype:"string"`
 	Booked    decimal.Decimal `json:"booked" swaggertype:"string"`
 	Source    string          `json:"source"`
+	// The newest earlier balance that still agreed (absent when none did),
+	// and the first one after it that did not: the gap opened in between.
+	Since *Date `json:"since,omitempty" swaggertype:"string"`
+	First Date  `json:"first" swaggertype:"string"`
 }
 
 // drift
@@ -592,9 +596,89 @@ func (h *handlers) drift(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]DriftDTO, len(ds))
 	for i, x := range ds {
-		out[i] = DriftDTO{AccountID: x.AccountID, Date: Date{x.Date}, Asserted: x.Asserted, Booked: x.Booked, Source: x.Source}
+		out[i] = DriftDTO{AccountID: x.AccountID, Date: Date{x.Date}, Asserted: x.Asserted, Booked: x.Booked, Source: x.Source, First: Date{x.First}}
+		if x.Since != nil {
+			out[i].Since = &Date{*x.Since}
+		}
 	}
 	response.JSON(w, http.StatusOK, out)
+}
+
+type BalanceRequest struct {
+	Date   Date            `json:"date" swaggertype:"string"`
+	Amount decimal.Decimal `json:"amount" swaggertype:"string"`
+}
+
+type BalanceDTO struct {
+	Asserted decimal.Decimal `json:"asserted" swaggertype:"string"`
+	Booked   decimal.Decimal `json:"booked" swaggertype:"string"`
+}
+
+// setBalance
+//
+//	@Summary	State what an account really held at the end of a day
+//	@Description	Stored as a balance assertion of source "manual"; answers the books' balance that day beside it. Signed like postings (a card's debt is negative).
+//	@Tags		accounts
+//	@Accept		json
+//	@Produce	json
+//	@Param		bookID		path		int				true	"book id"
+//	@Param		accountID	path		int				true	"account id"
+//	@Param		body		body		BalanceRequest	true	"day and balance"
+//	@Success	200			{object}	BalanceDTO
+//	@Router		/api/books/{bookID}/accounts/{accountID}/balance [post]
+func (h *handlers) setBalance(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(r, "accountID")
+	if !ok {
+		badParam(w, "accountID", "invalid")
+		return
+	}
+	var req BalanceRequest
+	if err := response.Decode(w, r, &req); err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	b, err := h.svc.SetBalance(r.Context(), access(r), id, req.Date.Time, req.Amount)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, BalanceDTO{Asserted: b.Asserted, Booked: b.Booked})
+}
+
+type AdjustRequest struct {
+	Date      Date  `json:"date" swaggertype:"string"`
+	CounterID int64 `json:"counter_id"`
+}
+
+// adjustBalance
+//
+//	@Summary	Book the difference between the books and a stated balance
+//	@Description	One transaction of source "adjustment" on that day, against counter_id (other expenses for unseen cash spending, opening balances for history before the books). Money accounts only.
+//	@Tags		accounts
+//	@Accept		json
+//	@Produce	json
+//	@Param		bookID		path		int				true	"book id"
+//	@Param		accountID	path		int				true	"account id"
+//	@Param		body		body		AdjustRequest	true	"day and counter account"
+//	@Success	201			{object}	TransactionDTO
+//	@Router		/api/books/{bookID}/accounts/{accountID}/adjust [post]
+func (h *handlers) adjustBalance(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(r, "accountID")
+	if !ok {
+		badParam(w, "accountID", "invalid")
+		return
+	}
+	var req AdjustRequest
+	if err := response.Decode(w, r, &req); err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	v, err := h.svc.BookDifference(r.Context(), access(r), id, req.Date.Time, req.CounterID)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	response.JSON(w, http.StatusCreated, transactionDTO(v))
 }
 
 func decPtr(d decimal.NullDecimal) *decimal.Decimal {

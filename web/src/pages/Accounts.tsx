@@ -1,9 +1,10 @@
 import { A, useSearchParams } from '@solidjs/router';
-import { Archive, ArchiveRestore, Ellipsis, Pencil, Plus, Trash2 } from 'lucide-solid';
+import { Archive, ArchiveRestore, Ellipsis, Pencil, Plus, Scale, Trash2 } from 'lucide-solid';
 import { batch, createEffect, createMemo, createResource, createSignal, For, on, Show } from 'solid-js';
 import { api } from '~/api/client';
 import type { Account, AccountClass, CfClass, SourceAccount } from '~/api/types';
 import { PageHeader } from '~/components/AppShell';
+import { BalanceDialog } from '~/components/BalanceDialog';
 import { NewAccountDialog, QUICK_KINDS, type QuickKind } from '~/components/NewAccountDialog';
 import { MoneyInput } from '~/components/Money';
 import { Button } from '~/components/ui/button';
@@ -210,7 +211,7 @@ export default function Accounts() {
   const { t, te } = useI18n();
   const book = useBook();
   // Accounts whose institution's last reported balance disagrees with the books.
-  const [drift] = createResource(book.id, (id) => api.drift(id).catch(() => []));
+  const [drift, { refetch: refetchDrift }] = createResource(book.id, (id) => api.drift(id).catch(() => []));
   const drifting = createMemo(() => new Set((drift() ?? []).map((d) => d.account_id)));
   // What feeds each account (#81): a card and its 發票載具, a broker and the bank it settles through.
   const [sources] = createResource(book.id, (id) => api.importSources(id).catch(() => []));
@@ -226,6 +227,7 @@ export default function Accounts() {
   });
   const [showArchived, setShowArchived] = createSignal(false);
   const [dialog, setDialog] = createSignal<{ account: Account | null; parent: Account | null; cls: AccountClass } | null>(null);
+  const [balanceOf, setBalanceOf] = createSignal<Account | null>(null);
 
   const archive = async (a: Account, archived: boolean) => {
     try {
@@ -283,6 +285,9 @@ export default function Accounts() {
               items={[
                 { label: t('common.edit'), icon: <Pencil />, onSelect: () => setDialog({ account: a(), parent: null, cls: a().class }) },
                 { label: t('accounts.new_child'), icon: <Plus />, onSelect: () => setDialog({ account: null, parent: a(), cls: a().class }) },
+                ...(a().commodity && !a().is_placeholder && (a().class === 'asset' || a().class === 'liability')
+                  ? [{ label: t('accounts.balance_set'), icon: <Scale />, onSelect: () => setBalanceOf(a()) }]
+                  : []),
                 a().archived
                   ? { label: t('accounts.unarchive'), icon: <ArchiveRestore />, onSelect: () => archive(a(), false) }
                   : { label: t('accounts.archive'), icon: <Archive />, onSelect: () => archive(a(), true) },
@@ -316,6 +321,15 @@ export default function Accounts() {
           <p class="text-muted-foreground">{t('accounts.welcome_hint')}</p>
         </div>
       </Show>
+      <BalanceDialog
+        open={!!balanceOf()}
+        onOpenChange={(o) => !o && setBalanceOf(null)}
+        account={balanceOf()}
+        onDone={() => {
+          refetchDrift();
+          book.refetchAccounts();
+        }}
+      />
       <NewAccountDialog
         open={quick()}
         kind={wanted()}

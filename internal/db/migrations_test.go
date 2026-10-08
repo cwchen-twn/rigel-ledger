@@ -114,3 +114,60 @@ func TestOneRunnerMigration(t *testing.T) {
 	}
 	check()
 }
+
+// 000016 adds the 'adjustment' source (#87); going down turns adjustments
+// into manual transactions, even inside a closed period.
+func TestAdjustmentSourceMigration(t *testing.T) {
+	store, dsn := dbtest.NewWithDSN(t)
+	ctx := context.Background()
+	var book, cash, food, txn int64
+	scan := func(dst *int64, sql string, args ...any) {
+		t.Helper()
+		if err := store.Pool.QueryRow(ctx, sql, args...).Scan(dst); err != nil {
+			t.Fatalf("%s: %v", sql, err)
+		}
+	}
+	scan(&book, `INSERT INTO books (name, base_currency) VALUES ('B', 'TWD') RETURNING id`)
+	scan(&cash, `INSERT INTO accounts (book_id, class, name, commodity, is_cash) VALUES ($1, 'asset', 'Cash', 'TWD', true) RETURNING id`, book)
+	scan(&food, `INSERT INTO accounts (book_id, class, name) VALUES ($1, 'expense', 'Food') RETURNING id`, book)
+	tx, err := store.Pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.QueryRow(ctx, `INSERT INTO transactions (book_id, date, source) VALUES ($1, '2026-09-30', 'adjustment') RETURNING id`, book).Scan(&txn); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO postings (transaction_id, account_id, commodity, amount, base_amount)
+	    VALUES ($1, $2, 'TWD', 100, 100), ($1, $3, 'TWD', -100, -100)`, txn, food, cash); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Pool.Exec(ctx, `UPDATE books SET lock_date = '2026-09-30' WHERE id = $1`, book); err != nil {
+		t.Fatal(err)
+	}
+	store.Close()
+
+	if err := db.MigrateTo(dsn, 15); err != nil {
+		t.Fatalf("down to 000015: %v", err)
+	}
+	store, err = db.Open(ctx, dsn, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var source string
+	if err := store.Pool.QueryRow(ctx, `SELECT source FROM transactions WHERE id = $1`, txn).Scan(&source); err != nil || source != "manual" {
+		t.Fatalf("source after down = %q (%v)", source, err)
+	}
+	if _, err := store.Pool.Exec(ctx, `UPDATE books SET lock_date = NULL WHERE id = $1`, book); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Pool.Exec(ctx, `UPDATE transactions SET source = 'adjustment' WHERE id = $1`, txn); err == nil {
+		t.Fatal("000015 took an adjustment")
+	}
+	store.Close()
+	if err := db.Migrate(dsn); err != nil {
+		t.Fatalf("up again: %v", err)
+	}
+}

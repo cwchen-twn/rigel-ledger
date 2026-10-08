@@ -1,9 +1,10 @@
 import { Check, FileText, FileUp, Inbox, Paperclip, Trash2, WandSparkles, X } from 'lucide-solid';
 import { createEffect, createMemo, createResource, createSignal, For, on, Show } from 'solid-js';
 import { api } from '~/api/client';
-import type { ImportRow, Proposal, SourceAccount } from '~/api/types';
+import type { Drift, ImportRow, Proposal, SourceAccount } from '~/api/types';
 import { AccountCombobox } from '~/components/AccountCombobox';
 import { PageHeader } from '~/components/AppShell';
+import { BalanceDialog } from '~/components/BalanceDialog';
 import { CsvImportDialog } from '~/components/CsvImportDialog';
 import { PdfImportDialog } from '~/components/PdfImportDialog';
 import { Money, MoneyInput } from '~/components/Money';
@@ -58,6 +59,7 @@ export default function Imports() {
   const [csvOpen, setCsvOpen] = createSignal(false);
   const [pdfOpen, setPdfOpen] = createSignal(false);
   const [ruleFor, setRuleFor] = createSignal<ImportRow | null>(null);
+  const [adjusting, setAdjusting] = createSignal<Drift | null>(null);
 
   const reload = () => {
     refetchQueue();
@@ -280,13 +282,23 @@ export default function Imports() {
                 {(d) => {
                   const cur = () => book.byId().get(d.account_id)?.commodity ?? book.book()?.base_currency ?? 'USD';
                   return (
-                    <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
-                      <span class="font-medium">{accountName(d.account_id)}</span>
-                      <span class="text-muted-foreground">
-                        {t('imports.drift_line', { date: fmt(d.date) })} <Money amount={d.asserted} currency={cur()} /> ·{' '}
-                        {t('imports.drift_books')} <Money amount={d.booked} currency={cur()} /> ·{' '}
-                        {t('imports.drift_diff')} <Money class="text-foreground" amount={sub(d.asserted, d.booked)} currency={cur()} signed />
-                      </span>
+                    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">
+                      <div class="min-w-0">
+                        <span class="font-medium">{accountName(d.account_id)}</span>
+                        <div class="text-muted-foreground">
+                          {t(d.source === 'manual' ? 'imports.drift_line_manual' : 'imports.drift_line', { date: fmt(d.date) })} <Money amount={d.asserted} currency={cur()} /> ·{' '}
+                          {t('imports.drift_books')} <Money amount={d.booked} currency={cur()} /> ·{' '}
+                          {t('imports.drift_diff')} <Money class="text-foreground" amount={sub(d.asserted, d.booked)} currency={cur()} signed />
+                        </div>
+                        <Show when={d.first !== d.date || d.since}>
+                          <div class="text-xs text-muted-foreground">
+                            {d.since ? t('imports.drift_since', { since: fmt(d.since), first: fmt(d.first) }) : t('imports.drift_never', { first: fmt(d.first) })}
+                          </div>
+                        </Show>
+                      </div>
+                      <Show when={book.canEdit()}>
+                        <Button size="sm" variant="outline" onClick={() => setAdjusting(d)}>{t('imports.drift_adjust')}</Button>
+                      </Show>
                     </div>
                   );
                 }}
@@ -601,6 +613,13 @@ export default function Imports() {
       </div>
 
       <CsvImportDialog open={csvOpen()} onOpenChange={setCsvOpen} onImported={reload} />
+      <BalanceDialog
+        open={!!adjusting()}
+        onOpenChange={(o) => !o && setAdjusting(null)}
+        account={adjusting() ? book.byId().get(adjusting()!.account_id) ?? null : null}
+        known={adjusting() ?? undefined}
+        onDone={reload}
+      />
       <PdfImportDialog open={pdfOpen()} onOpenChange={setPdfOpen} onImported={reload} />
       <RuleDialog
         row={ruleFor()}

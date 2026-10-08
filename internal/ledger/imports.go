@@ -875,31 +875,142 @@ func (s *Service) DeleteRule(ctx context.Context, a Access, id int64) error {
 	return nil
 }
 
-// Drift is an account whose institution's latest balance differs from the
-// books on that day.
+// Drift is an account whose latest stated balance differs from the books on
+// that day. Since is the newest earlier assertion that still agreed (nil
+// when none did) and First the one right after it: the gap opened between
+// the two, which is where a statement may be missing.
 type Drift struct {
 	AccountID int64
 	Date      time.Time
 	Asserted  decimal.Decimal
 	Booked    decimal.Decimal
 	Source    string
+	Since     *time.Time
+	First     time.Time
 }
 
-// Drifts lists every account's newest assertion that does not agree with
-// the books. Nothing is changed: finding the missing or wrong entry is the
-// person's job, and the date says where to look.
+// Drifts lists every account whose newest assertion does not agree with the
+// books. Nothing is changed: finding the missing or wrong entry is the
+// person's job (or booking the difference, BookDifference), and the dates
+// say where to look.
 func (s *Service) Drifts(ctx context.Context, a Access) ([]Drift, error) {
-	rows, err := s.store.AccountDrift(ctx, a.Book.ID)
+	rows, err := s.store.AccountAssertions(ctx, a.Book.ID)
 	if err != nil {
 		return nil, err
 	}
 	var out []Drift
-	for _, r := range rows {
-		if !r.Asserted.Equal(r.Booked) {
-			out = append(out, Drift{AccountID: r.AccountID, Date: r.Date, Asserted: r.Asserted, Booked: r.Booked, Source: r.Source})
+	for i := 0; i < len(rows); {
+		j := i
+		for j < len(rows) && rows[j].AccountID == rows[i].AccountID {
+			j++
 		}
+		if d, ok := drift(rows[i:j]); ok {
+			out = append(out, d)
+		}
+		i = j
 	}
 	return out, nil
+}
+
+// drift reads one account's assertions, oldest first.
+func drift(rows []db.AccountAssertionsRow) (Drift, bool) {
+	last := rows[len(rows)-1]
+	if last.Asserted.Equal(last.Booked) {
+		return Drift{}, false
+	}
+	d := Drift{AccountID: last.AccountID, Date: last.Date, Asserted: last.Asserted, Booked: last.Booked, Source: last.Source, First: rows[0].Date}
+	for k := len(rows) - 2; k >= 0; k-- {
+		if rows[k].Asserted.Equal(rows[k].Booked) {
+			since := rows[k].Date
+			d.Since, d.First = &since, rows[k+1].Date
+			break
+		}
+	}
+	return d, true
+}
+
+// Balance is an account's stated balance on a day beside the books'.
+type Balance struct {
+	Asserted decimal.Decimal
+	Booked   decimal.Decimal
+}
+
+// SetBalance records what an account really held at the end of a day (a
+// count of the cash in a wallet, a balance read off a statement), as an
+// assertion of its own source, next to any institution's.
+func (s *Service) SetBalance(ctx context.Context, a Access, accountID int64, on time.Time, amount decimal.Decimal) (Balance, error) {
+	if err := a.require(db.MemberRoleEditor); err != nil {
+		return Balance{}, err
+	}
+	acc, err := s.balanceAccount(ctx, a, accountID)
+	if err != nil {
+		return Balance{}, err
+	}
+	if on.IsZero() {
+		return Balance{}, fieldError("date", "required", "a balance needs a date")
+	}
+	err = s.store.WithTx(ctx, a.UserID, func(q *db.Queries) error {
+		return q.UpsertAssertion(ctx, db.UpsertAssertionParams{BookID: a.Book.ID, AccountID: acc.ID, Date: on, Amount: amount, Source: "manual"})
+	})
+	if err != nil {
+		return Balance{}, translate(err, "balance")
+	}
+	booked, err := s.store.BookedOn(ctx, db.BookedOnParams{BookID: a.Book.ID, AccountID: acc.ID, Date: on})
+	return Balance{Asserted: amount, Booked: booked}, err
+}
+
+// BookDifference books what separates the books from an account's stated
+// balance on a day as one adjustment against counter: cash spent that no
+// source saw ("other expenses"), or history before the books began
+// (opening balances).
+func (s *Service) BookDifference(ctx context.Context, a Access, accountID int64, on time.Time, counterID int64) (TransactionView, error) {
+	if err := a.require(db.MemberRoleEditor); err != nil {
+		return TransactionView{}, err
+	}
+	acc, err := s.balanceAccount(ctx, a, accountID)
+	if err != nil {
+		return TransactionView{}, err
+	}
+	if acc.Commodity == nil || s.validCurrency(ctx, *acc.Commodity) != nil {
+		return TransactionView{}, fieldError("account_id", "invalid", "only money is adjusted; shares and points need their cost")
+	}
+	counter, err := s.store.GetAccount(ctx, db.GetAccountParams{BookID: a.Book.ID, ID: counterID})
+	if err != nil || counter.IsPlaceholder || counter.ArchivedAt != nil || counter.ID == acc.ID {
+		return TransactionView{}, fieldError("counter_id", "invalid", "choose another account that takes postings")
+	}
+	asserted, err := s.store.AssertionOn(ctx, db.AssertionOnParams{BookID: a.Book.ID, AccountID: acc.ID, Date: on})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return TransactionView{}, fieldError("date", "no_balance", "no balance is known for that day")
+	}
+	if err != nil {
+		return TransactionView{}, err
+	}
+	booked, err := s.store.BookedOn(ctx, db.BookedOnParams{BookID: a.Book.ID, AccountID: acc.ID, Date: on})
+	if err != nil {
+		return TransactionView{}, err
+	}
+	diff := asserted.Sub(booked)
+	if diff.IsZero() {
+		return TransactionView{}, invalid("nothing_to_adjust", "the books already agree on that day")
+	}
+	cur := *acc.Commodity
+	return s.CreateTransaction(ctx, a, TransactionInput{
+		Date:   on,
+		Source: "adjustment",
+		Lines: []LineInput{
+			{AccountID: acc.ID, Commodity: cur, Amount: diff},
+			{AccountID: counter.ID, Commodity: cur, Amount: diff.Neg()},
+		},
+	})
+}
+
+// balanceAccount is an account of the book that can hold a balance.
+func (s *Service) balanceAccount(ctx context.Context, a Access, id int64) (db.Account, error) {
+	acc, err := s.store.GetAccount(ctx, db.GetAccountParams{BookID: a.Book.ID, ID: id})
+	if err != nil || acc.IsPlaceholder || acc.Commodity == nil {
+		return db.Account{}, fieldError("account_id", "invalid", "choose an account that holds a balance")
+	}
+	return acc, nil
 }
 
 // baseValue is an amount's value in the book's base on a day: itself when

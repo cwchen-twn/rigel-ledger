@@ -148,16 +148,28 @@ INSERT INTO balance_assertions (book_id, account_id, date, amount, source)
 VALUES (@book_id, @account_id, @date, @amount, @source)
 ON CONFLICT (account_id, date, source) DO UPDATE SET amount = EXCLUDED.amount;
 
--- name: AccountDrift :many
--- The newest assertion of each account against what the books say on that
--- date (in the account's own commodity).
-SELECT DISTINCT ON (ba.account_id)
-       ba.account_id, ba.date, ba.amount AS asserted, ba.source,
+-- name: AccountAssertions :many
+-- Every assertion of the book, oldest first, against what the books say on
+-- its date (in the account's own commodity): the newest says whether an
+-- account drifts, the older ones where it started.
+SELECT ba.account_id, ba.date, ba.amount AS asserted, ba.source,
        coalesce((SELECT sum(p.amount) FROM postings p JOIN transactions t ON t.id = p.transaction_id
                  WHERE p.account_id = ba.account_id AND t.date <= ba.date), 0)::numeric AS booked
 FROM balance_assertions ba
 WHERE ba.book_id = @book_id
-ORDER BY ba.account_id, ba.date DESC, ba.created_at DESC;
+ORDER BY ba.account_id, ba.date, ba.created_at;
+
+-- name: BookedOn :one
+-- An account's balance in its own commodity at the end of a day.
+SELECT coalesce(sum(p.amount), 0)::numeric AS booked
+FROM postings p JOIN transactions t ON t.id = p.transaction_id
+WHERE p.account_id = @account_id AND t.book_id = @book_id AND t.date <= @date;
+
+-- name: AssertionOn :one
+-- What an account held on a day by its newest assertion for that day.
+SELECT amount FROM balance_assertions
+WHERE book_id = @book_id AND account_id = @account_id AND date = @date
+ORDER BY created_at DESC LIMIT 1;
 
 -- name: SetPostingStatus :exec
 UPDATE postings SET status = @status, cleared_on = sqlc.narg(cleared_on)

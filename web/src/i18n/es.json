@@ -153,7 +153,8 @@
     "cost_required": "Introduce el coste (0 para millas ganadas)",
     "base_missing": "Algunas líneas aún no tienen importe base",
     "fill_remainder": "Poner aquí el resto",
-    "items": "Artículos de la factura"
+    "items": "Artículos de la factura",
+    "adjustment": "Ajuste de saldo"
   },
   "attachments": {
     "title": "Recibos y archivos",
@@ -218,7 +219,22 @@
     "quick_owed": "Deuda hoy",
     "quick_balance_hint": "Se registra como saldo inicial, con fecha de hoy",
     "quick_save_another": "Guardar y añadir otra",
-    "quick_added": "Se añadió {name}"
+    "quick_added": "Se añadió {name}",
+    "balance_set": "Fijar saldo",
+    "balance_title": "Saldo de {account}",
+    "balance_hint": "Lo que la cuenta tenía realmente al final de un día: el efectivo contado en la billetera, el saldo de un extracto.",
+    "balance_date": "Fecha",
+    "balance_amount": "Saldo real",
+    "balance_save": "Comparar con los libros",
+    "balance_stated": "Real:",
+    "balance_books": "Libros:",
+    "balance_difference": "Diferencia:",
+    "balance_agrees": "Los libros coinciden ese día.",
+    "balance_counter": "Registrar la diferencia contra",
+    "balance_counter_hint": "El efectivo gastado que ninguna fuente vio va a un gasto; la historia anterior a tus libros va a saldos iniciales.",
+    "balance_book": "Registrar la diferencia",
+    "balance_booked": "Diferencia registrada",
+    "balance_money_only": "Solo se ajusta dinero; acciones y puntos necesitan su costo."
   },
   "book": {
     "title": "Ajustes del libro",
@@ -336,7 +352,8 @@
     "role": "Necesitas ser editor de este libro",
     "stale": "La clave del sincronizador cambió; vuelve a introducir las credenciales",
     "unsupported_type": "Solo imágenes (JPEG, PNG, WebP) y PDF",
-    "too_large": "Demasiado grande"
+    "too_large": "Demasiado grande",
+    "no_balance": "No hay saldo conocido para ese día."
   },
   "languages": {
     "en": "English",
@@ -405,7 +422,8 @@
     "challenge_gone": "Esta verificación caducó o ya se respondió",
     "disabled": "Activa la conexión primero",
     "no_access": "El dueño de la conexión ya no tiene acceso a este libro",
-    "amount_unknown": "Este correo no indica un importe: solo puede unirse al pago al que pertenece."
+    "amount_unknown": "Este correo no indica un importe: solo puede unirse al pago al que pertenece.",
+    "nothing_to_adjust": "Los libros ya coinciden ese día."
   },
   "profile": {
     "username_hint": "Para iniciar sesión: a-z, 0-9, punto, guion, guion bajo"
@@ -907,7 +925,11 @@
     "pdf_error_unbalanced": "La tabla de saldos de este extracto no cuadra, así que no se leyó nada.",
     "pdf_error_other": "No se pudo leer este archivo.",
     "pdf_error_unreadable": "Este navegador no puede abrir esta imagen (un HEIC de iPhone fuera de Safari): guárdala como JPEG y vuelve a intentarlo.",
-    "pdf_error_password": "Este PDF está protegido: escribe su contraseña y ábrelo de nuevo."
+    "pdf_error_password": "Este PDF está protegido: escribe su contraseña y ábrelo de nuevo.",
+    "drift_since": "Coincidía el {since}, difiere desde el {first}",
+    "drift_never": "Nunca coincidió; primer saldo el {first}",
+    "drift_adjust": "Registrar la diferencia",
+    "drift_line_manual": "Contado el {date}:"
   },
   "tokens": {
     "title": "Tokens de API",

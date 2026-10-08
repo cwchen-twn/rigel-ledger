@@ -1183,6 +1183,54 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/books/{bookID}/accounts/{accountID}/adjust": {
+            "post": {
+                "description": "One transaction of source \"adjustment\" on that day, against counter_id (other expenses for unseen cash spending, opening balances for history before the books). Money accounts only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Book the difference between the books and a stated balance",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "account id",
+                        "name": "accountID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "day and counter account",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.AdjustRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/routes.TransactionDTO"
+                        }
+                    }
+                }
+            }
+        },
         "/api/books/{bookID}/accounts/{accountID}/archive": {
             "post": {
                 "consumes": [
@@ -1225,6 +1273,54 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/routes.AccountDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/accounts/{accountID}/balance": {
+            "post": {
+                "description": "Stored as a balance assertion of source \"manual\"; answers the books' balance that day beside it. Signed like postings (a card's debt is negative).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "State what an account really held at the end of a day",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "account id",
+                        "name": "accountID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "day and balance",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/routes.BalanceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/routes.BalanceDTO"
                         }
                     }
                 }
@@ -4139,6 +4235,17 @@ const docTemplate = `{
                 }
             }
         },
+        "routes.AdjustRequest": {
+            "type": "object",
+            "properties": {
+                "counter_id": {
+                    "type": "integer"
+                },
+                "date": {
+                    "type": "string"
+                }
+            }
+        },
         "routes.AdminSettingsDTO": {
             "type": "object",
             "properties": {
@@ -4326,6 +4433,28 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.BalanceDTO": {
+            "type": "object",
+            "properties": {
+                "asserted": {
+                    "type": "string"
+                },
+                "booked": {
+                    "type": "string"
+                }
+            }
+        },
+        "routes.BalanceRequest": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "date": {
                     "type": "string"
                 }
             }
@@ -4884,6 +5013,13 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "date": {
+                    "type": "string"
+                },
+                "first": {
+                    "type": "string"
+                },
+                "since": {
+                    "description": "The newest earlier balance that still agreed (absent when none did),\nand the first one after it that did not: the gap opened in between.",
                     "type": "string"
                 },
                 "source": {

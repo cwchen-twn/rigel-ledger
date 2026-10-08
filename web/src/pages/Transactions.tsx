@@ -127,7 +127,7 @@ export default function Transactions() {
                   <span class="text-sm whitespace-nowrap text-muted-foreground tabular-nums">{formatDate(tx.date, user()?.date_format ?? 'YYYY-MM-DD')}</span>
                   <span class="grid min-w-0 gap-0.5">
                     <span class="flex items-center gap-2 truncate text-sm font-medium">
-                      {tx.payee || (tx.source === 'opening' ? t('transactions.opening') : summary(tx))}
+                      {tx.payee || (tx.source === 'opening' ? t('transactions.opening') : tx.source === 'adjustment' ? t('transactions.adjustment') : summary(tx))}
                       <Show when={pending(tx)}>
                         <Badge variant="warning">{t('transactions.uncleared')}</Badge>
                       </Show>
@@ -138,7 +138,7 @@ export default function Transactions() {
                     </span>
                     <span class="truncate text-xs text-muted-foreground">
                       {/* The title already is the summary when there is no payee. */}
-                      {[tx.payee || tx.source === 'opening' ? summary(tx) : '', tx.memo].filter(Boolean).join(' · ')}
+                      {[tx.payee || tx.source === 'opening' || tx.source === 'adjustment' ? summary(tx) : '', tx.memo].filter(Boolean).join(' · ')}
                     </span>
                   </span>
                   <span class="grid justify-items-end gap-0.5">

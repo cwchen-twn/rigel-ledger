@@ -193,6 +193,10 @@ export const api = {
   archiveAccount: (id: number, accountId: number, archived: boolean) =>
     post<T.Account>(`${book(id)}/accounts/${accountId}/archive`, { archived }),
   deleteAccount: (id: number, accountId: number) => del(`${book(id)}/accounts/${accountId}`),
+  setBalance: (id: number, accountId: number, date: string, amount: string) =>
+    post<T.Balance>(`${book(id)}/accounts/${accountId}/balance`, { date, amount }),
+  adjustBalance: (id: number, accountId: number, date: string, counterId: number) =>
+    post<T.Transaction>(`${book(id)}/accounts/${accountId}/adjust`, { date, counter_id: counterId }),
   costBasis: (id: number, accountId: number, asOf: string, exclude?: number) =>
     get<T.CostBasis>(`${book(id)}/accounts/${accountId}/cost${qs({ as_of: asOf, exclude })}`),
 

@@ -252,6 +252,8 @@ func New(d Deps) http.Handler {
 						r.Post("/accounts/{accountID}/archive", h.archiveAccount)
 						r.Delete("/accounts/{accountID}", h.deleteAccount)
 						r.Get("/accounts/{accountID}/cost", h.costBasis)
+						r.Post("/accounts/{accountID}/balance", h.setBalance)
+						r.Post("/accounts/{accountID}/adjust", h.adjustBalance)
 						r.Post("/commodities", h.createCommodity)
 
 						r.Get("/transactions", h.listTransactions)

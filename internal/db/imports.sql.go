@@ -12,17 +12,16 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-const accountDrift = `-- name: AccountDrift :many
-SELECT DISTINCT ON (ba.account_id)
-       ba.account_id, ba.date, ba.amount AS asserted, ba.source,
+const accountAssertions = `-- name: AccountAssertions :many
+SELECT ba.account_id, ba.date, ba.amount AS asserted, ba.source,
        coalesce((SELECT sum(p.amount) FROM postings p JOIN transactions t ON t.id = p.transaction_id
                  WHERE p.account_id = ba.account_id AND t.date <= ba.date), 0)::numeric AS booked
 FROM balance_assertions ba
 WHERE ba.book_id = $1
-ORDER BY ba.account_id, ba.date DESC, ba.created_at DESC
+ORDER BY ba.account_id, ba.date, ba.created_at
 `
 
-type AccountDriftRow struct {
+type AccountAssertionsRow struct {
 	AccountID int64
 	Date      time.Time
 	Asserted  decimal.Decimal
@@ -30,17 +29,18 @@ type AccountDriftRow struct {
 	Booked    decimal.Decimal
 }
 
-// The newest assertion of each account against what the books say on that
-// date (in the account's own commodity).
-func (q *Queries) AccountDrift(ctx context.Context, bookID int64) ([]AccountDriftRow, error) {
-	rows, err := q.db.Query(ctx, accountDrift, bookID)
+// Every assertion of the book, oldest first, against what the books say on
+// its date (in the account's own commodity): the newest says whether an
+// account drifts, the older ones where it started.
+func (q *Queries) AccountAssertions(ctx context.Context, bookID int64) ([]AccountAssertionsRow, error) {
+	rows, err := q.db.Query(ctx, accountAssertions, bookID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []AccountDriftRow{}
+	items := []AccountAssertionsRow{}
 	for rows.Next() {
-		var i AccountDriftRow
+		var i AccountAssertionsRow
 		if err := rows.Scan(
 			&i.AccountID,
 			&i.Date,
@@ -56,6 +56,46 @@ func (q *Queries) AccountDrift(ctx context.Context, bookID int64) ([]AccountDrif
 		return nil, err
 	}
 	return items, nil
+}
+
+const assertionOn = `-- name: AssertionOn :one
+SELECT amount FROM balance_assertions
+WHERE book_id = $1 AND account_id = $2 AND date = $3
+ORDER BY created_at DESC LIMIT 1
+`
+
+type AssertionOnParams struct {
+	BookID    int64
+	AccountID int64
+	Date      time.Time
+}
+
+// What an account held on a day by its newest assertion for that day.
+func (q *Queries) AssertionOn(ctx context.Context, arg AssertionOnParams) (decimal.Decimal, error) {
+	row := q.db.QueryRow(ctx, assertionOn, arg.BookID, arg.AccountID, arg.Date)
+	var amount decimal.Decimal
+	err := row.Scan(&amount)
+	return amount, err
+}
+
+const bookedOn = `-- name: BookedOn :one
+SELECT coalesce(sum(p.amount), 0)::numeric AS booked
+FROM postings p JOIN transactions t ON t.id = p.transaction_id
+WHERE p.account_id = $1 AND t.book_id = $2 AND t.date <= $3
+`
+
+type BookedOnParams struct {
+	AccountID int64
+	BookID    int64
+	Date      time.Time
+}
+
+// An account's balance in its own commodity at the end of a day.
+func (q *Queries) BookedOn(ctx context.Context, arg BookedOnParams) (decimal.Decimal, error) {
+	row := q.db.QueryRow(ctx, bookedOn, arg.AccountID, arg.BookID, arg.Date)
+	var booked decimal.Decimal
+	err := row.Scan(&booked)
+	return booked, err
 }
 
 const createImportBatch = `-- name: CreateImportBatch :one

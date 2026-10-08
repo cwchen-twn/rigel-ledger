@@ -153,7 +153,8 @@
     "cost_required": "Enter the cost (0 for miles earned)",
     "base_missing": "Some lines have no base amount yet",
     "fill_remainder": "Put the remainder here",
-    "items": "Invoice items"
+    "items": "Invoice items",
+    "adjustment": "Balance adjustment"
   },
   "attachments": {
     "title": "Receipts and files",
@@ -218,7 +219,22 @@
     "quick_owed": "Owed today",
     "quick_balance_hint": "Booked as the opening balance, dated today",
     "quick_save_another": "Save and add another",
-    "quick_added": "Added {name}"
+    "quick_added": "Added {name}",
+    "balance_set": "Set balance",
+    "balance_title": "Balance of {account}",
+    "balance_hint": "What the account really held at the end of a day: cash counted in a wallet, a balance read off a statement.",
+    "balance_date": "Date",
+    "balance_amount": "Actual balance",
+    "balance_save": "Compare with the books",
+    "balance_stated": "Actual:",
+    "balance_books": "Books:",
+    "balance_difference": "Difference:",
+    "balance_agrees": "The books agree on that day.",
+    "balance_counter": "Book the difference against",
+    "balance_counter_hint": "Cash spent that no source saw goes to an expense; history from before your books began goes to opening balances.",
+    "balance_book": "Book the difference",
+    "balance_booked": "Difference booked",
+    "balance_money_only": "Only money can be adjusted; shares and points need their cost."
   },
   "book": {
     "title": "Book settings",
@@ -336,7 +352,8 @@
     "role": "You need to be an editor of this book",
     "stale": "The sync runner's key changed; enter the credentials again",
     "unsupported_type": "Only images (JPEG, PNG, WebP) and PDFs",
-    "too_large": "Too large"
+    "too_large": "Too large",
+    "no_balance": "No balance is known for that day."
   },
   "languages": {
     "en": "English",
@@ -405,7 +422,8 @@
     "challenge_gone": "This check expired or was already answered",
     "disabled": "Turn the connection on first",
     "no_access": "The connection's owner no longer has access to this book",
-    "amount_unknown": "This email states no amount: it can only join the payment it belongs to."
+    "amount_unknown": "This email states no amount: it can only join the payment it belongs to.",
+    "nothing_to_adjust": "The books already agree on that day."
   },
   "profile": {
     "username_hint": "Used to sign in: a-z, 0-9, dot, dash, underscore"
@@ -907,7 +925,11 @@
     "pdf_error_unbalanced": "This statement's balance table does not add up, so nothing would be right; nothing was read.",
     "pdf_error_other": "This file could not be read.",
     "pdf_error_unreadable": "This browser cannot open this image (an iPhone HEIC outside Safari): save it as JPEG and try again.",
-    "pdf_error_password": "This PDF is locked: enter its password and open it again."
+    "pdf_error_password": "This PDF is locked: enter its password and open it again.",
+    "drift_since": "Agreed on {since}, first off on {first}",
+    "drift_never": "Never agreed; first balance on {first}",
+    "drift_adjust": "Book the difference",
+    "drift_line_manual": "Counted on {date}:"
   },
   "tokens": {
     "title": "API tokens",

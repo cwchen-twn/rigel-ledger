@@ -607,6 +607,16 @@ export interface Drift {
   asserted: string;
   booked: string;
   source: string;
+  /** The newest earlier balance that still agreed; absent when none did. */
+  since?: string;
+  /** The first balance after it that did not: the gap opened in between. */
+  first: string;
+}
+
+/** A stated balance beside the books' on the same day (#87). */
+export interface Balance {
+  asserted: string;
+  booked: string;
 }
 
 // ---- connections and the sync runner (routes/handlers_connections.go, handlers_runner.go) ----
