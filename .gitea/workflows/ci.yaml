@@ -98,9 +98,9 @@ jobs:
           github-server-url: http://gitea-http.gitea.svc.cluster.local:3000
 
       - name: Set up Node
-        uses: actions/setup-node@v4.4.0
+        uses: actions/setup-node@v7.1.0
         with:
-          node-version: "22"
+          node-version: "24"
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2.2.0
