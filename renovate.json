@@ -98,6 +98,34 @@
         "requires-python"
       ],
       "enabled": false
+    },
+    {
+      "description": "engines is the oldest Node the sync runner accepts, not a dependency to pin: rangeStrategy pin made it exactly v26.11.1 (#94) while the runner image runs Node 22. Same mistake as requires-python above.",
+      "matchManagers": [
+        "npm",
+        "bun"
+      ],
+      "matchDepTypes": [
+        "engines"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "The Node runtime is the runner image (integrations/rigel-sync/Dockerfile) and setup-node's node-version in both CI forges. Move them in one PR so CI tests the Node that ships; renovate offers only LTS majors here.",
+      "matchDepNames": [
+        "node"
+      ],
+      "groupName": "node runtime"
+    },
+    {
+      "description": "@types/node must describe the runtime's major, not the newest Node: #98 moved it to 26 under a Node 22 image. Its major moves by hand together with the node runtime group.",
+      "matchDepNames": [
+        "@types/node"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "enabled": false
     }
   ],
   "customManagers": [
