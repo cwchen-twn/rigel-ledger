@@ -319,13 +319,22 @@ export interface AccountBalance {
   base_amount: string;
   total_amounts: CommodityAmount[];
   total_base_amount: string;
+  /** At the date's rates and prices for assets and liabilities; cost otherwise. */
+  value: string;
+  total_value: string;
 }
 
 export interface Balances {
   as_of: string;
   base_currency: string;
   check: string;
+  /** At cost (the base amounts as posted). */
   class_totals: Record<AccountClass, string>;
+  class_values: Record<AccountClass, string>;
+  /** assets - liabilities = equity + result + unrealised, at value. */
+  unrealised: string;
+  /** Commodities with no rate or price on the date, shown at cost. */
+  missing: string[];
   accounts: AccountBalance[];
 }
 

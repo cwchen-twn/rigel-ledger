@@ -172,3 +172,58 @@ func TestCashFlowDirectMethod(t *testing.T) {
 		t.Errorf("a cash-to-cash transfer changed the flows: %s %s", again.Operating, again.Closing)
 	}
 }
+
+// The Overview's balances agree with the balance sheet: assets at value, and
+// an account emptied after its rate moved is worth zero, whatever exchange
+// difference its history left at cost.
+func TestBalancesAtValue(t *testing.T) {
+	f, ids := reportFixture(t)
+	// 04-01: the 500 USD left, at 32, go to checking: the USD account holds
+	// nothing, but its base amounts sum to 15,000 - 16,000 = -1,000.
+	f.post(t, "2026-04-01",
+		LineInput{AccountID: f.keys["bank_checking"], Amount: d("16000")},
+		LineInput{AccountID: ids["usd"], Amount: d("-500")})
+
+	b, err := f.svc.Balances(f.ctx, f.acc, day("2026-03-31"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bs, err := f.svc.BalanceSheet(f.ctx, f.acc, day("2026-03-31"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !b.ClassValues[db.AccountClassAsset].Equal(bs.TotalAssets) || !b.Unrealised.Equal(bs.Unrealised) {
+		t.Errorf("assets %s unrealised %s, balance sheet %s %s", b.ClassValues[db.AccountClassAsset], b.Unrealised, bs.TotalAssets, bs.Unrealised)
+	}
+	if !b.ClassTotals[db.AccountClassAsset].Equal(d("78000")) || !b.Check.IsZero() {
+		t.Errorf("assets at cost %s, check %s", b.ClassTotals[db.AccountClassAsset], b.Check)
+	}
+	of := func(b Balances, id int64) AccountBalance {
+		for _, a := range b.Accounts {
+			if a.AccountID == id {
+				return a
+			}
+		}
+		return AccountBalance{}
+	}
+	if usd := of(b, ids["usd"]); !usd.Value.Equal(d("16000")) || !usd.BaseAmount.Equal(d("15000")) {
+		t.Errorf("USD account on 03-31: value %s cost %s", usd.Value, usd.BaseAmount)
+	}
+
+	after, err := f.svc.Balances(f.ctx, f.acc, day("2026-04-01"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	usd := of(after, ids["usd"])
+	if !usd.Value.IsZero() || !usd.TotalValue.IsZero() || !usd.BaseAmount.Equal(d("-1000")) || len(usd.Amounts) != 0 {
+		t.Errorf("emptied USD account: value %s total %s cost %s holdings %v", usd.Value, usd.TotalValue, usd.BaseAmount, usd.Amounts)
+	}
+	// assets - liabilities = equity + result + unrealised, at value; unrealised
+	// is AAPL's 4,200 plus the 1,000 the emptied account no longer carries
+	v := after.ClassValues
+	lhs := v[db.AccountClassAsset].Add(v[db.AccountClassLiability])
+	rhs := v[db.AccountClassEquity].Add(v[db.AccountClassIncome]).Add(v[db.AccountClassExpense]).Neg().Add(after.Unrealised)
+	if !lhs.Equal(rhs) || !after.Unrealised.Equal(d("5200")) {
+		t.Errorf("assets - liabilities %s, equity + result + unrealised %s (unrealised %s)", lhs, rhs, after.Unrealised)
+	}
+}

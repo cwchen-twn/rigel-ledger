@@ -25,6 +25,12 @@ type AccountBalance struct {
 	// The account plus all of its descendants.
 	TotalAmounts    []CommodityAmount
 	TotalBaseAmount decimal.Decimal
+	// What the base amounts are worth on the date: assets and liabilities
+	// revalued like the balance sheet (rates for currencies, prices for
+	// securities), everything else at cost. An account holding nothing is
+	// worth zero, whatever exchange difference its history left in the base.
+	Value      decimal.Decimal
+	TotalValue decimal.Decimal
 }
 
 type Balances struct {
@@ -32,6 +38,12 @@ type Balances struct {
 	BaseCurrency string
 	Accounts     []AccountBalance
 	ClassTotals  map[db.AccountClass]decimal.Decimal
+	// The same at value, and what revaluing assets and liabilities adds:
+	// assets - liabilities = equity + result + Unrealised.
+	ClassValues map[db.AccountClass]decimal.Decimal
+	Unrealised  decimal.Decimal
+	// Commodities with no rate or price on the date: valued at cost.
+	Missing []string
 	// The sum of every base amount. It is zero by construction; the page
 	// shows it anyway, which is the only "trial balance" this system keeps.
 	Check decimal.Decimal
@@ -60,6 +72,10 @@ func (s *Service) Balances(ctx context.Context, a Access, asOf time.Time) (Balan
 	if err != nil {
 		return Balances{}, err
 	}
+	rc, err := s.newReportCtx(ctx, a, a.Book.BaseCurrency, asOf)
+	if err != nil {
+		return Balances{}, err
+	}
 
 	parent := make(map[int64]*int64, len(accounts))
 	class := make(map[int64]db.AccountClass, len(accounts))
@@ -72,6 +88,8 @@ func (s *Service) Balances(ctx context.Context, a Access, asOf time.Time) (Balan
 	ownBase := map[int64]decimal.Decimal{}
 	total := map[int64]map[string]decimal.Decimal{}
 	totalBase := map[int64]decimal.Decimal{}
+	ownValue := map[int64]decimal.Decimal{}
+	totalValue := map[int64]decimal.Decimal{}
 	add := func(m map[int64]map[string]decimal.Decimal, id int64, c string, v decimal.Decimal) {
 		if m[id] == nil {
 			m[id] = map[string]decimal.Decimal{}
@@ -83,18 +101,32 @@ func (s *Service) Balances(ctx context.Context, a Access, asOf time.Time) (Balan
 		AsOf:         asOf,
 		BaseCurrency: a.Book.BaseCurrency,
 		ClassTotals:  map[db.AccountClass]decimal.Decimal{},
+		ClassValues:  map[db.AccountClass]decimal.Decimal{},
 		Check:        decimal.Zero,
+		Unrealised:   decimal.Zero,
 	}
 	for _, row := range sums {
+		cls := class[row.AccountID]
+		v := row.BaseAmount
+		if cls == db.AccountClassAsset || cls == db.AccountClassLiability {
+			if v, err = rc.value(row.Commodity, row.Amount, row.BaseAmount, asOf); err != nil {
+				return Balances{}, err
+			}
+			out.Unrealised = out.Unrealised.Add(v.Sub(row.BaseAmount))
+		}
 		add(own, row.AccountID, row.Commodity, row.Amount)
 		ownBase[row.AccountID] = ownBase[row.AccountID].Add(row.BaseAmount)
-		out.ClassTotals[class[row.AccountID]] = out.ClassTotals[class[row.AccountID]].Add(row.BaseAmount)
+		ownValue[row.AccountID] = ownValue[row.AccountID].Add(v)
+		out.ClassTotals[cls] = out.ClassTotals[cls].Add(row.BaseAmount)
+		out.ClassValues[cls] = out.ClassValues[cls].Add(v)
 		out.Check = out.Check.Add(row.BaseAmount)
 		for id := &row.AccountID; id != nil; id = parent[*id] {
 			add(total, *id, row.Commodity, row.Amount)
 			totalBase[*id] = totalBase[*id].Add(row.BaseAmount)
+			totalValue[*id] = totalValue[*id].Add(v)
 		}
 	}
+	out.Missing = rc.missingList()
 
 	out.Accounts = make([]AccountBalance, 0, len(accounts))
 	for _, acc := range accounts {
@@ -104,6 +136,8 @@ func (s *Service) Balances(ctx context.Context, a Access, asOf time.Time) (Balan
 			BaseAmount:      ownBase[acc.ID],
 			TotalAmounts:    sortedAmounts(total[acc.ID]),
 			TotalBaseAmount: totalBase[acc.ID],
+			Value:           ownValue[acc.ID],
+			TotalValue:      totalValue[acc.ID],
 		})
 	}
 	return out, nil

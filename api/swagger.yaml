@@ -147,6 +147,12 @@ definitions:
         type: array
       total_base_amount:
         type: string
+      total_value:
+        type: string
+      value:
+        description: At the date's rates and prices (assets and liabilities); cost
+          otherwise.
+        type: string
     type: object
   routes.AccountDTO:
     properties:
@@ -382,6 +388,16 @@ definitions:
         additionalProperties:
           type: string
         type: object
+      class_values:
+        additionalProperties:
+          type: string
+        type: object
+      missing:
+        items:
+          type: string
+        type: array
+      unrealised:
+        type: string
     type: object
   routes.BookDTO:
     properties:

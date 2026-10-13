@@ -121,7 +121,8 @@ func (rc *reportCtx) missingList() []string {
 //   - currencies at the latest rate on or before it (IAS 21 closing rate);
 //   - listed securities at price x rate (IFRS 9 FVTPL);
 //   - points, futures (contract value is exposure, not an asset) and anything
-//     without a rate at cost.
+//     without a rate at cost;
+//   - zero units of a currency or listed security at zero.
 func (rc *reportCtx) value(c string, amount, hist decimal.Decimal, on time.Time) (decimal.Decimal, error) {
 	base := rc.book.BaseCurrency
 	if c == base {
@@ -130,6 +131,11 @@ func (rc *reportCtx) value(c string, amount, hist decimal.Decimal, on time.Time)
 	com, ok := rc.commods[c]
 	if !ok {
 		return hist, nil
+	}
+	// Nothing held is worth nothing: no rate or price to look up, and no
+	// exchange difference left at cost (a closed position or emptied account).
+	if amount.IsZero() && (com.Kind == db.CommodityKindCurrency || (com.Kind == db.CommodityKindSecurity && !com.ContractSize.Valid)) {
+		return decimal.Zero, nil
 	}
 	switch com.Kind {
 	case db.CommodityKindCurrency:

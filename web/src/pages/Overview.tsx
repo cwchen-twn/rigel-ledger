@@ -12,13 +12,17 @@ import { EmptyState, Skeleton } from '~/components/ui/misc';
 import { useI18n } from '~/i18n';
 import { cn } from '~/lib/cn';
 import { today } from '~/lib/dates';
-import { add, isZero, neg } from '~/lib/money';
+import { add, isZero, neg, sub } from '~/lib/money';
 import { CLASS_ORDER, naturalAmount, useBook } from '~/stores/book';
 
 /**
- * Every account's balance as of a date, rolled up the tree. This is the only
- * "trial balance" the system keeps: the check at the bottom is zero by
- * construction and shown so it can be seen to be.
+ * Every account's balance as of a date, rolled up the tree. Assets and
+ * liabilities are shown at value (the date's rates and prices, as on the
+ * balance sheet), with the cost underneath when it differs; equity gains the
+ * unrealised line, so assets = liabilities + equity still reads off the page.
+ * This is the only "trial balance" the system keeps: the check at the bottom
+ * sums the base amounts as posted, is zero by construction and is shown so it
+ * can be seen to be.
  */
 export default function Overview() {
   const { t } = useI18n();
@@ -30,11 +34,14 @@ export default function Overview() {
 
   const byAccount = createMemo(() => new Map((balances()?.accounts ?? []).map((b) => [b.account_id, b])));
   const base = () => balances()?.base_currency ?? book.book()?.base_currency ?? 'USD';
-  const total = (cls: AccountClass) => naturalAmount(balances()?.class_totals[cls] ?? '0', cls);
+  const total = (cls: AccountClass) => naturalAmount(balances()?.class_values?.[cls] ?? balances()?.class_totals[cls] ?? '0', cls);
+  const unrealised = () => balances()?.unrealised ?? '0';
   const netIncome = () => add(total('income'), neg(total('expense')));
   const netWorth = () => add(total('asset'), neg(total('liability')));
 
-  const isEmpty = (b?: AccountBalance) => !b || (isZero(b.total_base_amount) && b.total_amounts.length === 0);
+  // An account holding nothing is empty even if its history left an exchange
+  // difference at cost; its value is zero.
+  const isEmpty = (b?: AccountBalance) => !b || (isZero(b.total_value) && b.total_amounts.length === 0);
   const visibleChildren = (parent: number | null, cls: AccountClass) =>
     (book.children().get(parent) ?? []).filter(
       (a) => a.class === cls && (showZero() || !isEmpty(byAccount().get(a.id))) && (!a.archived || !isEmpty(byAccount().get(a.id))),
@@ -50,7 +57,10 @@ export default function Overview() {
     const bal = () => byAccount().get(props.account.id);
     const kids = () => visibleChildren(props.account.id, props.account.class);
     const expanded = () => !collapsed().has(props.account.id);
-    const foreign = () => (bal()?.total_amounts ?? []).filter((a) => a.commodity !== base());
+    // Its own holdings only: a parent's row would otherwise repeat every
+    // child's currency and share count above its total.
+    const foreign = () => (bal()?.amounts ?? []).filter((a) => a.commodity !== base());
+    const revalued = () => !!bal() && !isZero(sub(bal()!.total_value, bal()!.total_base_amount));
     return (
       <>
         <div
@@ -70,7 +80,14 @@ export default function Overview() {
               </span>
             )}
           </For>
-          <Money class="w-36 text-right" signed amount={naturalAmount(bal()?.total_base_amount ?? '0', props.account.class)} currency={base()} />
+          <span class="flex w-36 shrink-0 flex-col items-end">
+            <Money class="text-right" signed amount={naturalAmount(bal()?.total_value ?? '0', props.account.class)} currency={base()} />
+            <Show when={revalued()}>
+              <span class="text-xs text-muted-foreground">
+                {t('reports.cost')} <Money amount={naturalAmount(bal()!.total_base_amount, props.account.class)} currency={base()} />
+              </span>
+            </Show>
+          </span>
         </div>
         <Show when={expanded()}>
           <For each={kids()}>{(k) => <Row account={k} depth={props.depth + 1} />}</For>
@@ -122,6 +139,11 @@ export default function Overview() {
             <A href={`/b/${book.id()}/accounts?new=bank`} class={buttonVariants({ size: 'sm' })}>{t('overview.add_bank')}</A>
           </EmptyState>
         }>
+          <Show when={balances()!.missing?.length}>
+            <p class="mb-4 rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
+              {t('reports.missing', { list: balances()!.missing.join(', ') })}
+            </p>
+          </Show>
           <div class="grid gap-4 lg:grid-cols-2">
             <For each={CLASS_ORDER}>
               {(cls) => (
@@ -129,7 +151,7 @@ export default function Overview() {
                   <CardHeader class="flex flex-row items-center justify-between px-4">
                     <CardTitle class="text-base">{t(`class.${cls}`)}</CardTitle>
                     {/* Equity includes the result to date, so assets = liabilities + equity reads off the page. */}
-                    <Money class="font-semibold" signed amount={cls === 'equity' ? add(total('equity'), netIncome()) : total(cls)} currency={base()} />
+                    <Money class="font-semibold" signed amount={cls === 'equity' ? add(add(total('equity'), netIncome()), unrealised()) : total(cls)} currency={base()} />
                   </CardHeader>
                   <CardContent class="px-4">
                     <For each={visibleChildren(null, cls)}>{(a) => <Row account={a} depth={0} />}</For>
@@ -137,6 +159,13 @@ export default function Overview() {
                       <div class="flex items-center gap-2 py-2 pl-6 text-sm italic text-muted-foreground">
                         <span class="flex-1">{t('overview.net_income')}</span>
                         <Money class="w-36 text-right" signed amount={netIncome()} currency={base()} />
+                      </div>
+                      <div class="flex items-center gap-2 py-2 pl-6 text-sm italic text-muted-foreground">
+                        <span class="min-w-0 flex-1">
+                          {t('reports.unrealised')}
+                          <span class="block text-xs not-italic">{t('reports.unrealised_hint')}</span>
+                        </span>
+                        <Money class="w-36 text-right" signed amount={unrealised()} currency={base()} />
                       </div>
                     </Show>
                   </CardContent>

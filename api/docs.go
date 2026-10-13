@@ -4191,6 +4191,13 @@ const docTemplate = `{
                 },
                 "total_base_amount": {
                     "type": "string"
+                },
+                "total_value": {
+                    "type": "string"
+                },
+                "value": {
+                    "description": "At the date's rates and prices (assets and liabilities); cost otherwise.",
+                    "type": "string"
                 }
             }
         },
@@ -4545,6 +4552,21 @@ const docTemplate = `{
                     "additionalProperties": {
                         "type": "string"
                     }
+                },
+                "class_values": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "missing": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "unrealised": {
+                    "type": "string"
                 }
             }
         },

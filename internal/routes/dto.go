@@ -275,6 +275,9 @@ type AccountBalanceDTO struct {
 	BaseAmount      decimal.Decimal      `json:"base_amount" swaggertype:"string"`
 	TotalAmounts    []CommodityAmountDTO `json:"total_amounts"`
 	TotalBaseAmount decimal.Decimal      `json:"total_base_amount" swaggertype:"string"`
+	// At the date's rates and prices (assets and liabilities); cost otherwise.
+	Value      decimal.Decimal `json:"value" swaggertype:"string"`
+	TotalValue decimal.Decimal `json:"total_value" swaggertype:"string"`
 }
 
 type BalancesDTO struct {
@@ -282,22 +285,28 @@ type BalancesDTO struct {
 	BaseCurrency string                     `json:"base_currency"`
 	Check        decimal.Decimal            `json:"check" swaggertype:"string"`
 	ClassTotals  map[string]decimal.Decimal `json:"class_totals" swaggertype:"object,string"`
+	ClassValues  map[string]decimal.Decimal `json:"class_values" swaggertype:"object,string"`
+	Unrealised   decimal.Decimal            `json:"unrealised" swaggertype:"string"`
+	Missing      []string                   `json:"missing"`
 	Accounts     []AccountBalanceDTO        `json:"accounts"`
 }
 
 func balancesDTO(b ledger.Balances) BalancesDTO {
-	totals := map[string]decimal.Decimal{}
+	totals, values := map[string]decimal.Decimal{}, map[string]decimal.Decimal{}
 	for _, c := range []db.AccountClass{db.AccountClassAsset, db.AccountClassLiability, db.AccountClassEquity, db.AccountClassIncome, db.AccountClassExpense} {
 		totals[string(c)] = b.ClassTotals[c]
+		values[string(c)] = b.ClassValues[c]
 	}
 	accts := make([]AccountBalanceDTO, len(b.Accounts))
 	for i, a := range b.Accounts {
 		accts[i] = AccountBalanceDTO{
 			AccountID: a.AccountID, Amounts: amountsDTO(a.Amounts), BaseAmount: a.BaseAmount,
 			TotalAmounts: amountsDTO(a.TotalAmounts), TotalBaseAmount: a.TotalBaseAmount,
+			Value: a.Value, TotalValue: a.TotalValue,
 		}
 	}
-	return BalancesDTO{AsOf: Date{b.AsOf}, BaseCurrency: b.BaseCurrency, Check: b.Check, ClassTotals: totals, Accounts: accts}
+	return BalancesDTO{AsOf: Date{b.AsOf}, BaseCurrency: b.BaseCurrency, Check: b.Check, ClassTotals: totals,
+		ClassValues: values, Unrealised: b.Unrealised, Missing: b.Missing, Accounts: accts}
 }
 
 type PriceDTO struct {
