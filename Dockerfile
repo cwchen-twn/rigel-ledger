@@ -17,7 +17,7 @@ COPY web/ ./
 COPY integrations/rigel-sync/src/ /src/integrations/rigel-sync/src/
 RUN bun run build:prod
 
-FROM golang:1.27.1-bookworm AS build
+FROM golang:1.27.2-bookworm AS build
 ARG VERSION=dev
 ARG COMMIT=none
 ARG DATE=unknown
