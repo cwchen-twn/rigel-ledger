@@ -174,6 +174,10 @@ export const api = {
   books: () => get<T.Book[]>('/api/books'),
   createBook: (name: string, base_currency: string) => post<T.Book>('/api/books', { name, base_currency }),
   book: (id: number) => get<T.Book>(book(id)),
+  /** The whole book as a file (owner only): a plain GET, saved by the browser. */
+  exportBookUrl: (id: number) => `${book(id)}/export`,
+  /** A new book from a book file, already parsed; name overrides the file's. */
+  importBook: (file: unknown, name?: string) => post<T.BookImport>(`/api/books/import${qs({ name })}`, file),
   deleteBook: (id: number, confirm: string) => request<void>('DELETE', book(id), { confirm }),
   updateBook: (id: number, b: { name: string; lock_date: string | null; interest_dividend_cf_class: T.CfClass }) =>
     patch<T.Book>(book(id), b),

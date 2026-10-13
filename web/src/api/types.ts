@@ -226,6 +226,16 @@ export interface Book {
   role: Role;
 }
 
+/** What importing a book file made. */
+export interface BookImport {
+  book: Book;
+  accounts: number;
+  transactions: number;
+  assertions: number;
+  prices_added: number;
+  prices_skipped: number;
+}
+
 export interface Member {
   user_id: number;
   username: string;

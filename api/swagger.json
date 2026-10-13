@@ -916,6 +916,52 @@
                 }
             }
         },
+        "/api/books/import": {
+            "post": {
+                "description": "The whole file is imported in one database transaction: on any error nothing is created. Prices only fill days with no rate.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "books"
+                ],
+                "summary": "Create a new book from a book file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "name for the new book (default: the file's)",
+                        "name": "name",
+                        "in": "query"
+                    },
+                    {
+                        "description": "book file",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ledger.BookFile"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/routes.BookImportDTO"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/api/books/{bookID}": {
             "get": {
                 "produces": [
@@ -1515,6 +1561,35 @@
                             "items": {
                                 "$ref": "#/definitions/routes.DriftDTO"
                             }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/books/{bookID}/export": {
+            "get": {
+                "description": "Owner only. The format is ledger.BookFile (\"rigelledger-book\", version 1).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "books"
+                ],
+                "summary": "The whole book as one file, to import elsewhere",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "book id",
+                        "name": "bookID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ledger.BookFile"
                         }
                     }
                 }
@@ -4046,6 +4121,353 @@
                 "PostingStatusReconciled"
             ]
         },
+        "ledger.BookFile": {
+            "type": "object",
+            "properties": {
+                "accounts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ledger.FileAccount"
+                    }
+                },
+                "balance_assertions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ledger.FileAssertion"
+                    }
+                },
+                "book": {
+                    "$ref": "#/definitions/ledger.FileBook"
+                },
+                "commodities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ledger.FileCommodity"
+                    }
+                },
+                "exported_at": {
+                    "type": "string"
+                },
+                "format": {
+                    "type": "string"
+                },
+                "omitted": {
+                    "description": "What the file leaves out, counted, so a person knows.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                },
+                "prices": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ledger.FilePrice"
+                    }
+                },
+                "rules": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ledger.FileRule"
+                    }
+                },
+                "source_accounts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ledger.FileSourceAccount"
+                    }
+                },
+                "transactions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ledger.FileTransaction"
+                    }
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "ledger.FileAccount": {
+            "type": "object",
+            "properties": {
+                "archived": {
+                    "type": "boolean"
+                },
+                "cf_class": {
+                    "$ref": "#/definitions/db.CfClass"
+                },
+                "class": {
+                    "$ref": "#/definitions/db.AccountClass"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "commodity": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_cash": {
+                    "type": "boolean"
+                },
+                "is_current": {
+                    "type": "boolean"
+                },
+                "is_placeholder": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "parent_id": {
+                    "type": "integer"
+                },
+                "template_key": {
+                    "type": "string"
+                }
+            }
+        },
+        "ledger.FileAssertion": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "amount": {
+                    "type": "number"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                }
+            }
+        },
+        "ledger.FileBook": {
+            "type": "object",
+            "properties": {
+                "base_currency": {
+                    "type": "string"
+                },
+                "interest_dividend_cf_class": {
+                    "$ref": "#/definitions/db.CfClass"
+                },
+                "lock_date": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "ledger.FileCommodity": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "contract_size": {
+                    "type": "number"
+                },
+                "decimals": {
+                    "type": "integer"
+                },
+                "exchange_mic": {
+                    "type": "string"
+                },
+                "kind": {
+                    "$ref": "#/definitions/db.CommodityKind"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "quote_currency": {
+                    "type": "string"
+                }
+            }
+        },
+        "ledger.FileItem": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "amount": {
+                    "type": "number"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "unit_price": {
+                    "type": "number"
+                }
+            }
+        },
+        "ledger.FileLine": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "amount": {
+                    "type": "number"
+                },
+                "base_amount": {
+                    "type": "number"
+                },
+                "cleared_on": {
+                    "type": "string"
+                },
+                "commodity": {
+                    "type": "string"
+                },
+                "memo": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/db.PostingStatus"
+                },
+                "unit_cost": {
+                    "type": "number"
+                }
+            }
+        },
+        "ledger.FilePrice": {
+            "type": "object",
+            "properties": {
+                "commodity": {
+                    "type": "string"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "quote": {
+                    "type": "string"
+                },
+                "rate": {
+                    "type": "number"
+                },
+                "source": {
+                    "type": "string"
+                }
+            }
+        },
+        "ledger.FileRule": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "pattern": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "source_account_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "ledger.FileSourceAccount": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "connector": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "external_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "ignored": {
+                    "type": "boolean"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "securities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ledger.FileSourceSecurity"
+                    }
+                },
+                "settlement_account_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "ledger.FileSourceSecurity": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "commodity": {
+                    "type": "string"
+                }
+            }
+        },
+        "ledger.FileTransaction": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string"
+                },
+                "external_id": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ledger.FileItem"
+                    }
+                },
+                "lines": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ledger.FileLine"
+                    }
+                },
+                "memo": {
+                    "type": "string"
+                },
+                "payee": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "response.ErrorBody": {
             "type": "object",
             "properties": {
@@ -4583,6 +5005,29 @@
                 },
                 "role": {
                     "$ref": "#/definitions/db.MemberRole"
+                }
+            }
+        },
+        "routes.BookImportDTO": {
+            "type": "object",
+            "properties": {
+                "accounts": {
+                    "type": "integer"
+                },
+                "assertions": {
+                    "type": "integer"
+                },
+                "book": {
+                    "$ref": "#/definitions/routes.BookDTO"
+                },
+                "prices_added": {
+                    "type": "integer"
+                },
+                "prices_skipped": {
+                    "type": "integer"
+                },
+                "transactions": {
+                    "type": "integer"
                 }
             }
         },

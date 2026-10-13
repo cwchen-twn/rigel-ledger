@@ -61,7 +61,14 @@
     "base_currency_hint": "所有金額也會以此幣別記錄，報表以此為準。",
     "book_name_default": "家庭",
     "another_title": "要建立另一本帳本嗎？",
-    "another_description": "第二本帳本適用於完全分開的財務，例如公司或代管親人的資金。銀行帳戶、信用卡或幣別不是帳本：請在目前帳本的「科目」中新增。"
+    "another_description": "第二本帳本適用於完全分開的財務，例如公司或代管親人的資金。銀行帳戶、信用卡或幣別不是帳本：請在目前帳本的「科目」中新增。",
+    "import_title": "或匯入帳本檔",
+    "import_hint": "從 RigelLedger 匯出的 .rigelledger.json 檔（帳本設定 → 匯出）。匯入後會建立一本新帳本，不會改動其他資料。",
+    "import_file": "帳本檔",
+    "import_button": "匯入",
+    "importing": "正在匯入 {n} 筆交易…",
+    "imported": "已將 {transactions} 筆交易匯入 {name}",
+    "import_bad_file": "這不是 RigelLedger 的帳本檔。"
   },
   "class": {
     "asset": "資產",
@@ -293,7 +300,10 @@
     "delete_hint": "其中所有科目、交易與標籤將永久刪除，成員也將失去存取權；只有從備份還原才能復原。",
     "delete_type": "輸入「{name}」以確認",
     "delete_button": "刪除帳本",
-    "deleted": "已刪除 {name}"
+    "deleted": "已刪除 {name}",
+    "export_title": "匯出",
+    "export_hint": "將整本帳本下載為一個檔案：帳戶、交易、標籤、餘額、規則與用到的匯率。可在另一個 RigelLedger 匯入，建立一本新帳本。不含附件。",
+    "export_button": "下載帳本檔"
   },
   "settings": {
     "title": "個人設定",
@@ -353,7 +363,8 @@
     "stale": "同步程式的金鑰已更換，請重新輸入登入資料",
     "unsupported_type": "只接受圖片（JPEG、PNG、WebP）與 PDF",
     "too_large": "檔案太大",
-    "no_balance": "該日沒有已知的餘額。"
+    "no_balance": "該日沒有已知的餘額。",
+    "commodity_conflict": "這裡已存在但定義不同"
   },
   "languages": {
     "en": "English",
@@ -423,7 +434,10 @@
     "disabled": "請先啟用此連結",
     "no_access": "連結擁有者已無此帳本的權限",
     "amount_unknown": "此郵件未載明金額，只能併入它所屬的付款。",
-    "nothing_to_adjust": "帳本當日餘額已一致。"
+    "nothing_to_adjust": "帳本當日餘額已一致。",
+    "file_format": "這不是 RigelLedger 的帳本檔。",
+    "file_version": "這個帳本檔是由較新版本的 RigelLedger 產生的。",
+    "commodity_conflict": "檔案中的某個證券在這裡已存在，但定義不同。"
   },
   "profile": {
     "username_hint": "用於登入：a-z、0-9、點、連字號、底線"

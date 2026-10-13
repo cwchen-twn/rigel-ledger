@@ -61,7 +61,14 @@
     "base_currency_hint": "Todos los importes se guardan también en esta moneda. Los informes la usan.",
     "book_name_default": "Familia",
     "another_title": "¿Crear otro libro?",
-    "another_description": "Un segundo libro es para finanzas totalmente separadas, como un negocio o el dinero de un familiar. Una cuenta bancaria, tarjeta o moneda no es un libro: añádela en Cuentas de tu libro actual."
+    "another_description": "Un segundo libro es para finanzas totalmente separadas, como un negocio o el dinero de un familiar. Una cuenta bancaria, tarjeta o moneda no es un libro: añádela en Cuentas de tu libro actual.",
+    "import_title": "O importa un archivo de libro",
+    "import_hint": "Un archivo .rigelledger.json exportado desde RigelLedger (Ajustes del libro, Exportar). Se convierte en un libro nuevo; nada más cambia.",
+    "import_file": "Archivo de libro",
+    "import_button": "Importar",
+    "importing": "Importando {n} transacciones…",
+    "imported": "Se importaron {transactions} transacciones en {name}",
+    "import_bad_file": "Esto no es un archivo de libro de RigelLedger."
   },
   "class": {
     "asset": "Activos",
@@ -293,7 +300,10 @@
     "delete_hint": "Se eliminan para siempre todas sus cuentas, transacciones y etiquetas, y los miembros pierden el acceso. Solo una restauración desde copia de seguridad lo recupera.",
     "delete_type": "Escribe \"{name}\" para confirmar",
     "delete_button": "Eliminar el libro",
-    "deleted": "Se eliminó {name}"
+    "deleted": "Se eliminó {name}",
+    "export_title": "Exportar",
+    "export_hint": "Descarga el libro entero en un archivo: cuentas, transacciones, etiquetas, saldos, reglas y los tipos de cambio que usa. Impórtalo en otro RigelLedger para empezar un libro nuevo. No incluye adjuntos.",
+    "export_button": "Descargar archivo del libro"
   },
   "settings": {
     "title": "Ajustes",
@@ -353,7 +363,8 @@
     "stale": "La clave del sincronizador cambió; vuelve a introducir las credenciales",
     "unsupported_type": "Solo imágenes (JPEG, PNG, WebP) y PDF",
     "too_large": "Demasiado grande",
-    "no_balance": "No hay saldo conocido para ese día."
+    "no_balance": "No hay saldo conocido para ese día.",
+    "commodity_conflict": "Ya existe aquí con otro significado"
   },
   "languages": {
     "en": "English",
@@ -423,7 +434,10 @@
     "disabled": "Activa la conexión primero",
     "no_access": "El dueño de la conexión ya no tiene acceso a este libro",
     "amount_unknown": "Este correo no indica un importe: solo puede unirse al pago al que pertenece.",
-    "nothing_to_adjust": "Los libros ya coinciden ese día."
+    "nothing_to_adjust": "Los libros ya coinciden ese día.",
+    "file_format": "Esto no es un archivo de libro de RigelLedger.",
+    "file_version": "Este archivo de libro lo creó un RigelLedger más nuevo.",
+    "commodity_conflict": "Un valor del archivo ya existe aquí con otro significado."
   },
   "profile": {
     "username_hint": "Para iniciar sesión: a-z, 0-9, punto, guion, guion bajo"

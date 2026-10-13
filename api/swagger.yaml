@@ -53,6 +53,234 @@ definitions:
     - PostingStatusUncleared
     - PostingStatusCleared
     - PostingStatusReconciled
+  ledger.BookFile:
+    properties:
+      accounts:
+        items:
+          $ref: '#/definitions/ledger.FileAccount'
+        type: array
+      balance_assertions:
+        items:
+          $ref: '#/definitions/ledger.FileAssertion'
+        type: array
+      book:
+        $ref: '#/definitions/ledger.FileBook'
+      commodities:
+        items:
+          $ref: '#/definitions/ledger.FileCommodity'
+        type: array
+      exported_at:
+        type: string
+      format:
+        type: string
+      omitted:
+        additionalProperties:
+          format: int64
+          type: integer
+        description: What the file leaves out, counted, so a person knows.
+        type: object
+      prices:
+        items:
+          $ref: '#/definitions/ledger.FilePrice'
+        type: array
+      rules:
+        items:
+          $ref: '#/definitions/ledger.FileRule'
+        type: array
+      source_accounts:
+        items:
+          $ref: '#/definitions/ledger.FileSourceAccount'
+        type: array
+      transactions:
+        items:
+          $ref: '#/definitions/ledger.FileTransaction'
+        type: array
+      version:
+        type: integer
+    type: object
+  ledger.FileAccount:
+    properties:
+      archived:
+        type: boolean
+      cf_class:
+        $ref: '#/definitions/db.CfClass'
+      class:
+        $ref: '#/definitions/db.AccountClass'
+      code:
+        type: string
+      commodity:
+        type: string
+      id:
+        type: integer
+      is_cash:
+        type: boolean
+      is_current:
+        type: boolean
+      is_placeholder:
+        type: boolean
+      name:
+        type: string
+      parent_id:
+        type: integer
+      template_key:
+        type: string
+    type: object
+  ledger.FileAssertion:
+    properties:
+      account_id:
+        type: integer
+      amount:
+        type: number
+      date:
+        type: string
+      source:
+        type: string
+    type: object
+  ledger.FileBook:
+    properties:
+      base_currency:
+        type: string
+      interest_dividend_cf_class:
+        $ref: '#/definitions/db.CfClass'
+      lock_date:
+        type: string
+      name:
+        type: string
+    type: object
+  ledger.FileCommodity:
+    properties:
+      code:
+        type: string
+      contract_size:
+        type: number
+      decimals:
+        type: integer
+      exchange_mic:
+        type: string
+      kind:
+        $ref: '#/definitions/db.CommodityKind'
+      name:
+        type: string
+      quote_currency:
+        type: string
+    type: object
+  ledger.FileItem:
+    properties:
+      account_id:
+        type: integer
+      amount:
+        type: number
+      currency:
+        type: string
+      description:
+        type: string
+      quantity:
+        type: number
+      source:
+        type: string
+      unit_price:
+        type: number
+    type: object
+  ledger.FileLine:
+    properties:
+      account_id:
+        type: integer
+      amount:
+        type: number
+      base_amount:
+        type: number
+      cleared_on:
+        type: string
+      commodity:
+        type: string
+      memo:
+        type: string
+      status:
+        $ref: '#/definitions/db.PostingStatus'
+      unit_cost:
+        type: number
+    type: object
+  ledger.FilePrice:
+    properties:
+      commodity:
+        type: string
+      date:
+        type: string
+      quote:
+        type: string
+      rate:
+        type: number
+      source:
+        type: string
+    type: object
+  ledger.FileRule:
+    properties:
+      account_id:
+        type: integer
+      pattern:
+        type: string
+      priority:
+        type: integer
+      source_account_id:
+        type: integer
+    type: object
+  ledger.FileSourceAccount:
+    properties:
+      account_id:
+        type: integer
+      connector:
+        type: string
+      currency:
+        type: string
+      external_id:
+        type: string
+      id:
+        type: integer
+      ignored:
+        type: boolean
+      kind:
+        type: string
+      label:
+        type: string
+      securities:
+        items:
+          $ref: '#/definitions/ledger.FileSourceSecurity'
+        type: array
+      settlement_account_id:
+        type: integer
+    type: object
+  ledger.FileSourceSecurity:
+    properties:
+      account_id:
+        type: integer
+      commodity:
+        type: string
+    type: object
+  ledger.FileTransaction:
+    properties:
+      date:
+        type: string
+      external_id:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/ledger.FileItem'
+        type: array
+      lines:
+        items:
+          $ref: '#/definitions/ledger.FileLine'
+        type: array
+      memo:
+        type: string
+      payee:
+        type: string
+      source:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+    type: object
   response.ErrorBody:
     properties:
       error:
@@ -414,6 +642,21 @@ definitions:
         type: string
       role:
         $ref: '#/definitions/db.MemberRole'
+    type: object
+  routes.BookImportDTO:
+    properties:
+      accounts:
+        type: integer
+      assertions:
+        type: integer
+      book:
+        $ref: '#/definitions/routes.BookDTO'
+      prices_added:
+        type: integer
+      prices_skipped:
+        type: integer
+      transactions:
+        type: integer
     type: object
   routes.CashFlowDTO:
     properties:
@@ -3006,6 +3249,26 @@ paths:
       summary: Accounts whose institution balance differs from the books
       tags:
       - imports
+  /api/books/{bookID}/export:
+    get:
+      description: Owner only. The format is ledger.BookFile ("rigelledger-book",
+        version 1).
+      parameters:
+      - description: book id
+        in: path
+        name: bookID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ledger.BookFile'
+      summary: The whole book as one file, to import elsewhere
+      tags:
+      - books
   /api/books/{bookID}/imports:
     post:
       consumes:
@@ -3835,6 +4098,37 @@ paths:
       summary: Take a file off a transaction
       tags:
       - transactions
+  /api/books/import:
+    post:
+      consumes:
+      - application/json
+      description: 'The whole file is imported in one database transaction: on any
+        error nothing is created. Prices only fill days with no rate.'
+      parameters:
+      - description: 'name for the new book (default: the file''s)'
+        in: query
+        name: name
+        type: string
+      - description: book file
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/ledger.BookFile'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/routes.BookImportDTO'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Create a new book from a book file
+      tags:
+      - books
   /api/commodities:
     get:
       produces:

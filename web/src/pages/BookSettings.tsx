@@ -1,4 +1,4 @@
-import { Trash2 } from 'lucide-solid';
+import { Download, Trash2 } from 'lucide-solid';
 import { createEffect, createResource, createSignal, For, on, Show } from 'solid-js';
 import { api } from '~/api/client';
 import type { CfClass, CommodityKind, Role } from '~/api/types';
@@ -6,7 +6,7 @@ import { PageHeader } from '~/components/AppShell';
 import { BookDangerZone } from '~/components/BookDangerZone';
 import { RebaseCard } from '~/components/RebaseCard';
 import { MoneyInput } from '~/components/Money';
-import { Button } from '~/components/ui/button';
+import { Button, buttonVariants } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Field, Input, Select } from '~/components/ui/input';
 import { SearchSelect } from '~/components/ui/search-select';
@@ -319,6 +319,21 @@ export default function BookSettings() {
             </Show>
           </CardContent>
         </Card>
+        <Show when={book.isOwner()}>
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('book.export_title')}</CardTitle>
+              <CardDescription>{t('book.export_hint')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {/* A plain GET: the browser saves the file under the server's name. */}
+              <a href={api.exportBookUrl(book.id())} download="" class={buttonVariants({ variant: 'outline' })}>
+                <Download class="size-4" />
+                {t('book.export_button')}
+              </a>
+            </CardContent>
+          </Card>
+        </Show>
         <BookDangerZone />
       </div>
     </>

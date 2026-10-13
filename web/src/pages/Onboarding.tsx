@@ -5,6 +5,7 @@ import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Field, Input } from '~/components/ui/input';
 import { SearchSelect } from '~/components/ui/search-select';
+import { toast } from '~/components/ui/toast';
 import { commodityOptions } from '~/lib/options';
 import { useI18n } from '~/i18n';
 import { useSession } from '~/stores/session';
@@ -21,6 +22,36 @@ export default function Onboarding() {
   const [errors, setErrors] = createSignal<Record<string, string>>({});
   const [error, setError] = createSignal('');
   const [busy, setBusy] = createSignal(false);
+
+  // Or start from a book file exported elsewhere: read in the tab, sent as JSON.
+  const [importing, setImporting] = createSignal<number | null>(null);
+  const [importError, setImportError] = createSignal('');
+  const importFile = async (file: File | undefined) => {
+    if (!file) return;
+    setImportError('');
+    let parsed: { format?: string; transactions?: unknown[] };
+    try {
+      parsed = JSON.parse(await file.text());
+    } catch {
+      setImportError(t('onboarding.import_bad_file'));
+      return;
+    }
+    if (parsed?.format !== 'rigelledger-book') {
+      setImportError(t('onboarding.import_bad_file'));
+      return;
+    }
+    setImporting(parsed.transactions?.length ?? 0);
+    try {
+      const res = await api.importBook(parsed);
+      refresh();
+      toast.success(t('onboarding.imported', { transactions: String(res.transactions), name: res.book.name }));
+      navigate(`/b/${res.book.id}`, { replace: true });
+    } catch (err) {
+      setImportError(te(err));
+    } finally {
+      setImporting(null);
+    }
+  };
 
   const submit = async (e: Event) => {
     e.preventDefault();
@@ -58,8 +89,24 @@ export default function Onboarding() {
             <Show when={error() && Object.keys(errors()).length === 0}>
               <p role="alert" class="text-sm text-destructive">{error()}</p>
             </Show>
-            <Button type="submit" disabled={busy()}>{t('common.create')}</Button>
+            <Button type="submit" disabled={busy() || importing() !== null}>{t('common.create')}</Button>
           </form>
+          <div class="mt-6 grid gap-3 border-t pt-4">
+            <div>
+              <h3 class="text-sm font-medium">{t('onboarding.import_title')}</h3>
+              <p class="text-sm text-muted-foreground">{t('onboarding.import_hint')}</p>
+            </div>
+            <Field label={t('onboarding.import_file')}>
+              <Input type="file" accept=".json,application/json" disabled={importing() !== null}
+                onChange={(e) => { void importFile(e.currentTarget.files?.[0]); e.currentTarget.value = ''; }} />
+            </Field>
+            <Show when={importing() !== null}>
+              <p role="status" class="text-sm text-muted-foreground">{t('onboarding.importing', { n: String(importing()) })}</p>
+            </Show>
+            <Show when={importError()}>
+              <p role="alert" class="text-sm text-destructive">{importError()}</p>
+            </Show>
+          </div>
         </CardContent>
       </Card>
     </div>

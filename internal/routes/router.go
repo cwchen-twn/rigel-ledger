@@ -235,11 +235,13 @@ func New(d Deps) http.Handler {
 
 					r.Get("/books", h.listBooks)
 					r.Post("/books", h.createBook)
+					r.Post("/books/import", h.importBook)
 					r.Route("/books/{bookID}", func(r chi.Router) {
 						r.Use(h.bookAccess)
 						r.Get("/", h.getBook)
 						r.Patch("/", h.updateBook)
 						r.Delete("/", h.deleteBook)
+						r.Get("/export", h.exportBook)
 
 						r.Get("/members", h.listMembers)
 						r.Post("/members", h.addMember)

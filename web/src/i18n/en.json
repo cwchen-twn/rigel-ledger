@@ -61,7 +61,14 @@
     "base_currency_hint": "Every amount is also kept in this currency. Reports use it.",
     "book_name_default": "Family",
     "another_title": "Create another book?",
-    "another_description": "A second book is for finances kept completely apart, such as a business or a relative's money. A bank account, card or currency is not a book: add it under Accounts in your current book."
+    "another_description": "A second book is for finances kept completely apart, such as a business or a relative's money. A bank account, card or currency is not a book: add it under Accounts in your current book.",
+    "import_title": "Or import a book file",
+    "import_hint": "A .rigelledger.json file exported from RigelLedger (Book settings, Export). It becomes a new book; nothing else changes.",
+    "import_file": "Book file",
+    "import_button": "Import",
+    "importing": "Importing {n} transactions…",
+    "imported": "Imported {transactions} transactions into {name}",
+    "import_bad_file": "This is not a RigelLedger book file."
   },
   "class": {
     "asset": "Assets",
@@ -293,7 +300,10 @@
     "delete_hint": "Every account, transaction and tag in it is removed for good. Members lose access. Only a restore from backup brings it back.",
     "delete_type": "Type \"{name}\" to confirm",
     "delete_button": "Delete the book",
-    "deleted": "Deleted {name}"
+    "deleted": "Deleted {name}",
+    "export_title": "Export",
+    "export_hint": "Download the whole book as one file: accounts, transactions, tags, balances, rules and the rates it uses. Import it on another RigelLedger to start a new book from it. Attachments are not included.",
+    "export_button": "Download book file"
   },
   "settings": {
     "title": "Settings",
@@ -353,7 +363,8 @@
     "stale": "The sync runner's key changed; enter the credentials again",
     "unsupported_type": "Only images (JPEG, PNG, WebP) and PDFs",
     "too_large": "Too large",
-    "no_balance": "No balance is known for that day."
+    "no_balance": "No balance is known for that day.",
+    "commodity_conflict": "Exists here with a different meaning"
   },
   "languages": {
     "en": "English",
@@ -423,7 +434,10 @@
     "disabled": "Turn the connection on first",
     "no_access": "The connection's owner no longer has access to this book",
     "amount_unknown": "This email states no amount: it can only join the payment it belongs to.",
-    "nothing_to_adjust": "The books already agree on that day."
+    "nothing_to_adjust": "The books already agree on that day.",
+    "file_format": "This is not a RigelLedger book file.",
+    "file_version": "This book file was made by a newer RigelLedger.",
+    "commodity_conflict": "A security in the file exists here with a different meaning."
   },
   "profile": {
     "username_hint": "Used to sign in: a-z, 0-9, dot, dash, underscore"
