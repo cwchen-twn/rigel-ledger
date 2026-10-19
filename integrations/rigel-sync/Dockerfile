@@ -12,7 +12,7 @@
 # stage only installs the production dependencies and drops what Node never
 # loads (onnxruntime-web's browser builds, 130 MB of its 139).
 
-FROM oven/bun:1.4.2 AS deps
+FROM oven/bun:1.4.3 AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile --production \
