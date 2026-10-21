@@ -5,9 +5,9 @@
     "": {
       "name": "rigel-sync",
       "dependencies": {
-        "imapflow": "2.4.3",
+        "imapflow": "2.5.4",
         "jpeg-js": "0.4.4",
-        "mailparser": "3.9.39",
+        "mailparser": "3.9.42",
         "node-forge": "1.4.0",
         "onnxruntime-web": "1.30.0",
         "pdfjs-dist": "6.4.299",
@@ -118,7 +118,7 @@
 
     "@typescript/typescript-win32-x64": ["@typescript/typescript-win32-x64@7.0.2", "", { "os": "win32", "cpu": "x64" }, "sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g=="],
 
-    "@zone-eu/mailsplit": ["@zone-eu/mailsplit@5.4.21", "", { "dependencies": { "libbase64": "1.3.3", "libmime": "5.4.8", "libqp": "2.1.2" } }, "sha512-a7DjD8zysu77OeLuAZRTMC6NDALc3smuKkaZv1QTJkq2kMa5CbEgVQuC7Nfd9LfMO92bkjxT41t8L3mkWDZe1Q=="],
+    "@zone-eu/mailsplit": ["@zone-eu/mailsplit@5.4.25", "", { "dependencies": { "libbase64": "1.3.3", "libmime": "5.4.9", "libqp": "2.1.3" } }, "sha512-cxrz8950Pzg/kFj5fP6pOEOYHbRlWvST6hb1XiJ6eMn4cSyMk9R+Gby8dUYmg+6AB9T/PTBPJF2oRblqJkoX/g=="],
 
     "ansi-regex": ["ansi-regex@6.4.0", "", {}, "sha512-KzTVk2tCWAHtYrvvvaP8bJKJq2pVinhLcGEQdtLIYPbmNGNyYe8QwNaTUYQp2J7/vIsUKt5QCqAfUkYyG9DkOw=="],
 
@@ -166,7 +166,7 @@
 
     "iconv-lite": ["iconv-lite@0.6.3", "", { "dependencies": { "safer-buffer": ">= 2.1.2 < 3.0.0" } }, "sha512-4fCk79wshMdzMp2rH06qWrJE4iolqLhCUH+OiuIgU++RB0+94NlDL81atO7GX55uUKueo0txHNtvEyI6D7WdMw=="],
 
-    "imapflow": ["imapflow@2.4.3", "", { "dependencies": { "@zone-eu/mailsplit": "5.4.21", "encoding-japanese": "2.4.0", "iconv-lite": "0.7.3", "libbase64": "1.3.3", "libmime": "5.4.8", "libqp": "2.1.2", "pino": "10.3.1", "socks": "2.8.10" } }, "sha512-n9JLurmTDHRYacQXvi7zlNIuyeG7sjsKAXI1nyJ1cFqd1fHwqVXf1UOnmTL/GwnFURvDnQ6H0akuwltyffxyUA=="],
+    "imapflow": ["imapflow@2.5.4", "", { "dependencies": { "@zone-eu/mailsplit": "5.4.25", "encoding-japanese": "2.4.0", "iconv-lite": "0.7.3", "libbase64": "1.3.3", "libmime": "5.4.9", "libqp": "2.1.3", "pino": "10.3.1", "socks": "2.8.10" } }, "sha512-RnW6V/BEG5Pcy5n7JvUG7UNiWgZrHPJksv2LJRPCjPPtLF9GHlS/on3Bi977qLtvXrZqks5qWZPryoCyC+I5ew=="],
 
     "ip-address": ["ip-address@10.7.3", "", {}, "sha512-A1kdq/tSb5QjvKvAMgIoEvDBIgL7qaqVP/jkvSwYYRZ9iEzvPpopxp2wQfu3SuZRHtpHNxMn8Fs0bS+gf5Xmwg=="],
 
@@ -176,15 +176,15 @@
 
     "libbase64": ["libbase64@1.3.3", "", {}, "sha512-6n4p3TUeQPimN4ANBTYQ5P4IpFx8p6cdanknnOBfw05XGtaG/k1LAtTSu79w7S07D1esy4qUfM8G4qvQncDWcw=="],
 
-    "libmime": ["libmime@5.4.8", "", { "dependencies": { "encoding-japanese": "2.4.0", "iconv-lite": "0.7.3", "libbase64": "1.3.3", "libqp": "2.1.2" } }, "sha512-nsBApAZkontkOI4Kmg/7GyctCRraQ9Yxn7vZnzpHSOfqCmkt5/WTXpu5jk7a14REzW8OghKcbTY4bxx6rR9wSQ=="],
+    "libmime": ["libmime@5.4.9", "", { "dependencies": { "encoding-japanese": "2.4.0", "iconv-lite": "0.7.3", "libbase64": "1.3.3", "libqp": "2.1.3" } }, "sha512-HKKUqLVU/ndBsAn9nBx6oykz5Tt7QzWkJG86cYvm3ekt5A/LuMR+5AjIr7fKnUg3Y2d8JQhMtQnBLYbh59/bEw=="],
 
-    "libqp": ["libqp@2.1.2", "", {}, "sha512-rp+U80tl9Os4K7GnVbPzPRmghPu6eqB8rcF+ontvNAnoga0JhMFG/bkTD/reC8yoznKMgOc5/ttZHJasiWeFPw=="],
+    "libqp": ["libqp@2.1.3", "", {}, "sha512-2tRtFndHYRyc6pAuExPbiZbzgwdWp8HIMTE1fLycMwv13YZlN5+DKvgR5WsP1W6vSpGXFuGvV49gteKetlMwLw=="],
 
     "linkify-it": ["linkify-it@5.0.2", "", { "dependencies": { "uc.micro": "^2.0.0" } }, "sha512-ONTm2jCMAVZjgQa/Fy1kScXsuOoF5NPTsoFBdE1KVIZ2vAh/r9+Bqo+0jINCBYnavTPQZz38QzFTme79ENoN3Q=="],
 
     "long": ["long@5.3.2", "", {}, "sha512-mNAgZ1GmyNhD7AuqnTG3/VQ26o760+ZYBPKjPvugO8+nLbYfX6TVpJPseBvopbdY+qpZ/lKUnmEc1LeZYS3QAA=="],
 
-    "mailparser": ["mailparser@3.9.39", "", { "dependencies": { "@zone-eu/mailsplit": "5.4.21", "encoding-japanese": "2.4.0", "he": "1.2.0", "html-to-text": "10.0.1", "iconv-lite": "0.7.3", "libmime": "5.4.8", "linkify-it": "5.0.2", "nodemailer": "10.1.1", "punycode.js": "2.3.1", "tlds": "1.261.0" } }, "sha512-tFIEhwsNR4Xs5aq/8oBtd8aQZv42oLoDGWrne6rT/b3e0hN+o/k1KjaedWLh1NydVK35FiDaOTmGg9ZFhIsfYw=="],
+    "mailparser": ["mailparser@3.9.42", "", { "dependencies": { "@zone-eu/mailsplit": "5.4.25", "encoding-japanese": "2.4.0", "he": "1.2.0", "html-to-text": "10.0.1", "iconv-lite": "0.7.3", "libmime": "5.4.9", "linkify-it": "5.0.2", "nodemailer": "10.1.2", "punycode.js": "2.3.1", "tlds": "1.261.0" } }, "sha512-1Gk+KG/WGOYq/zh1u0fjWiFBxO1xYccK5Vmro0pcVU/ghXwF+PdSxtcG44wQ7s8FQcxrfVTqdOQcoL+CP6FxuA=="],
 
     "mitt": ["mitt@3.0.1", "", {}, "sha512-vKivATfr97l2/QBCYAkXYDbrIWPM2IIKEl7YPhjCvKlG3kE2gm+uBo6nEXK3M5/Ffh/FLpKExzOQ3JJoJGFKBw=="],
 
@@ -192,7 +192,7 @@
 
     "node-forge": ["node-forge@1.4.0", "", {}, "sha512-LarFH0+6VfriEhqMMcLX2F7SwSXeWwnEAJEsYm5QKWchiVYVvJyV9v7UDvUv+w5HO23ZpQTXDv/GxdDdMyOuoQ=="],
 
-    "nodemailer": ["nodemailer@10.1.1", "", {}, "sha512-pbqZRoeYUO+1E8TJ/11WeY4D2EVujj1hsYjz3qff/vUFDtGnmi7p3iqzTFslYOfQ6PnjVcWxx/CIUSHCSrO/QA=="],
+    "nodemailer": ["nodemailer@10.1.2", "", {}, "sha512-rnQn9Rzh8RAwcp42MVsIvxbsv6YZ2a2/av+uyJ/LPU1+2QSlrRgFsWWZTKenyRUqkIl8urOI0c4+CEcmFdsvQw=="],
 
     "on-exit-leak-free": ["on-exit-leak-free@2.1.2", "", {}, "sha512-0eJJY6hXLGf1udHwfNftBqH+g73EU4B504nZeKpz1sYRKafAghwxEJunB2O7rDZkL4PGfsMVnTXZ2EjibbqcsA=="],
 

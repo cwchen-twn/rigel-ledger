@@ -13,7 +13,7 @@
         "dayjs": "1.11.23",
         "js-big-decimal": "2.2.0",
         "jsqr": "1.4.0",
-        "lucide-solid": "1.57.0",
+        "lucide-solid": "1.59.0",
         "pdfjs-dist": "6.4.299",
         "solid-js": "1.9.17",
         "tailwind-merge": "3.7.0",
@@ -334,7 +334,7 @@
 
     "lru-cache": ["lru-cache@5.1.1", "", { "dependencies": { "yallist": "^3.0.2" } }, "sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w=="],
 
-    "lucide-solid": ["lucide-solid@1.57.0", "", { "peerDependencies": { "solid-js": "^1.4.7" } }, "sha512-GSzxlC+2ZdRo/27adINoXSsMqg3CGJz88ytiBb92sdkm2KW1JonDTitcbVuRBXphFytbxPPxUUAdtg0ZXE8qgw=="],
+    "lucide-solid": ["lucide-solid@1.59.0", "", { "peerDependencies": { "solid-js": "^1.4.7" } }, "sha512-Ai36BaNmgt9Mladwz6PqFP8KbqRooZ0LK0RPmJEy+jkwSjrZjzWnXlrkSAehEcfVWPcayMNFAyoQMWZYUEdATg=="],
 
     "magic-string": ["magic-string@0.30.21", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.5" } }, "sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ=="],
 
