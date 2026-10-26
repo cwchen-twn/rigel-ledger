@@ -4,7 +4,7 @@
   "type": "module",
   "description": "A person's sync runner for every institution RigelLedger syncs, linked to RigelLedger under Settings -> Sync runner",
   "license": "MIT",
-  "packageManager": "bun@1.4.3",
+  "packageManager": "bun@1.4.4",
   "engines": {
     "node": ">=22.18"
   },
@@ -24,14 +24,14 @@
     "typescript": "7.0.2"
   },
   "dependencies": {
-    "imapflow": "2.4.3",
+    "imapflow": "2.9.1",
     "jpeg-js": "0.4.4",
-    "mailparser": "3.9.39",
+    "mailparser": "3.12.4",
     "node-forge": "1.4.0",
     "onnxruntime-web": "1.30.0",
     "pdfjs-dist": "6.4.299",
     "pngjs": "7.0.0",
-    "puppeteer-core": "25.14.0",
+    "puppeteer-core": "25.16.0",
     "zod": "4.6.7"
   }
 }
