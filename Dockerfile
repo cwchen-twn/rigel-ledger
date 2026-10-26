@@ -8,7 +8,7 @@
 # The runtime stage stays distroless: statement PDFs are read in the browser
 # with pdf.js (#42), not by poppler on the server.
 
-FROM oven/bun:1.4.3 AS web
+FROM oven/bun:1.4.4 AS web
 WORKDIR /src/web
 COPY web/package.json web/bun.lock ./
 RUN bun install --frozen-lockfile
