@@ -24,11 +24,11 @@
     "typescript": "7.0.2"
   },
   "dependencies": {
-    "imapflow": "2.9.1",
+    "imapflow": "2.10.0",
     "jpeg-js": "0.4.4",
-    "mailparser": "3.12.4",
-    "node-forge": "1.4.0",
-    "onnxruntime-web": "1.30.0",
+    "mailparser": "3.14.1",
+    "node-forge": "1.4.2",
+    "onnxruntime-web": "1.31.1",
     "pdfjs-dist": "6.4.299",
     "pngjs": "7.0.0",
     "puppeteer-core": "25.16.0",
