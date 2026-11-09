@@ -3,7 +3,7 @@ module github.com/cwchen-twn/rigel-ledger
 go 1.27.3
 
 require (
-	github.com/caarlos0/env/v11 v11.4.1
+	github.com/caarlos0/env/v11 v11.4.2
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-chi/httplog/v3 v3.5.0
 	github.com/go-webauthn/webauthn v0.18.2
