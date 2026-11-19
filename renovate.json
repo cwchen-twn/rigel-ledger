@@ -1,10 +1,8 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "local>cwchen-twn/renovate-config:fast"
   ],
-  "timezone": "America/Asuncion",
-  "dependencyDashboard": true,
   "enabledManagers": [
     "gomod",
     "bun",
@@ -21,17 +19,6 @@
   "postUpdateOptions": [
     "gomodTidy"
   ],
-  "rangeStrategy": "pin",
-  "minimumReleaseAge": "3 days",
-  "prConcurrentLimit": 10,
-  "prHourlyLimit": 0,
-  "prCreation": "immediate",
-  "semanticCommits": "enabled",
-  "semanticCommitType": "chore",
-  "semanticCommitScope": "deps",
-  "lockFileMaintenance": {
-    "enabled": true
-  },
   "ignorePaths": [
     "**/node_modules/**"
   ],
@@ -126,20 +113,6 @@
         "major"
       ],
       "enabled": false
-    }
-  ],
-  "customManagers": [
-    {
-      "description": "Tool pins in the CI workflows are plain env strings that no other manager reads. The annotation sits on the line above the pin so it is obvious the value is managed.",
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/^\\.gitea/workflows/.+\\.yaml$/",
-        "/^\\.github/workflows/.+\\.yml$/"
-      ],
-      "matchStrings": [
-        "# renovate: datasource=(?<datasource>[a-z-]+?) depName=(?<depName>\\S+?)(?: extractVersion=(?<extractVersion>\\S+?))?\\s+[A-Z_]+_VERSION: \"(?<currentValue>[^\"]+)\""
-      ],
-      "versioningTemplate": "semver"
     }
   ]
 }
