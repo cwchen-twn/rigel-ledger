@@ -7,7 +7,7 @@
 [tools]
 go = "1.27.4"
 bun = "1.4.4"
-node = "24.22.2"                         # runs rigel-sync's TypeScript directly (type stripping)
+node = "24.22.3"                         # runs rigel-sync's TypeScript directly (type stripping)
 
 # The gate (`make lint` / `make audit`) and the dev targets: binaries, so nothing is `go run …@latest`
 "aqua:sqlc-dev/sqlc" = "1.31.1"          # make sqlc; make lint runs `sqlc diff`
