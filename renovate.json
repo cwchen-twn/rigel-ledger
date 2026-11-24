@@ -95,6 +95,16 @@
         "major"
       ],
       "enabled": false
+    },
+    {
+      "description": "CI tests the PostgreSQL major production runs: hcloud runs 18, the Gitea CI installs postgresql-18 from PGDG, and the GitHub CI's service image must match it. Lift this together with hcloud and the PGDG step, in one change (#145).",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "postgres"
+      ],
+      "allowedVersions": "<19"
     }
   ]
 }
