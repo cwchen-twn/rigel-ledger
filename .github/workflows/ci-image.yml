@@ -75,4 +75,4 @@ jobs:
             org.opencontainers.image.description=RigelLedger's CI image (ci/Dockerfile): tools and PostgreSQL, no code
 
       - name: What the image holds
-        run: docker run --rm -w /opt/ci "$IMAGE:main" sh -c 'mise --version; node --version; go version; psql --version; pre-commit --version'
+        run: docker run --rm -w /opt/ci "$IMAGE:main" sh -c 'mise --version; node --version; go version; psql --version; pre-commit --version; chromium --version; ls -l /opt/rigel-sync/models'

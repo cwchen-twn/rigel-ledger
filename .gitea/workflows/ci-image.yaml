@@ -77,7 +77,7 @@ jobs:
             --secret id=gh_token,env=GH_PUBLIC_TOKEN \
             -t "$IMG:main" -t "$IMG:$SHA_TAG" .
           # what the image holds, in the log
-          docker run --rm -w /opt/ci "$IMG:main" sh -c 'mise --version; node --version; go version; psql --version; pre-commit --version'
+          docker run --rm -w /opt/ci "$IMG:main" sh -c 'mise --version; node --version; go version; psql --version; pre-commit --version; chromium --version; ls -l /opt/rigel-sync/models'
 
       - name: Push
         # main only: a dispatch on another branch builds but must not publish :main
