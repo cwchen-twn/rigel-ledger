@@ -5,7 +5,7 @@
 #
 #   push to main touching what pins the tools -> :main, :sha-<12>
 #   pull request touching the same            -> build only, nothing pushed
-#   workflow_dispatch                         -> as push to main
+#   workflow_dispatch                         -> build; push only when run on main
 
 name: CI image
 
@@ -49,7 +49,8 @@ jobs:
         uses: docker/setup-buildx-action@v4.4.1
 
       - name: Log in to ghcr.io
-        if: github.event_name != 'pull_request'
+        # main only: a dispatch on another branch builds but must not publish :main
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: docker/login-action@v4.7.0
         with:
           registry: ghcr.io
@@ -63,7 +64,7 @@ jobs:
           file: ci/Dockerfile
           platforms: linux/amd64
           load: true
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
           tags: ${{ env.IMAGE }}:main,${{ env.IMAGE }}:${{ steps.meta.outputs.sha_tag }}
           build-args: MISE_VERSION=${{ env.MISE_VERSION }}
           # GitHub's job token works on api.github.com, so it lifts mise's rate limit here

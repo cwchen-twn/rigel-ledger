@@ -5,7 +5,7 @@
 #
 #   push to main touching what pins the tools -> :main, :sha-<12>
 #   pull request touching the same            -> build only, nothing pushed
-#   workflow_dispatch                         -> as push to main
+#   workflow_dispatch                         -> build; push only when run on main
 #
 # The `ci` job still runs `mise install` first, so a PR that bumps a pin passes
 # before this rebuilds the image; merging it rebuilds :main.
@@ -80,11 +80,14 @@ jobs:
           docker run --rm -w /opt/ci "$IMG:main" sh -c 'mise --version; node --version; go version; psql --version; pre-commit --version'
 
       - name: Push
-        if: github.event_name != 'pull_request'
+        # main only: a dispatch on another branch builds but must not publish :main
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
         run: |
           set -eu
-          echo "${{ secrets.REGISTRY_TOKEN }}" \
-            | docker login "$REGISTRY" -u "${{ secrets.REGISTRY_USER }}" --password-stdin
+          echo "$REGISTRY_TOKEN" | docker login "$REGISTRY" -u "$REGISTRY_USER" --password-stdin
           IMG="$REGISTRY/$IMAGE_PATH"
           SHA_TAG="sha-$(echo "$GITHUB_SHA" | cut -c1-12)"
           for t in main "$SHA_TAG"; do docker push "$IMG:$t"; done
