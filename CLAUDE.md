@@ -287,11 +287,12 @@ behaviourally identical — change one, change the other in the same commit.**
   `GORELEASER_FORCE_TOKEN` in each workflow picks the forge.
 - The version shown in logs comes from `-X main.version` (both `cmd/*/main.go`); a non-empty `APP_VERSION` env var
   overrides it.
-- Gitea secrets on this repo: `REGISTRY_USER`, `REGISTRY_TOKEN` (package rw), `RELEASE_TOKEN` (repo write; mapped to
-  `GITEA_TOKEN`, since Gitea forbids secret names starting `GITEA_`).
+- Gitea secrets: none on this repo. The workflows read user-level secrets of cwchen-twn: `REGISTRY_USER`
+  (`cwchen-twn`), `REGISTRY_TOKEN` (package rw), `RELEASE_TOKEN` (repo write; mapped to `GITEA_TOKEN`, since Gitea
+  forbids secret names starting `GITEA_`) and `GH_PUBLIC_TOKEN`. A repo secret of the same name would override them.
 - Gitea runner traps are inherited from hcloud (`hcloud/.gitea/CLAUDE.md`): checkout and the GoReleaser API use the
   in-cluster Service `http://gitea-http.gitea.svc.cluster.local:3000`, `mise-action` runs with `cache: false` and
-  `github_token: ${{ secrets.MISE_GITHUB_TOKEN }}` (a no-scope github.com PAT, a user-level secret; api.github.com
+  `github_token: ${{ secrets.GH_PUBLIC_TOKEN }}` (a no-scope github.com PAT, a user-level secret shared with Renovate; api.github.com
   rejects the Gitea job token, and anonymous calls are capped at 60/h), and docker needs the buildx plugin.
 - Toolchain pins: `mise.toml` pins Go, Bun and Node for this repo (mise puts them on PATH). Go is also in `go.mod` +
   Dockerfile build stage; Bun in `web/package.json` `packageManager` + Dockerfile web stage; the lint and dev tools only
