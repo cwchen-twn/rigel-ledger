@@ -22,7 +22,7 @@ the SolidJS frontend. **The app is deployed** (ledger.chenantunez.com, tailnet-o
 
 ## Shape
 
-```
+```text
 PostgreSQL 18 (hcloud host, 10.0.1.1)
         |
 Go binary  -- chi JSON API, embedded SolidJS SPA, migrations on start,
@@ -143,7 +143,7 @@ there is **no stored balance and no materialised view.**
 
 ## Data model (one fresh `000001` migration)
 
-```
+```text
 users(id, username, email, password_hash, display_name, is_admin,
       language, display_currency, timezone, date_format, default_book_id, ...)
 sessions(id, user_id, token_hash, kind web|api, label, expires_at, last_used_at)
@@ -320,7 +320,7 @@ memberships (2026-09-23).
 
 ### How accounts, transactions and postings relate
 
-```
+```text
 account      a bucket that holds ONE commodity     "Visa card (TWD)", "Travel", "EVA miles"
 transaction  one event: date, payee, memo, tags    "EVA award ticket, 2026-09-23"
 posting      one leg of that event                 EVA miles  -10,500 miles (cost -6,300)
@@ -345,11 +345,13 @@ posting      one leg of that event                 EVA miles  -10,500 miles (cos
 | `points` | `MILES:EVA`, `PTS:CATHAY` | none, by design | cost |
 
 **Coming in:**
+
 - A buy with a unit price is priced as units × `unit_cost` × the quote-currency rate.
 - Anything else needs its cost entered. Zero is fine for miles earned.
 
 **Going out** (miles spent, shares sold): the server releases the weighted-average cost
 of what the account holds, and exactly the remaining cost when everything goes.
+
 - The editor fetches the same figure from `GET /accounts/{id}/cost`, and "Put the
   remainder here" fills the balancing line.
 - Example ticket: 10,500 of 20,000 miles bought for 12,000 TWD leave at 6,300, and
@@ -359,6 +361,7 @@ of what the account holds, and exactly the remaining cost when everything goes.
 moves across unchanged.
 
 **Futures** carry `contract_size` (TX = 200).
+
 - Their balance-sheet value is **margin plus unrealised P&L**.
 - Contract value (units × size × price) is **exposure**: shown beside the position,
   never added to assets. Adding it would overstate net worth many times over.
@@ -603,14 +606,16 @@ key.
   - Balance rows are keyed `<account>:<day>:balance`: the import key is
     `<connector>:<id>` per book, so a bare day collided across accounts.
   - The runner itself (P4c-2a, implemented): Node 22.18+ running its TypeScript
-    directly; puppeteer-core drives Chrome, onnxruntime-web reads CAPTCHAs. `rigel-sync run` is the daemon; `rigel-sync try
+    directly; puppeteer-core drives Chrome, onnxruntime-web reads CAPTCHAs. `rigel-sync run` is the daemon; `rigel-sync
+    try
     <connector>` runs one connector from a terminal with no app, which is how a real
     login is checked before a connection is made. Its key and each connection's
     session state (cookies, trusted device) stay in its `DATA_DIR`.
   - It maps all-set-tw's `SyncResult` (accounts, balance snapshots, pending/posted
     transactions, card bills, invoices with items, positions, trades) to our import
     payload.
-  - Upstream fixes arrive by bumping the pin. New connectors (將來, 兆豐) follow all-set-tw's connector contract, so they could be upstreamed.
+  - Upstream fixes arrive by bumping the pin. New connectors (將來, 兆豐) follow all-set-tw's connector contract, so they
+    could be upstreamed.
 - **No Python, and not a second runner** (decided 2026-10-07). A person links one
   runner (`RegisterKeys` retires every key a runner does not list, so two would retire
   each other's), so every institution is a connector in rigel-sync. Firstrade's
@@ -1053,7 +1058,8 @@ Email is **evidence**, like e-invoices: it enriches and proposes, it does not po
     shared through the `@sync` alias), so an uploaded PDF and an emailed one give the
     same rows. pdf.js is not in the bundle: its two prebuilt files load as module
     scripts when a PDF is chosen, the worker in the page's thread (no `worker-src`).
-    The original file is kept in `attachments`. Known statements: 國泰期貨 月對帳單; Banco Continental's Movimientos de Cuenta (USD, PYG) and credit card extracto (#43).
+    The original file is kept in `attachments`. Known statements: 國泰期貨 月對帳單; Banco Continental's Movimientos de Cuenta
+    (USD, PYG) and credit card extracto (#43).
   - **Many files at once** (#88). Imports -> "Import statement files" takes any number
     of PDFs, ContiWeb XLS exports and receipt photos (pick or drop), reads them one at
     a time in the tab, and tries one password on every locked PDF (another password
@@ -1265,6 +1271,7 @@ deploys with `k3s/upgrade.sh`. So **the chart lives in hcloud**, and this repo o
 builds images.
 
 **This repo owns** (done, see CLAUDE.md "CI and releases"):
+
 - A multi-stage `Dockerfile`: bun builds the SPA, Go builds static binaries with
   `-tags prod`, and the result runs on distroless static (statement PDFs are read in
   the browser, #42).
@@ -1276,6 +1283,7 @@ builds images.
   `ghcr.io/cwchen-twn/rigel-ledger`.
 
 **hcloud owns** `k3s/helm/rigel-ledger/`, modelled on `k3s/helm/navidrome/`:
+
 - A stateless Deployment (RollingUpdate, no PVC), plus the owner's own sync runners
   (`rigel-ledger-sync`), with only its runner token in a SOPS secret and its
   private key in a small volume; institution logins live sealed in the app.

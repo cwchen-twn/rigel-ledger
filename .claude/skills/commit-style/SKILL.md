@@ -1,6 +1,9 @@
 ---
 name: commit-style
-description: Writes commit messages for the rigel-ledger repo in its conventional-commit style - a subject that states the finding rather than the edit, and a prose body that records the mechanism, the measurement and what was rejected. Use when committing, staging and committing, writing or rewriting a commit message, or preparing a PR description in this repository.
+description: Writes commit messages for the rigel-ledger repo in its conventional-commit style - a subject that states
+the finding rather than the edit, and a prose body that records the mechanism, the measurement and what was rejected.
+Use when committing, staging and committing, writing or rewriting a commit message, or preparing a PR description in
+this repository.
 ---
 
 # Commit messages (rigel-ledger)
@@ -16,7 +19,7 @@ this repo's history has 48 non-merge commits, and most of them predate the conve
 
 ## Format
 
-```
+```text
 <type>: <subject>
 
 <body>
@@ -51,7 +54,7 @@ the *why* is encouraged.
 
 **Good:**
 
-```
+```text
 chore: Bump x/text to v0.42.0, because govulncheck traced pgx into norm.*
 fix: The balance check summed raw amounts, so every FX journal was rejected
 feat: Books with members, so a family can share one set of accounts
@@ -60,7 +63,7 @@ docs: Record why the 4-grade Taiwan business chart of accounts was dropped
 
 **Too thin (this is how the old history reads):**
 
-```
+```text
 chore: Updated dependencies
 wip: Implementing ledger page and transaction page
 fix: Fixed issues discovered by static scans
@@ -91,7 +94,7 @@ bullets only for enumerations inside the prose. Roughly in this order:
 
 ### A body in the house style
 
-```
+```text
 chore: Bump x/text to v0.42.0, because govulncheck traced pgx into norm.*
 
 make audit failed after the Go 1.26.8 bump on GO-2026-5970 (infinite loop

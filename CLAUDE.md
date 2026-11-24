@@ -4,9 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-RigelLedger is a personal and family finance web application built with Go (backend) and SolidJS (frontend): double-entry bookkeeping, multi-currency, IFRS-flavoured reports, statement imports and stock investments. It is deployed (ledger.chenantunez.com, tailnet-only), so **applied migrations are frozen**: schema changes are new migration pairs.
+RigelLedger is a personal and family finance web application built with Go (backend) and SolidJS (frontend):
+double-entry bookkeeping, multi-currency, IFRS-flavoured reports, statement imports and stock investments. It is
+deployed (ledger.chenantunez.com, tailnet-only), so **applied migrations are frozen**: schema changes are new migration
+pairs.
 
-**Read `docs/ARCHITECTURE.md` before designing anything.** It is the accepted target design and the roadmap P1-P7; P1, P2, P2.5 (accounts, administration, throttling, two-factor sign-in) and P3 (rates, statements, tags, rebase) are done; P4 (sync and review) is all but done, and its end is the v1.0.0 milestone (#45: the first deploy since 2026-09-24).
+**Read `docs/ARCHITECTURE.md` before designing anything.** It is the accepted target design and the roadmap P1-P7; P1,
+P2, P2.5 (accounts, administration, throttling, two-factor sign-in) and P3 (rates, statements, tags, rebase) are done;
+P4 (sync and review) is all but done, and its end is the v1.0.0 milestone (#45: the first deploy since 2026-09-24).
 
 ## Common Commands
 
@@ -50,7 +55,7 @@ To run a single test: `go test -run TestName ./internal/ledger/` (with `TEST_DAT
 
 ### Package Structure
 
-```
+```text
 cmd/rigel-ledger/   # HTTP server entry point
 cmd/cli/            # Admin CLI: create-user, reset-password, set-admin, reset-mfa, create-runner-token
 internal/
@@ -87,35 +92,79 @@ api/                # Generated Swagger output (do not edit manually)
 
 ### Request Flow
 
-1. `internal/routes/router.go`: `auth.ResolveClientIP` (rightmost untrusted `X-Forwarded-For`, see `TRUSTED_PROXIES`), then `auth.Authenticate` resolves the session from the `rigel_session` cookie or an `Authorization: Bearer` token on every request.
-2. `/api/*` routes behind `auth.RequireUser` return 401 when anonymous and 403 `csrf` when a cookie-authenticated POST/PUT/PATCH/DELETE lacks `X-Rigel-Client`. Behind `auth.RequireInitialized`, a user who has not finished the first-login wizard gets 403 `onboarding_required` (only `/api/me`, logout, `/api/me/email*` and `/api/me/onboarding` are open to them). `/api/admin/*` is behind `auth.RequireAdmin` (404 for non-admins). A `token` session (a person's script, made in Settings -> API tokens) only passes `auth.TokenScope`'s list (`tokenAllowed` in `handlers_imports.go`); a `runner` session (a person's own sync runner, linked in Settings -> Sync runner; one per person) only reaches `/api/runner/*`, which answers 404 to every other kind, and only ever sees its owner's keys, connectors and connections (`connections.Runner`); anything else is 403 `token_scope`.
-3. `/api/books/{bookID}/*` goes through `bookAccess`, which loads the caller's membership (`ledger.Access`); a non-member gets 404, never 403.
-4. Handlers decode DTOs, call `ledger.Service` or `identity.Service`, and map `*ledger.Error` to 404/403/409/422 and `*auth.ThrottledError` to 429 (+ `Retry-After`), with `{"error":{"code","message","fields"}}`.
+1. `internal/routes/router.go`: `auth.ResolveClientIP` (rightmost untrusted `X-Forwarded-For`, see `TRUSTED_PROXIES`),
+   then `auth.Authenticate` resolves the session from the `rigel_session` cookie or an `Authorization: Bearer` token on
+   every request.
+2. `/api/*` routes behind `auth.RequireUser` return 401 when anonymous and 403 `csrf` when a cookie-authenticated
+   POST/PUT/PATCH/DELETE lacks `X-Rigel-Client`. Behind `auth.RequireInitialized`, a user who has not finished the
+   first-login wizard gets 403 `onboarding_required` (only `/api/me`, logout, `/api/me/email*` and `/api/me/onboarding`
+   are open to them). `/api/admin/*` is behind `auth.RequireAdmin` (404 for non-admins). A `token` session (a person's
+   script, made in Settings -> API tokens) only passes `auth.TokenScope`'s list (`tokenAllowed` in
+   `handlers_imports.go`); a `runner` session (a person's own sync runner, linked in Settings -> Sync runner; one per
+   person) only reaches `/api/runner/*`, which answers 404 to every other kind, and only ever sees its owner's keys,
+   connectors and connections (`connections.Runner`); anything else is 403 `token_scope`.
+3. `/api/books/{bookID}/*` goes through `bookAccess`, which loads the caller's membership (`ledger.Access`); a
+   non-member gets 404, never 403.
+4. Handlers decode DTOs, call `ledger.Service` or `identity.Service`, and map `*ledger.Error` to 404/403/409/422 and
+   `*auth.ThrottledError` to 429 (+ `Retry-After`), with `{"error":{"code","message","fields"}}`.
 5. `/livez` (process up, never touches the DB) and `/readyz` (pings the DB, 503 when down) are the kubelet probes.
 6. Every other GET renders the SPA shell with the user's language and theme and a CSP nonce.
 
 ### Ledger rules (internal/ledger)
 
-- Postings are signed (debit > 0). `amount` is in the posting's commodity; `base_amount` is in the book's base currency. A foreign line takes the client's `base_amount` or is converted via `RateOn` (direct, inverse, or crossed through USD, newest price on or before the date).
+- Postings are signed (debit > 0). `amount` is in the posting's commodity; `base_amount` is in the book's base currency.
+  A foreign line takes the client's `base_amount` or is converted via `RateOn` (direct, inverse, or crossed through USD,
+  newest price on or before the date).
 - A residue of at most one base minor unit is booked to the `fx_gain_loss` account; anything larger is `unbalanced`.
-- Exchange rates: `internal/rates` stores one USD->X snapshot per day for every ISO currency (source `er-api` or `fawaz`); `RateOn` crosses through USD. A `manual` rate wins on its date. Never persist a rate as float: providers are decoded with `json.Number`.
-- Commodities are `currency` (ISO seed), `security` (`XNAS:AAPL`, quoted in `quote_currency`, futures carry `contract_size`) or `points` (`MILES:EVA`, never priced). For the last two, `amount` is units and `base_amount` is cost: a buy with `unit_cost` is priced via the quote rate; units leaving an asset account go at weighted-average cost (`costBasis`, excluding the transaction being edited); anything else must state its cost (`cost_required`).
-- `validCurrency` means ISO money only (book base, display currency, rate quote); `validCommodity` is anything an account can hold. The commodity cache is dropped on `CreateCommodity`.
-- `prices` obeys the lock date too: a rate on or before the lock date of any book using either side is frozen (trigger `prices_lock`).
-- Go validates first for friendly field errors; the triggers in `000001_init.up.sql` enforce the same rules for any writer. A trigger's `CONSTRAINT` name becomes the API error code (see `ledger.translate`).
+- Exchange rates: `internal/rates` stores one USD->X snapshot per day for every ISO currency (source `er-api` or
+  `fawaz`); `RateOn` crosses through USD. A `manual` rate wins on its date. Never persist a rate as float: providers are
+  decoded with `json.Number`.
+- Commodities are `currency` (ISO seed), `security` (`XNAS:AAPL`, quoted in `quote_currency`, futures carry
+  `contract_size`) or `points` (`MILES:EVA`, never priced). For the last two, `amount` is units and `base_amount` is
+  cost: a buy with `unit_cost` is priced via the quote rate; units leaving an asset account go at weighted-average cost
+  (`costBasis`, excluding the transaction being edited); anything else must state its cost (`cost_required`).
+- `validCurrency` means ISO money only (book base, display currency, rate quote); `validCommodity` is anything an
+  account can hold. The commodity cache is dropped on `CreateCommodity`.
+- `prices` obeys the lock date too: a rate on or before the lock date of any book using either side is frozen (trigger
+  `prices_lock`).
+- Go validates first for friendly field errors; the triggers in `000001_init.up.sql` enforce the same rules for any
+  writer. A trigger's `CONSTRAINT` name becomes the API error code (see `ledger.translate`).
 - No stored balances: `Balances` sums postings and rolls up the account tree in Go.
-- Statements (`internal/ledger/reports.go`): `BalanceSheet`, `IncomeStatement`, `CashFlow`, computed per request, never persisted; values in the base, then translated at the report date (`reportCtx.out`). Revaluation uses `RateDetail` (the rate plus its date and path) so every report lists `rates_used`. Keep assets - liabilities - equity at zero by deriving the unrealised line, not by summing it. `Tags`/`Tag` (tagreport.go) sum expense postings of tagged transactions; `Rebase` (rebase.go) changes a book's base, re-translating every posting (dry run first; refuses on gaps or a lock date).
-- New books are seeded from `personalTemplate` in `template.go`; account names are i18n keys (`account.template.<key>`) until renamed.
-- Imports (`imports.go`, migration `000005`): sources stage `import_rows`; `propose` matches each (duplicate -> clears -> transfer -> rule; a trade against the books and other sources of its broker, `proposeTrade`) and `AcceptRow` is the only way a row becomes a transaction. A source account set aside (`ignored`, migration `000015`) has every row ignored. Balance rows become `balance_assertions`; `Drifts` compares the newest one per account with the books and names where the gap opened. A person states a balance by hand (`SetBalance`, source `manual`) and `BookDifference` books the gap as a transaction of source `adjustment`. Windows and rules: `docs/ARCHITECTURE.md` "The import core".
-- Attachments (`attachments.go`, migration `000009`): files on transactions, one copy per book and SHA-256, type sniffed from the bytes (images and PDFs only), deleted by trigger when nothing links them, bytes kept out of `audit_log`. A batch's `files` reach the transaction through `import_rows.attachment_id` when the row is accepted.
-- Securities from a sync (`securities.go`, migration `000010`): a `brokerage` source account maps to a parent (each security gets its own child account, `source_securities`) and a settlement account; `holding` rows are unit assertions, `trade` rows are booked on accept at the cash the person confirms (buy cost = cash paid, sale gain to `realized_gains`).
-- Invoices (`invoices.go`, migration `000011`): `invoice` rows enrich, they do not create. Proposal `enrich` names the booked transaction (or the waiting card row) that paid; accepting adds `transaction_items` and, with `split`, splits the expense by the categories rules give the items. Only an unmatched invoice books a cash purchase.
+- Statements (`internal/ledger/reports.go`): `BalanceSheet`, `IncomeStatement`, `CashFlow`, computed per request, never
+  persisted; values in the base, then translated at the report date (`reportCtx.out`). Revaluation uses `RateDetail`
+  (the rate plus its date and path) so every report lists `rates_used`. Keep assets - liabilities - equity at zero by
+  deriving the unrealised line, not by summing it. `Tags`/`Tag` (tagreport.go) sum expense postings of tagged
+  transactions; `Rebase` (rebase.go) changes a book's base, re-translating every posting (dry run first; refuses on gaps
+  or a lock date).
+- New books are seeded from `personalTemplate` in `template.go`; account names are i18n keys (`account.template.<key>`)
+  until renamed.
+- Imports (`imports.go`, migration `000005`): sources stage `import_rows`; `propose` matches each (duplicate -> clears
+  -> transfer -> rule; a trade against the books and other sources of its broker, `proposeTrade`) and `AcceptRow` is the
+  only way a row becomes a transaction. A source account set aside (`ignored`, migration `000015`) has every row
+  ignored. Balance rows become `balance_assertions`; `Drifts` compares the newest one per account with the books and
+  names where the gap opened. A person states a balance by hand (`SetBalance`, source `manual`) and `BookDifference`
+  books the gap as a transaction of source `adjustment`. Windows and rules: `docs/ARCHITECTURE.md` "The import core".
+- Attachments (`attachments.go`, migration `000009`): files on transactions, one copy per book and SHA-256, type sniffed
+  from the bytes (images and PDFs only), deleted by trigger when nothing links them, bytes kept out of `audit_log`. A
+  batch's `files` reach the transaction through `import_rows.attachment_id` when the row is accepted.
+- Securities from a sync (`securities.go`, migration `000010`): a `brokerage` source account maps to a parent (each
+  security gets its own child account, `source_securities`) and a settlement account; `holding` rows are unit
+  assertions, `trade` rows are booked on accept at the cash the person confirms (buy cost = cash paid, sale gain to
+  `realized_gains`).
+- Invoices (`invoices.go`, migration `000011`): `invoice` rows enrich, they do not create. Proposal `enrich` names the
+  booked transaction (or the waiting card row) that paid; accepting adds `transaction_items` and, with `split`, splits
+  the expense by the categories rules give the items. Only an unmatched invoice books a cash purchase.
 
 ### Frontend (web/src)
 
-A SolidJS SPA mounted into the Go shell's `<div id="app">`. Vite builds one content-hashed JS and CSS file (`main-<hash>.js`, `main-<hash>.css`) plus `manifest.json` into `web/static/dist` (embedded in the binary); `internal/response/assets.go` reads the manifest to link them, `/static/dist` is served `immutable`, the shell `no-cache`. API responses carry `X-App-Build` (the bundle's name), and a tab running an older bundle shows a reload banner. Never link a dist file by a fixed name. Follow the `frontend-ui` skill (`.claude/skills/frontend-ui/SKILL.md`) for any UI change.
+A SolidJS SPA mounted into the Go shell's `<div id="app">`. Vite builds one content-hashed JS and CSS file
+(`main-<hash>.js`, `main-<hash>.css`) plus `manifest.json` into `web/static/dist` (embedded in the binary);
+`internal/response/assets.go` reads the manifest to link them, `/static/dist` is served `immutable`, the shell
+`no-cache`. API responses carry `X-App-Build` (the bundle's name), and a tab running an older bundle shows a reload
+banner. Never link a dist file by a fixed name. Follow the `frontend-ui` skill (`.claude/skills/frontend-ui/SKILL.md`)
+for any UI change.
 
-```
+```text
 api/         client.ts (fetch + X-Rigel-Client + ApiError), types.ts (mirrors routes/dto.go)
 stores/      session (me, currencies, live language/theme), book (book, accounts, names, paths, roles)
 components/  ui/ -- shadcn-style kit (tokens only, cva variants, Kobalte where a11y is hard)
@@ -126,7 +175,9 @@ i18n/        en.json, zh.json (Traditional), es.json -- same keys; account names
 lib/         money.ts (decimal strings via js-big-decimal), dates.ts, csv.ts (statement parsing), statements.ts (PDF statements via pdf.js and @sync parsers), xlsx.ts (XLS exports, unzipped in the tab), receipts.ts (KuDE QR codes via jsQR), seal.ts (sealing to the runner), cn.ts
 ```
 
-Routes: signed out `/login`, `/register`, `/request-access`, `/invite/:token`, `/verify?token=`; `/welcome` (first-login wizard); `/onboarding` (new book), `/settings`, `/connections`, `/admin/:tab`, `/b/:bookId/{,transactions,accounts,reports/:tab,imports,settings}`; `/` redirects to the default book.
+Routes: signed out `/login`, `/register`, `/request-access`, `/invite/:token`, `/verify?token=`; `/welcome` (first-login
+wizard); `/onboarding` (new book), `/settings`, `/connections`, `/admin/:tab`,
+`/b/:bookId/{,transactions,accounts,reports/:tab,imports,settings}`; `/` redirects to the default book.
 
 ## Configuration
 
@@ -156,19 +207,47 @@ Copy `.env.example` to `.env`. Real environment variables always win over `.env`
 
 ## Key Conventions
 
-- API endpoints live under `/api`; book data under `/api/books/{bookID}/...`. Check the role with `Access.require` inside the service, not in handlers.
-- Every write goes through `db.Store.WithTx(ctx, userID, ...)`, which sets `app.current_user` for the audit trigger. Pass 0 only for CLI/system changes.
-- Schema or query change: follow the `db-change` skill (`.claude/skills/db-change/SKILL.md`) -- edit `000001_init` in place until the first deploy, run `make sqlc`, add a DB test for any trigger.
-- Money: `NUMERIC` in Postgres, `shopspring/decimal` in Go, strings in JSON -- never floats anywhere. Dates are `YYYY-MM-DD` (`routes.Date`).
-- UI text, including account names, lives in the frontend i18n files keyed by stable codes (follow the `translation` skill, `.claude/skills/translation/SKILL.md`: zh is Taiwan usage, and technical words Taiwanese users say in English stay English, e.g. token, never 權杖); the database stores no translations. API error codes are translated as `error.<code>`, per-field codes as `field.<code>`, sign-in events as `event.<name>`. The one server-side exception is mail: `internal/mail/templates/{en,zh,es}/*.tmpl`, one file per message per language.
-- Two-factor sign-in: sessions carry `aal` (1 password/link, 2 second factor or passkey). `auth.Manager.RequireMFA` confines aal-1 sessions to enrolment while `system_settings.mfa_required`; login answers a challenge instead of a session when the user has a factor. Factors live in `mfa_factors` (email, TOTP sealed by `secretbox`), `webauthn_credentials`, `mfa_recovery_codes`; short-lived ceremony state in `auth_challenges`. Code in `internal/identity/{mfa,passkey}.go`; the frontend's WebAuthn JSON glue is `web/src/lib/webauthn.ts`. Passkeys bind to `APP_ORIGIN`'s host.
-- Sign-in and account flows go through `identity.Service`, which records every outcome in `auth_events` (also the throttle's source). New anonymous or code-checking endpoints call `auth.Manager.Check` first and record failures with `Failure: true`.
-- Sync and imports: design in `docs/ARCHITECTURE.md` ("Data sources and sync"). Taiwan bank, card, 集保 and e-invoice connectors come from [all-set-tw](https://github.com/TedLin1993/all-set-tw) (MIT), vendored into the one runner, `integrations/rigel-sync`, which is meant for every institution (Paraguay, the US, brokers, crypto) under country-prefixed connector ids (`tw-sinopac`, `py-continental`, `us-firstrade`). Each person links institutions under Connections: the browser seals the credentials to the runner's X25519 key (`web/src/lib/seal.ts` = `internal/sealing`), the app stores ciphertext it cannot open, and a runner claims jobs over `/api/runner/*` (`internal/connections`). Every person, admin or not, links their own runner (Settings -> Sync runner), like a self-hosted CI runner: the owner's runs next to the app, anyone else's on their own computer, and credentials are sealed to that person's runner's key. There is no server runner and no sync mode (migration `000008`). Never add a code path that decrypts, logs or returns a sealed blob. `integrations/fake-runner` is the reference runner for development.
-- Deployment target: the Helm chart lives in the hcloud repo (`k3s/helm/rigel-ledger/`); this repo only builds the image. See `docs/ARCHITECTURE.md#deployment`.
+- API endpoints live under `/api`; book data under `/api/books/{bookID}/...`. Check the role with `Access.require`
+  inside the service, not in handlers.
+- Every write goes through `db.Store.WithTx(ctx, userID, ...)`, which sets `app.current_user` for the audit trigger.
+  Pass 0 only for CLI/system changes.
+- Schema or query change: follow the `db-change` skill (`.claude/skills/db-change/SKILL.md`) -- edit `000001_init` in
+  place until the first deploy, run `make sqlc`, add a DB test for any trigger.
+- Money: `NUMERIC` in Postgres, `shopspring/decimal` in Go, strings in JSON -- never floats anywhere. Dates are
+  `YYYY-MM-DD` (`routes.Date`).
+- UI text, including account names, lives in the frontend i18n files keyed by stable codes (follow the `translation`
+  skill, `.claude/skills/translation/SKILL.md`: zh is Taiwan usage, and technical words Taiwanese users say in English
+  stay English, e.g. token, never 權杖); the database stores no translations. API error codes are translated as
+  `error.<code>`, per-field codes as `field.<code>`, sign-in events as `event.<name>`. The one server-side exception is
+  mail: `internal/mail/templates/{en,zh,es}/*.tmpl`, one file per message per language.
+- Two-factor sign-in: sessions carry `aal` (1 password/link, 2 second factor or passkey). `auth.Manager.RequireMFA`
+  confines aal-1 sessions to enrolment while `system_settings.mfa_required`; login answers a challenge instead of a
+  session when the user has a factor. Factors live in `mfa_factors` (email, TOTP sealed by `secretbox`),
+  `webauthn_credentials`, `mfa_recovery_codes`; short-lived ceremony state in `auth_challenges`. Code in
+  `internal/identity/{mfa,passkey}.go`; the frontend's WebAuthn JSON glue is `web/src/lib/webauthn.ts`. Passkeys bind to
+  `APP_ORIGIN`'s host.
+- Sign-in and account flows go through `identity.Service`, which records every outcome in `auth_events` (also the
+  throttle's source). New anonymous or code-checking endpoints call `auth.Manager.Check` first and record failures with
+  `Failure: true`.
+- Sync and imports: design in `docs/ARCHITECTURE.md` ("Data sources and sync"). Taiwan bank, card, 集保 and e-invoice
+  connectors come from [all-set-tw](https://github.com/TedLin1993/all-set-tw) (MIT), vendored into the one runner,
+  `integrations/rigel-sync`, which is meant for every institution (Paraguay, the US, brokers, crypto) under
+  country-prefixed connector ids (`tw-sinopac`, `py-continental`, `us-firstrade`). Each person links institutions under
+  Connections: the browser seals the credentials to the runner's X25519 key (`web/src/lib/seal.ts` =
+  `internal/sealing`), the app stores ciphertext it cannot open, and a runner claims jobs over `/api/runner/*`
+  (`internal/connections`). Every person, admin or not, links their own runner (Settings -> Sync runner), like a
+  self-hosted CI runner: the owner's runs next to the app, anyone else's on their own computer, and credentials are
+  sealed to that person's runner's key. There is no server runner and no sync mode (migration `000008`). Never add a
+  code path that decrypts, logs or returns a sealed blob. `integrations/fake-runner` is the reference runner for
+  development.
+- Deployment target: the Helm chart lives in the hcloud repo (`k3s/helm/rigel-ledger/`); this repo only builds the
+  image. See `docs/ARCHITECTURE.md#deployment`.
 
 ## CI and releases
 
-Gitea (`git.chenantunez.com`, private) is the primary remote and push-mirrors every commit and tag to the public GitHub repo. Gitea runs only `.gitea/workflows/`, GitHub runs only `.github/workflows/`, and **the two sets must stay behaviourally identical — change one, change the other in the same commit.**
+Gitea (`git.chenantunez.com`, private) is the primary remote and push-mirrors every commit and tag to the public GitHub
+repo. Gitea runs only `.gitea/workflows/`, GitHub runs only `.github/workflows/`, and **the two sets must stay
+behaviourally identical — change one, change the other in the same commit.**
 
 | Trigger | `ci` (frontend build, `sqlc diff`, `make audit` against PostgreSQL 18, pre-commit hooks) | `image` | `release` (GoReleaser) |
 |---|---|---|---|
@@ -176,19 +255,35 @@ Gitea (`git.chenantunez.com`, private) is the primary remote and push-mirrors ev
 | push to `main` | yes | `:sha-<12>`, `:latest` | — |
 | tag `vX.Y.Z` | yes | `:vX.Y.Z`, `:sha-<12>` | binaries (linux/darwin × amd64/arm64) + checksums |
 
-- Images: `git.chenantunez.com/cwchen-twn/rigel-ledger` (Gitea) and `ghcr.io/cwchen-twn/rigel-ledger` (GitHub), built from the same `Dockerfile`, linux/amd64 only. The image carries `rigel-ledger` (entrypoint) and `rigel-ledger-cli`. The sync runner image `rigel-ledger-sync` (`integrations/rigel-sync/Dockerfile`: Node, Debian's Chromium, the CAPTCHA model) is built and pushed alongside it by the same workflows, with the same tags, also linux/amd64 only.
-- Releases are cut by hand: `git tag vX.Y.Z && git push origin vX.Y.Z` on Gitea; the mirror carries the tag to GitHub. One `.goreleaser.yaml` serves both; `GORELEASER_FORCE_TOKEN` in each workflow picks the forge.
-- The version shown in logs comes from `-X main.version` (both `cmd/*/main.go`); a non-empty `APP_VERSION` env var overrides it.
-- Gitea secrets on this repo: `REGISTRY_USER`, `REGISTRY_TOKEN` (package rw), `RELEASE_TOKEN` (repo write; mapped to `GITEA_TOKEN`, since Gitea forbids secret names starting `GITEA_`).
-- Gitea runner traps are inherited from hcloud (`hcloud/.gitea/CLAUDE.md`): checkout and the GoReleaser API use the in-cluster Service `http://gitea-http.gitea.svc.cluster.local:3000`, `setup-go` runs with `cache: false`, and docker needs the buildx plugin.
-- Toolchain pins: `mise.toml` pins Go, Bun and Node for this repo (mise puts them on PATH). Go is also in `go.mod` + Dockerfile build stage; Bun in `web/package.json` `packageManager` + Dockerfile web stage; sqlc in the Makefile + both CI files (`SQLC_VERSION`). `make upgrade/go version=X.Y.Z` / `make upgrade/bun version=X.Y.Z` move a toolchain everywhere at once, `make upgradeable` lists what is newer. Renovate (config in `renovate.json`) groups each set so they move together.
-- How CI gets PostgreSQL 18 is the one intended difference between forges: GitHub uses a `services:` container; Gitea installs it inside the job from PGDG, because hcloud's runner puts jobs on docker's default bridge (no service DNS). Both use `localhost:5432`.
+- Images: `git.chenantunez.com/cwchen-twn/rigel-ledger` (Gitea) and `ghcr.io/cwchen-twn/rigel-ledger` (GitHub), built
+  from the same `Dockerfile`, linux/amd64 only. The image carries `rigel-ledger` (entrypoint) and `rigel-ledger-cli`.
+  The sync runner image `rigel-ledger-sync` (`integrations/rigel-sync/Dockerfile`: Node, Debian's Chromium, the CAPTCHA
+  model) is built and pushed alongside it by the same workflows, with the same tags, also linux/amd64 only.
+- Releases are cut by hand: `git tag vX.Y.Z && git push origin vX.Y.Z` on Gitea; the mirror carries the tag to GitHub.
+  One `.goreleaser.yaml` serves both; `GORELEASER_FORCE_TOKEN` in each workflow picks the forge.
+- The version shown in logs comes from `-X main.version` (both `cmd/*/main.go`); a non-empty `APP_VERSION` env var
+  overrides it.
+- Gitea secrets on this repo: `REGISTRY_USER`, `REGISTRY_TOKEN` (package rw), `RELEASE_TOKEN` (repo write; mapped to
+  `GITEA_TOKEN`, since Gitea forbids secret names starting `GITEA_`).
+- Gitea runner traps are inherited from hcloud (`hcloud/.gitea/CLAUDE.md`): checkout and the GoReleaser API use the
+  in-cluster Service `http://gitea-http.gitea.svc.cluster.local:3000`, `setup-go` runs with `cache: false`, and docker
+  needs the buildx plugin.
+- Toolchain pins: `mise.toml` pins Go, Bun and Node for this repo (mise puts them on PATH). Go is also in `go.mod` +
+  Dockerfile build stage; Bun in `web/package.json` `packageManager` + Dockerfile web stage; sqlc in the Makefile + both
+  CI files (`SQLC_VERSION`). `make upgrade/go version=X.Y.Z` / `make upgrade/bun version=X.Y.Z` move a toolchain
+  everywhere at once, `make upgradeable` lists what is newer. Renovate (config in `renovate.json`) groups each set so
+  they move together.
+- How CI gets PostgreSQL 18 is the one intended difference between forges: GitHub uses a `services:` container; Gitea
+  installs it inside the job from PGDG, because hcloud's runner puts jobs on docker's default bridge (no service DNS).
+  Both use `localhost:5432`.
 
 ## Deploying
 
-**No deploys to hcloud before v1.0.0** (the owner's call, 2026-09-24). Tags and releases are fine; production stays on what it runs, and features are checked on `make run/live` / a local server. Do not open hcloud chart bumps until then.
+**No deploys to hcloud before v1.0.0** (the owner's call, 2026-09-24). Tags and releases are fine; production stays on
+what it runs, and features are checked on `make run/live` / a local server. Do not open hcloud chart bumps until then.
 
 ## Committing
 
 - Use the `commit-style` skill (`.claude/skills/commit-style/SKILL.md`) for every commit message and PR description.
-- Commit on a branch: pre-commit runs `no-commit-to-branch main`, `make audit` and gitleaks. Fix failures; never `--no-verify`.
+- Commit on a branch: pre-commit runs `no-commit-to-branch main`, `make audit` and gitleaks. Fix failures; never
+  `--no-verify`.
