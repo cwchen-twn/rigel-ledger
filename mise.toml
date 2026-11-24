@@ -1,0 +1,10 @@
+# Tool and runtime versions for this repo: the same ones locally, in CI and in the images.
+# Project pins, not global installs: Mason still owns the editor's language servers.
+# Moved together with go.mod (go directive), the Dockerfiles and package.json packageManager:
+# `make upgrade/go` / `make upgrade/bun` do it by hand, Renovate's groups do it on its schedule.
+# `make upgradeable` lists newer versions.
+
+[tools]
+go = "1.27.4"
+bun = "1.4.4"
+node = "24.22.2"                         # runs rigel-sync's TypeScript directly (type stripping)

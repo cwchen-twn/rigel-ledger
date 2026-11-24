@@ -181,7 +181,7 @@ Gitea (`git.chenantunez.com`, private) is the primary remote and push-mirrors ev
 - The version shown in logs comes from `-X main.version` (both `cmd/*/main.go`); a non-empty `APP_VERSION` env var overrides it.
 - Gitea secrets on this repo: `REGISTRY_USER`, `REGISTRY_TOKEN` (package rw), `RELEASE_TOKEN` (repo write; mapped to `GITEA_TOKEN`, since Gitea forbids secret names starting `GITEA_`).
 - Gitea runner traps are inherited from hcloud (`hcloud/.gitea/CLAUDE.md`): checkout and the GoReleaser API use the in-cluster Service `http://gitea-http.gitea.svc.cluster.local:3000`, `setup-go` runs with `cache: false`, and docker needs the buildx plugin.
-- Toolchain pins: Go in `go.mod` + Dockerfile build stage; Bun in `web/package.json` `packageManager` + Dockerfile web stage; sqlc in the Makefile + both CI files (`SQLC_VERSION`). Renovate (hcloud's self-hosted bot, config in `renovate.json`) groups each pair so they move together.
+- Toolchain pins: `mise.toml` pins Go, Bun and Node for this repo (mise puts them on PATH). Go is also in `go.mod` + Dockerfile build stage; Bun in `web/package.json` `packageManager` + Dockerfile web stage; sqlc in the Makefile + both CI files (`SQLC_VERSION`). `make upgrade/go version=X.Y.Z` / `make upgrade/bun version=X.Y.Z` move a toolchain everywhere at once, `make upgradeable` lists what is newer. Renovate (config in `renovate.json`) groups each set so they move together.
 - How CI gets PostgreSQL 18 is the one intended difference between forges: GitHub uses a `services:` container; Gitea installs it inside the job from PGDG, because hcloud's runner puts jobs on docker's default bridge (no service DNS). Both use `localhost:5432`.
 
 ## Deploying

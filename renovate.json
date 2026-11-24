@@ -4,6 +4,7 @@
     "local>cwchen-twn/renovate-config:fast"
   ],
   "enabledManagers": [
+    "mise",
     "gomod",
     "bun",
     "npm",
@@ -24,7 +25,7 @@
   ],
   "packageRules": [
     {
-      "description": "The Go toolchain is pinned in go.mod (go directive, read by setup-go in both CI forges) and in the Dockerfile build stage. Move them in one PR so CI and the image never build with different compilers.",
+      "description": "The Go toolchain is pinned in mise.toml, in go.mod (go directive, read by setup-go in both CI forges) and in the Dockerfile build stage. Move them in one PR so CI and the image never build with different compilers.",
       "matchDepNames": [
         "go",
         "golang"
@@ -32,7 +33,7 @@
       "groupName": "go toolchain"
     },
     {
-      "description": "Bun is pinned in web/package.json packageManager (read by setup-bun in both CI forges) and in the Dockerfile web stage. Same reasoning as the Go toolchain.",
+      "description": "Bun is pinned in mise.toml, in web/package.json packageManager (read by setup-bun in both CI forges) and in the Dockerfile web stage. Same reasoning as the Go toolchain.",
       "matchDepNames": [
         "bun",
         "oven/bun"
@@ -98,7 +99,7 @@
       "enabled": false
     },
     {
-      "description": "The Node runtime is the runner image (integrations/rigel-sync/Dockerfile) and setup-node's node-version in both CI forges. Move them in one PR so CI tests the Node that ships; renovate offers only LTS majors here.",
+      "description": "The Node runtime is mise.toml, the runner image (integrations/rigel-sync/Dockerfile) and setup-node's node-version in both CI forges. Move them in one PR so CI tests the Node that ships; renovate offers only LTS majors here.",
       "matchDepNames": [
         "node"
       ],

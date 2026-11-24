@@ -39,73 +39,42 @@ updatedep:
 	.venv/bin/pre-commit autoupdate
 	.venv/bin/pre-commit install
 
-##upgrade/go: Upgrade the Go toolchain, e.g. `make upgrade/go version=1.26.9` (go.mod + Dockerfile); keep $(go env GOPATH)/bin in PATH
+##upgrade/go: Upgrade the Go toolchain, e.g. `make upgrade/go version=1.27.4` (mise.toml, go.mod, Dockerfile)
 .PHONY: upgrade/go
 upgrade/go:
-	@if [ -z "$(version)" ]; then \
-		echo "Error: Please specify a version. Usage: make upgrade/go version=1.26.9"; \
-		exit 1; \
-	fi
-	go install golang.org/dl/go$(version)@latest
-	go$(version) download
-	@echo "Go $(version) downloaded successfully in $(shell go env GOPATH)/bin/go$(version). Use 'go$(version)' to run commands with this version."
-	# --remove-destination: replace, not overwrite, so a go that is running
-	# (gopls, air) does not fail the copy with "Text file busy".
-	cp --remove-destination $(shell go env GOPATH)/bin/go$(version) $(shell go env GOPATH)/bin/go
-	@echo "You should add '$(shell go env GOPATH)/bin' to your PATH before '/usr/local/go/bin'"
-	go$(version) mod edit -go=$(version)
-	go$(version) mod tidy
-	go$(version) mod verify
-	go$(version) mod download
-	# The image builds with the same toolchain (CLAUDE.md "Toolchain pins").
-	sed -i -E 's|^FROM golang:[0-9.]+-bookworm|FROM golang:$(version)-bookworm|' Dockerfile
-	@grep -n '^FROM golang:' Dockerfile
+	@test -n "$(version)" || { echo "usage: make upgrade/go version=X.Y.Z (newer ones: make upgradeable)"; exit 1; }
+	# mise.toml pins the toolchain for this repo (and installs it); go.mod and
+	# the image's build stage follow, so CI and the image build with the same
+	# compiler (CLAUDE.md "Toolchain pins").
+	mise use go@$(version)
+	mise exec -- go mod edit -go=$(version)
+	mise exec -- go mod tidy
+	mise exec -- go mod verify
+	# -i.bak: the same flag works with GNU and BSD (macOS) sed.
+	sed -i.bak -E 's|^FROM golang:[0-9.]+-bookworm|FROM golang:$(version)-bookworm|' Dockerfile && rm -f Dockerfile.bak
+	@grep -n '^go ' go.mod; grep -n '^FROM golang:' Dockerfile; mise exec -- go version
 
-##upgrade/go/list: Show the pinned Go (go.mod, Dockerfile) and the newest stable releases
-.PHONY: upgrade/go/list
-upgrade/go/list:
-	@command -v jq >/dev/null || { echo "needs jq (apt install jq)"; exit 1; }
-	@echo "pinned:  go.mod $$(sed -n 's/^go //p' go.mod)   Dockerfile $$(sed -nE 's/^FROM golang:([0-9.]+)-.*/\1/p' Dockerfile)   local $$(go env GOVERSION)"
-	@echo "stable releases (newest first; * = pinned in go.mod):"
-	@curl -fsSL 'https://go.dev/dl/?mode=json&include=all' \
-		| jq -r --arg cur "go$$(sed -n 's/^go //p' go.mod)" \
-			'[.[] | select(.stable) | .version] | .[:12][] | if . == $$cur then "  * \(.)" else "    \(.)" end'
-	@echo "upgrade with: make upgrade/go version=<x.y.z>"
-
-##upgrade/bun: Upgrade Bun, e.g. `make upgrade/bun version=1.3.15` (local binary, package.json packageManager, Dockerfile, bun.lock)
+##upgrade/bun: Upgrade Bun, e.g. `make upgrade/bun version=1.4.5` (mise.toml, package.json packageManager, Dockerfiles, bun.lock)
 .PHONY: upgrade/bun
 upgrade/bun:
-	@if [ -z "$(version)" ]; then \
-		echo "Error: Please specify a version. Usage: make upgrade/bun version=1.3.15"; \
-		exit 1; \
-	fi
-	# The official installer takes an exact tag; it replaces ~/.bun/bin/bun.
-	curl -fsSL https://bun.sh/install | bash -s "bun-v$(version)"
-	@test "$$(bun --version)" = "$(version)" || { echo "bun on PATH is $$(bun --version), not $(version): is ~/.bun/bin first in PATH?"; exit 1; }
-	# CI reads the version from packageManager (setup-bun bun-version-file);
-	# the image from the Dockerfile. Renovate moves both together too.
-	sed -i -E 's|"packageManager": "bun@[0-9.]+"|"packageManager": "bun@$(version)"|' web/package.json integrations/rigel-sync/package.json
-	sed -i -E 's|^FROM oven/bun:[0-9.]+|FROM oven/bun:$(version)|' Dockerfile integrations/rigel-sync/Dockerfile
-	cd web && bun install
-	cd web && bun run build:prod
-	cd integrations/rigel-sync && bun install
+	@test -n "$(version)" || { echo "usage: make upgrade/bun version=X.Y.Z (newer ones: make upgradeable)"; exit 1; }
+	mise use bun@$(version)
+	# CI and the images read packageManager and the Dockerfiles; Renovate moves
+	# them together too.
+	sed -i.bak -E 's|"packageManager": "bun@[0-9.]+"|"packageManager": "bun@$(version)"|' web/package.json integrations/rigel-sync/package.json \
+		&& rm -f web/package.json.bak integrations/rigel-sync/package.json.bak
+	sed -i.bak -E 's|^FROM oven/bun:[0-9.]+|FROM oven/bun:$(version)|' Dockerfile integrations/rigel-sync/Dockerfile \
+		&& rm -f Dockerfile.bak integrations/rigel-sync/Dockerfile.bak
+	cd web && mise exec -- bun install
+	cd web && mise exec -- bun run build:prod
+	cd integrations/rigel-sync && mise exec -- bun install
 	@grep -n '"packageManager"' web/package.json integrations/rigel-sync/package.json; grep -n '^FROM oven/bun:' Dockerfile integrations/rigel-sync/Dockerfile
 
-##upgrade/bun/list: Show the pinned Bun (package.json, Dockerfile) and the newest releases
-.PHONY: upgrade/bun/list
-upgrade/bun/list:
-	@command -v jq >/dev/null || { echo "needs jq (apt install jq)"; exit 1; }
-	@echo "pinned:  package.json $$(sed -nE 's/.*"packageManager": "bun@([0-9.]+)".*/\1/p' web/package.json)   Dockerfile $$(sed -nE 's|^FROM oven/bun:([0-9.]+).*|\1|p' Dockerfile)   local $$(bun --version 2>/dev/null || echo none)"
-	@echo "releases (newest first; * = pinned in package.json):"
-	@curl -fsSL 'https://api.github.com/repos/oven-sh/bun/releases?per_page=12' \
-		| jq -r --arg cur "bun-v$$(sed -nE 's/.*"packageManager": "bun@([0-9.]+)".*/\1/p' web/package.json)" \
-			'.[] | select(.prerelease | not) | .tag_name | if . == $$cur then "  * \(ltrimstr("bun-v"))" else "    \(ltrimstr("bun-v"))" end'
-	@echo "upgrade with: make upgrade/bun version=<x.y.z>"
-
-##upgradeable: Check for upgradeable dependencies
+##upgradeable: List pinned tools (mise.toml) and Go modules with newer versions
 .PHONY: upgradeable
 upgradeable:
-	@go run github.com/oligot/go-mod-upgrade@latest
+	mise outdated --bump --no-global
+	@go list -m -u -f '{{if and .Update (not .Indirect)}}{{.Path}} {{.Version}} -> {{.Update.Version}}{{end}}' all
 
 ##tidy: Tidy go modules and format code
 .PHONY: tidy
