@@ -140,6 +140,14 @@ release:
 rigel-sync/check:
 	cd integrations/rigel-sync && bun install --frozen-lockfile && bun run check
 
+##ci/image: Build rigel-ledger-ci, the image the ci job runs in (ci/Dockerfile - the mise.toml tools and PostgreSQL, no code)
+.PHONY: ci/image
+ci/image:
+	docker build -f ci/Dockerfile \
+		--build-arg MISE_VERSION=$$(sed -n 's/^ *MISE_VERSION: "\(.*\)"/\1/p' .gitea/workflows/ci-image.yaml) \
+		--secret id=gh_token,env=GH_PUBLIC_TOKEN \
+		-t rigel-ledger-ci .
+
 # the lockfile's dependencies, as CI and the image install them (about a second when already there)
 .PHONY: frontend/deps
 frontend/deps:

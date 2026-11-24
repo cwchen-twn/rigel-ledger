@@ -1,0 +1,4 @@
+# ci/Dockerfile copies only what pins the tools: nothing else is sent to the builder.
+*
+!mise.toml
+!.pre-commit-config.yaml
