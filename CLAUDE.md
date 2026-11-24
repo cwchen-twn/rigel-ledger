@@ -290,9 +290,9 @@ behaviourally identical — change one, change the other in the same commit.**
 - Gitea secrets on this repo: `REGISTRY_USER`, `REGISTRY_TOKEN` (package rw), `RELEASE_TOKEN` (repo write; mapped to
   `GITEA_TOKEN`, since Gitea forbids secret names starting `GITEA_`).
 - Gitea runner traps are inherited from hcloud (`hcloud/.gitea/CLAUDE.md`): checkout and the GoReleaser API use the
-  in-cluster Service `http://gitea-http.gitea.svc.cluster.local:3000`, `mise-action` runs with `cache: false` and an
-  empty
-  `github_token` (api.github.com rejects the Gitea job token), and docker needs the buildx plugin.
+  in-cluster Service `http://gitea-http.gitea.svc.cluster.local:3000`, `mise-action` runs with `cache: false` and
+  `github_token: ${{ secrets.MISE_GITHUB_TOKEN }}` (a no-scope github.com PAT, a user-level secret; api.github.com
+  rejects the Gitea job token, and anonymous calls are capped at 60/h), and docker needs the buildx plugin.
 - Toolchain pins: `mise.toml` pins Go, Bun and Node for this repo (mise puts them on PATH). Go is also in `go.mod` +
   Dockerfile build stage; Bun in `web/package.json` `packageManager` + Dockerfile web stage; the lint and dev tools only
   in

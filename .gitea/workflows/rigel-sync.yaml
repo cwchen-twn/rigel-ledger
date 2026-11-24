@@ -34,7 +34,9 @@ jobs:
           version: 2026.11.11 # mise itself, as on the machines
           install_args: node bun # only what this job runs
           cache: false
-          github_token: "" # the Gitea job token is rejected by api.github.com; download anonymously
+          # MISE_GITHUB_TOKEN: a no-scope github.com PAT (user/org-level secret) that lifts api.github.com's
+          # anonymous 60/h limit; the default, the Gitea job token, is rejected there (401)
+          github_token: ${{ secrets.MISE_GITHUB_TOKEN }}
 
       - name: Set up Chrome
         # The connector tests drive a pretend bank in a real browser.
