@@ -15,6 +15,8 @@ import (
 	"net/http"
 	"net/netip"
 	"strings"
+	"sync"
+	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -35,12 +37,31 @@ const (
 
 var ErrInvalidCredentials = errors.New("invalid username or password")
 
-// A bcrypt hash compared against when the username does not exist, so a
-// login for an unknown user costs the same as a wrong password.
-var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("rigel-ledger-timing-guard"), bcrypt.DefaultCost)
+// passwordCost is the bcrypt cost of new password hashes. Only tests change
+// it (UseFastHashForTests).
+var passwordCost = bcrypt.DefaultCost
+
+// UseFastHashForTests drops the bcrypt cost to its minimum. Under -race one
+// DefaultCost hash takes about a second, and the DB tests create users and
+// sign in hundreds of times (#141). internal/dbtest calls it from init. It
+// panics outside a test binary, so production can never hash weakly.
+func UseFastHashForTests() {
+	if !testing.Testing() {
+		panic("auth.UseFastHashForTests called outside a test binary")
+	}
+	passwordCost = bcrypt.MinCost
+}
+
+// dummyHash is a bcrypt hash compared against when the username does not
+// exist (or the user has no password), so such a login costs the same as a
+// wrong password. Made on first use, at passwordCost, to match real hashes.
+var dummyHash = sync.OnceValue(func() []byte {
+	h, _ := bcrypt.GenerateFromPassword([]byte("rigel-ledger-timing-guard"), passwordCost)
+	return h
+})
 
 func HashPassword(password string) (string, error) {
-	h, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	h, err := bcrypt.GenerateFromPassword([]byte(password), passwordCost)
 	return string(h), err
 }
 
@@ -49,7 +70,7 @@ func HashPassword(password string) (string, error) {
 // same bcrypt time as a real comparison, so it is not a tell.
 func CheckPassword(hash, password string) bool {
 	if hash == "" {
-		_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
+		_ = bcrypt.CompareHashAndPassword(dummyHash(), []byte(password))
 		return false
 	}
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
@@ -118,7 +139,7 @@ func (m *Manager) VerifyPassword(ctx context.Context, username, password string,
 	}
 	u, err := m.store.GetUserByUsername(ctx, username)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && !u.IsActive) {
-		_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
+		_ = bcrypt.CompareHashAndPassword(dummyHash(), []byte(password))
 		if err == nil {
 			return fail(&u.ID)
 		}

@@ -26,9 +26,15 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/cwchen-twn/rigel-ledger/internal/auth"
 	"github.com/cwchen-twn/rigel-ledger/internal/db"
 	"github.com/cwchen-twn/rigel-ledger/migrations"
 )
+
+// Every package whose tests touch the database imports dbtest, and those are
+// the tests that create users and sign in: hash at bcrypt's minimum cost
+// there, not the second per hash DefaultCost takes under -race (#141).
+func init() { auth.UseFastHashForTests() }
 
 // templateLock is the advisory lock that serializes building the template
 // across test packages, which `go test ./...` runs as concurrent processes.
