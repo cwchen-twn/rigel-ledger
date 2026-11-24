@@ -21,7 +21,7 @@ RUN bun install --frozen-lockfile --production \
       ! -name 'ort-wasm-simd-threaded.wasm' ! -name package.json -delete \
  && find node_modules -name '*.map' -delete
 
-FROM node:22.23.3-bookworm-slim
+FROM node:24.22.2-bookworm-slim
 # Debian's chromium (security-updated in bookworm-security); tini reaps the
 # renderer processes Chrome leaves when it is killed, which Node as PID 1
 # would not.

@@ -912,7 +912,7 @@ token kinds). Migration `000008`.
   ```
 
   The key is generated inside the volume on first start, so it stays on that machine.
-  The image (`integrations/rigel-sync/Dockerfile`, P4c-2d) is Node 22 on Debian
+  The image (`integrations/rigel-sync/Dockerfile`, P4c-2d) is Node 24 on Debian
   bookworm-slim with Debian's Chromium, tini as PID 1 (Chrome leaves renderer
   processes to reap), the CAPTCHA model baked in at its sha256, and the runner as
   the unprivileged `node` user. Chrome's sandbox is off (`RIGEL_SYNC_NO_SANDBOX=1`):
