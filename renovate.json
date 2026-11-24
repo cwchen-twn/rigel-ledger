@@ -11,7 +11,6 @@
     "dockerfile",
     "github-actions",
     "pre-commit",
-    "pep621",
     "custom.regex"
   ],
   "pre-commit": {
@@ -25,7 +24,7 @@
   ],
   "packageRules": [
     {
-      "description": "The Go toolchain is pinned in mise.toml, in go.mod (go directive, read by setup-go in both CI forges) and in the Dockerfile build stage. Move them in one PR so CI and the image never build with different compilers.",
+      "description": "The Go toolchain is pinned in mise.toml (what CI and the machines run), go.mod (go directive) and the Dockerfile build stage. Move them in one PR so CI and the image never build with different compilers.",
       "matchDepNames": [
         "go",
         "golang"
@@ -33,7 +32,7 @@
       "groupName": "go toolchain"
     },
     {
-      "description": "Bun is pinned in mise.toml, in web/package.json packageManager (read by setup-bun in both CI forges) and in the Dockerfile web stage. Same reasoning as the Go toolchain.",
+      "description": "Bun is pinned in mise.toml (what CI and the machines run), web/ and integrations/rigel-sync/ package.json packageManager, and the Dockerfiles. Same reasoning as the Go toolchain.",
       "matchDepNames": [
         "bun",
         "oven/bun"
@@ -70,25 +69,7 @@
       "groupName": "ci actions"
     },
     {
-      "description": "sqlc is pinned in the Makefile (go run ...@vX) and in both CI workflows; move them together.",
-      "matchDepNames": [
-        "sqlc-dev/sqlc",
-        "github.com/sqlc-dev/sqlc"
-      ],
-      "groupName": "sqlc"
-    },
-    {
-      "description": "requires-python is the floor the project supports, not a dependency to pin: rangeStrategy pin made it ==3.14.8 while .python-version says 3.13, and uv sync refused in the hooks job. The interpreter is chosen by .python-version.",
-      "matchManagers": [
-        "pep621"
-      ],
-      "matchDepTypes": [
-        "requires-python"
-      ],
-      "enabled": false
-    },
-    {
-      "description": "engines is the oldest Node the sync runner accepts, not a dependency to pin: rangeStrategy pin made it exactly v26.11.1 (#94) while the runner image runs Node 22. Same mistake as requires-python above.",
+      "description": "engines is the oldest Node the sync runner accepts, not a dependency to pin: rangeStrategy pin made it exactly v26.11.1 (#94) while the runner image ran Node 22.",
       "matchManagers": [
         "npm",
         "bun"
@@ -99,7 +80,7 @@
       "enabled": false
     },
     {
-      "description": "The Node runtime is mise.toml, the runner image (integrations/rigel-sync/Dockerfile) and setup-node's node-version in both CI forges. Move them in one PR so CI tests the Node that ships; renovate offers only LTS majors here.",
+      "description": "The Node runtime is mise.toml (CI's Node, through jdx/mise-action) and the runner image (integrations/rigel-sync/Dockerfile). Move them in one PR so CI tests the Node that ships; renovate offers only LTS majors here.",
       "matchDepNames": [
         "node"
       ],

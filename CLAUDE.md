@@ -9,13 +9,24 @@ double-entry bookkeeping, multi-currency, IFRS-flavoured reports, statement impo
 deployed (ledger.chenantunez.com, tailnet-only), so **applied migrations are frozen**: schema changes are new migration
 pairs.
 
+New UI features start with the `product-docs` skill (PRD, flows, mockups in `docs/product/`), then the
+`frontend-ui` skill; `docs/ARCHITECTURE.md` stays the design of record for the system as a whole.
+
 **Read `docs/ARCHITECTURE.md` before designing anything.** It is the accepted target design and the roadmap P1-P7; P1,
 P2, P2.5 (accounts, administration, throttling, two-factor sign-in) and P3 (rates, statements, tags, rebase) are done;
 P4 (sync and review) is all but done, and its end is the v1.0.0 milestone (#45: the first deploy since 2026-09-24).
 
 ## Common Commands
 
+Tool versions are pinned in `mise.toml` (Go, Bun, Node, sqlc, staticcheck, govulncheck, migrate, air, swag,
+gitleaks, pre-commit, markdownlint); the Makefile puts them first on PATH. `make help` lists every target.
+
 ```bash
+# Setup and upkeep
+make init              # Once per clone: mise install, go + bun dependencies, git hooks (commit -> lint, push -> audit)
+make upgradeable       # Pinned tools and Go modules with newer versions
+make upgrade/go version=X.Y.Z   # Go everywhere: mise.toml, go.mod, Dockerfile (upgrade/bun likewise)
+
 # Development
 make run/live          # Hot-reload with Air
 make run/livedebug     # Hot-reload + Delve debugger
@@ -25,18 +36,23 @@ make build/dev         # Dev build (with debug flags)
 make build/prod        # Optimized production build (static binary)
 
 # Quality
-make tidy              # Format code and tidy modules
-make audit             # tests + tidy check + gofmt + vet + staticcheck + govulncheck
+make tidy              # Format code, tidy modules, markdownlint --fix
+make lint              # Seconds, the pre-commit hook: file hooks, markdownlint, gofmt, vet, staticcheck, sqlc diff
+make audit             # The gate, the pre-push hook and CI: frontend build + lint + test + tidy/verify + govulncheck + gitleaks
 make test              # All tests with -race; DB tests need TEST_DATABASE_URL
 make test/cover        # HTML coverage report
 
 # Database
 make sqlc              # Regenerate internal/db after touching migrations/ or internal/db/queries/
-make db/reset          # Drop the dev database's tables and re-migrate (destroys local data)
+make db/reset confirm=yes         # Drop the dev database's tables and re-migrate (destroys local data)
 make migrations/new name=<name>   # New migration pair: the only way to change the schema now
 
 # Docs
 make swag              # Regenerate Swagger/OpenAPI docs (writes to api/)
+
+# Release (tags main; CI publishes, see "CI and releases")
+make release version=X.Y.Z summary="..."               # preview the tag message
+make release version=X.Y.Z summary="..." confirm=yes   # tag and push
 
 # Admin CLI (also shipped in the image as rigel-ledger-cli)
 go run ./cmd/cli create-user -u alice -e alice@example.com   # password read from stdin; walks the wizard at first sign-in
@@ -249,28 +265,38 @@ Gitea (`git.chenantunez.com`, private) is the primary remote and push-mirrors ev
 repo. Gitea runs only `.gitea/workflows/`, GitHub runs only `.github/workflows/`, and **the two sets must stay
 behaviourally identical — change one, change the other in the same commit.**
 
-| Trigger | `ci` (frontend build, `sqlc diff`, `make audit` against PostgreSQL 18, pre-commit hooks) | `image` | `release` (GoReleaser) |
-|---|---|---|---|
-| any push / PR | yes | — | — |
-| push to `main` | yes | `:sha-<12>`, `:latest` | — |
-| tag `vX.Y.Z` | yes | `:vX.Y.Z`, `:sha-<12>` | binaries (linux/darwin × amd64/arm64) + checksums |
+| Trigger | `ci` (`make audit` against PostgreSQL 18) | `rigel-sync` (`make rigel-sync/check`) | `image` | `release` (GoReleaser) |
+|---|---|---|---|---|
+| pull request | yes, unless docs-only | if `integrations/rigel-sync/**` or `mise.toml` changed | — | — |
+| push to `main` | yes, unless docs-only | same | `:sha-<12>`, `:latest` | — |
+| tag `vX.Y.Z` | — | — | `:vX.Y.Z`, `:sha-<12>` | binaries (linux/darwin × amd64/arm64) + checksums |
+
+- A PR branch push runs `ci` once (the `pull_request` event), not also as a `push`: the single runner used to run both,
+  one after the other. Docs-only means every changed file matches `**/*.md`, `docs/**`, `LICENSE` or `.mailmap`;
+  markdownlint still checks those in the pre-commit hook. There is no branch protection, so a skipped run blocks
+  nothing.
+- CI runs nothing that isn't a make target: `jdx/mise-action` installs `mise.toml`'s tools, then `make audit`.
 
 - Images: `git.chenantunez.com/cwchen-twn/rigel-ledger` (Gitea) and `ghcr.io/cwchen-twn/rigel-ledger` (GitHub), built
   from the same `Dockerfile`, linux/amd64 only. The image carries `rigel-ledger` (entrypoint) and `rigel-ledger-cli`.
   The sync runner image `rigel-ledger-sync` (`integrations/rigel-sync/Dockerfile`: Node, Debian's Chromium, the CAPTCHA
   model) is built and pushed alongside it by the same workflows, with the same tags, also linux/amd64 only.
-- Releases are cut by hand: `git tag vX.Y.Z && git push origin vX.Y.Z` on Gitea; the mirror carries the tag to GitHub.
-  One `.goreleaser.yaml` serves both; `GORELEASER_FORCE_TOKEN` in each workflow picks the forge.
+- Releases: `make release version=X.Y.Z summary="..."` (`scripts/release.sh`) previews the annotated tag, grouped
+  Features/Fixes/Other like the GoReleaser changelog; `confirm=yes` tags a clean, in-sync `main` and pushes. Tag only a
+  commit whose CI passed. The mirror carries the tag to GitHub. One `.goreleaser.yaml` serves both;
+  `GORELEASER_FORCE_TOKEN` in each workflow picks the forge.
 - The version shown in logs comes from `-X main.version` (both `cmd/*/main.go`); a non-empty `APP_VERSION` env var
   overrides it.
 - Gitea secrets on this repo: `REGISTRY_USER`, `REGISTRY_TOKEN` (package rw), `RELEASE_TOKEN` (repo write; mapped to
   `GITEA_TOKEN`, since Gitea forbids secret names starting `GITEA_`).
 - Gitea runner traps are inherited from hcloud (`hcloud/.gitea/CLAUDE.md`): checkout and the GoReleaser API use the
-  in-cluster Service `http://gitea-http.gitea.svc.cluster.local:3000`, `setup-go` runs with `cache: false`, and docker
-  needs the buildx plugin.
+  in-cluster Service `http://gitea-http.gitea.svc.cluster.local:3000`, `mise-action` runs with `cache: false` and an
+  empty
+  `github_token` (api.github.com rejects the Gitea job token), and docker needs the buildx plugin.
 - Toolchain pins: `mise.toml` pins Go, Bun and Node for this repo (mise puts them on PATH). Go is also in `go.mod` +
-  Dockerfile build stage; Bun in `web/package.json` `packageManager` + Dockerfile web stage; sqlc in the Makefile + both
-  CI files (`SQLC_VERSION`). `make upgrade/go version=X.Y.Z` / `make upgrade/bun version=X.Y.Z` move a toolchain
+  Dockerfile build stage; Bun in `web/package.json` `packageManager` + Dockerfile web stage; the lint and dev tools only
+  in
+  `mise.toml`. `make upgrade/go version=X.Y.Z` / `make upgrade/bun version=X.Y.Z` move a toolchain
   everywhere at once, `make upgradeable` lists what is newer. Renovate (config in `renovate.json`) groups each set so
   they move together.
 - How CI gets PostgreSQL 18 is the one intended difference between forges: GitHub uses a `services:` container; Gitea
@@ -285,5 +311,22 @@ what it runs, and features are checked on `make run/live` / a local server. Do n
 ## Committing
 
 - Use the `commit-style` skill (`.claude/skills/commit-style/SKILL.md`) for every commit message and PR description.
-- Commit on a branch: pre-commit runs `no-commit-to-branch main`, `make audit` and gitleaks. Fix failures; never
-  `--no-verify`.
+- Commit on a branch. On commit the hooks run `no-commit-to-branch main`, the file checks, gitleaks and `make lint`
+  (seconds); on push they run `make audit`, the gate, with the database tests (set `TEST_DATABASE_URL` in `.env`). This
+  repo's override of AGENTS.md's "audit before every commit". Fix failures; never `--no-verify`.
+
+## Git profile
+
+```text
+issue-first: yes
+branch: <issue>-<slug>
+merge: fast-forward-only
+commit-style: .claude/skills/commit-style/SKILL.md
+tags: vX.Y.Z
+release: goreleaser
+image: git.chenantunez.com/cwchen-twn/rigel-ledger   # and -sync; code only, no personal data in the image
+gate: make audit                 # pre-push hook and CI; the pre-commit hook runs make lint
+deploy: hcloud chart (k3s/helm/rigel-ledger) via a Renovate bump PR; none before v1.0.0
+```
+
+Gitea (`cwchen-twn/rigel-ledger`, `tea`) is the source; GitHub is a push mirror, never worked on directly.

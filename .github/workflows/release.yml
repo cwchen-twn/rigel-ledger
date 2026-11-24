@@ -21,15 +21,12 @@ jobs:
         with:
           fetch-depth: 0 # the changelog needs history and the previous tag
 
-      - name: Set up Go
-        uses: actions/setup-go@v7.0.0
+      - name: Install the pinned tools
+        # Go and Bun from mise.toml; .goreleaser.yaml's before hook builds the frontend with bun
+        uses: jdx/mise-action@v5.2.10
         with:
-          go-version-file: go.mod
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2.2.0
-        with:
-          bun-version-file: web/package.json
+          version: 2026.11.11 # mise itself, as on the machines
+          install_args: go bun # only what this job runs
 
       - name: GoReleaser
         uses: goreleaser/goreleaser-action@v7.3.0

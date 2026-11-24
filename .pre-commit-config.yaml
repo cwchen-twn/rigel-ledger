@@ -1,3 +1,10 @@
+# Hooks installed by `make init`: on commit, the fast file checks on staged files plus `make lint`;
+# on push, `make audit` (the gate, with the database tests). `make lint/hygiene` runs the file checks
+# on every file, so CI applies them too (it skips make-lint/make-audit, which would recurse, and the
+# branch and staged-only hooks).
+default_install_hook_types: [pre-commit, pre-push]
+default_stages: [pre-commit]
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -21,12 +28,6 @@ repos:
   - repo: https://github.com/python-jsonschema/check-jsonschema
     rev: 0.39.0
     hooks:
-      - id: check-gitlab-ci
-        args: ["--verbose"]
-
-  - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.39.0
-    hooks:
       - id: check-github-workflows
         args: ["--verbose"]
 
@@ -37,16 +38,24 @@ repos:
 
   - repo: local
     hooks:
-      - id: make-audit
-        name: Make Audit
-        entry: make audit
+      - id: make-lint
+        name: make lint
+        entry: make lint
         language: system
         stages: [pre-commit]
-        # One run for the whole commit: with file names, pre-commit split a
-        # large commit into batches and ran the full audit once per batch,
-        # in parallel, against one database.
+        # One run for the whole commit: with file names, pre-commit splits a
+        # large commit into batches and runs the target once per batch.
+        pass_filenames: false
+        require_serial: true
+        always_run: true
+
+      - id: make-audit
+        name: make audit
+        entry: make audit
+        language: system
+        stages: [pre-push]
+        # The whole gate once per push, against one database (see make-lint).
         pass_filenames: false
         require_serial: true
         always_run: true
         verbose: true
-        description: "Run code quality checks and security audits via make audit"

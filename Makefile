@@ -1,31 +1,81 @@
+# Task interface for this repo: run `make` (or `make help`) to list targets.
+# Tool versions live in mise.toml; this file only runs tasks. GNU Make 3.81 compatible (macOS).
+# Contract targets first (makefile skill: init tidy lint test audit build run updatedep upgradeable
+# clean release), then this repo's group/action targets.
+
 -include .env
+
+# the pinned tools (mise.toml) come first on PATH, so make, pre-commit and CI run the same versions
+export PATH := $(shell mise bin-paths 2>/dev/null | tr '\n' ':')$(PATH)
+# A shell that mise activated elsewhere may still export another Go's GOROOT; unset, go finds its own
+unexport GOROOT
 
 APP_VERSION := $(shell git describe --exact-match --tags HEAD 2>/dev/null || git rev-parse --short HEAD)
 DB_DSN := $(PG_USER):$(PG_PASS)@$(PG_HOST):$(PG_PORT)/$(APP_DBNAME)?sslmode=disable
 
 CURRENT_BRANCH := $(shell git branch --show-current)
-DATE := $(shell date -u +%Y%m%d)
 BUILD_DIR := /tmp/bin
 
+.DEFAULT_GOAL := help
+
+##help: List the targets
 .PHONY: help
 help:
-	@echo 'Usage:'
-	@sed -n 's/^##//p' $(MAKEFILE_LIST) | column -t -s ':' |  sed -e 's/^/ /'
+	@echo 'Usage: make <target> [name=value ...]'
+	@sed -n 's/^##//p' $(MAKEFILE_LIST) | column -t -s ':' | sed -e 's/^/ /'
 
-##init: Initialize the project, including go modules and uv packages
+##init: Install the pinned tools (mise), Go and bun dependencies, and the git hooks (commit -> lint, push -> audit)
 .PHONY: init
 init:
-	@if [ ! -f go.mod ]; then go mod init github.com/cwchen-twn/rigel-ledger; else echo "Project exists, skipping go mod init"; fi
-	@go mod tidy
-	@go mod verify
-	@go mod download
-	@command -v uv >/dev/null 2>&1 || curl -LsSf https://astral.sh/uv/install.sh | sh
-	@uv sync --dev
-	@.venv/bin/pre-commit install
-	@command -v bun >/dev/null 2>&1 || curl -fsSL https://bun.sh/install | bash
-	@cd web && bun install
+	mise install
+	go mod download
+	cd web && bun install --frozen-lockfile
+	cd integrations/rigel-sync && bun install --frozen-lockfile
+	pre-commit install --hook-type pre-commit --hook-type pre-push
 
-##updatedep: Update dependencies -- go modules, web packages (bun) and the pre-commit hooks
+##tidy: Format code and tidy modules (writes files)
+.PHONY: tidy
+tidy:
+	go mod tidy -v
+	go fmt ./...
+	markdownlint-cli2 --fix
+
+##lint: Static checks, read-only and quick (the pre-commit hook) - file hygiene, markdown, gofmt, vet, staticcheck, sqlc diff
+.PHONY: lint
+lint: lint/hygiene lint/markdown lint/go lint/sqlc
+
+.PHONY: lint/hygiene lint/markdown lint/go lint/sqlc
+# the pre-commit file checks on every file (make-lint and make-audit would recurse; the others only apply to a commit)
+lint/hygiene:
+	SKIP=make-lint,make-audit,no-commit-to-branch,gitleaks pre-commit run --all-files --show-diff-on-failure
+lint/markdown:
+	markdownlint-cli2
+lint/go:
+	@test -z "$$(gofmt -l .)" || { gofmt -l .; echo "run: make tidy"; exit 1; }
+	go vet ./...
+	staticcheck -checks=all,-ST1000,-U1000 ./...
+# internal/db is generated: fail if it no longer matches migrations/ and internal/db/queries/
+lint/sqlc:
+	sqlc diff
+
+##test: Run all tests with race detection (DB tests need TEST_DATABASE_URL, see .env.example)
+.PHONY: test
+test:
+	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -race -buildvcs ./...
+
+##audit: The gate (pre-push hook and CI) - frontend build, lint, tests, tidy/verify, govulncheck, gitleaks
+.PHONY: audit
+audit: frontend/build/prod lint test
+	go mod tidy -diff
+	go mod verify
+	govulncheck ./...
+	gitleaks git --no-banner --redact .
+
+##build: Build the production binary (alias of build/prod)
+.PHONY: build
+build: build/prod
+
+##updatedep: Update dependencies -- go modules, web packages (bun) and the pre-commit hooks (writes files)
 .PHONY: updatedep
 updatedep:
 	go get -u ./...
@@ -35,9 +85,7 @@ updatedep:
 	cd web && bun update --latest
 	cd web && bun run build:prod
 	cd integrations/rigel-sync && bun update --latest && bun run check
-	uv sync --upgrade-package pre-commit
-	.venv/bin/pre-commit autoupdate
-	.venv/bin/pre-commit install
+	pre-commit autoupdate
 
 ##upgrade/go: Upgrade the Go toolchain, e.g. `make upgrade/go version=1.27.4` (mise.toml, go.mod, Dockerfile)
 .PHONY: upgrade/go
@@ -76,16 +124,26 @@ upgradeable:
 	mise outdated --bump --no-global
 	@go list -m -u -f '{{if and .Update (not .Indirect)}}{{.Path}} {{.Version}} -> {{.Update.Version}}{{end}}' all
 
-##tidy: Tidy go modules and format code
-.PHONY: tidy
-tidy:
-	go mod tidy -v
-	go fmt ./...
+##clean: Remove build output
+.PHONY: clean
+clean:
+	rm -rf $(BUILD_DIR)/rigel-ledger* ./web/static/dist ./dist ./tmp
+
+##release: Preview the vX.Y.Z tag, and with confirm=yes tag main and push - make release version=X.Y.Z summary="..."
+.PHONY: release
+release:
+	@test -n "$(version)" || { echo 'usage: make release version=X.Y.Z summary="..." [confirm=yes]'; exit 1; }
+	./scripts/release.sh "$(version)" "$(summary)" "$(confirm)"
 
 ##rigel-sync/check: Typecheck and test the rigel-sync runner (Node 22.18+ runs its TypeScript directly)
 .PHONY: rigel-sync/check
 rigel-sync/check:
 	cd integrations/rigel-sync && bun install --frozen-lockfile && bun run check
+
+# the lockfile's dependencies, as CI and the image install them (about a second when already there)
+.PHONY: frontend/deps
+frontend/deps:
+	cd web && bun install --frozen-lockfile
 
 ##frontend/install: Install frontend dependencies using bun
 .PHONY: frontend/install
@@ -94,28 +152,13 @@ frontend/install:
 
 ##frontend/build/dev: Build frontend for development (with source maps)
 .PHONY: frontend/build/dev
-frontend/build/dev:
+frontend/build/dev: frontend/deps
 	cd web && bun run build:dev
 
 ##frontend/build/prod: Build frontend for production (minified)
 .PHONY: frontend/build/prod
-frontend/build/prod:
+frontend/build/prod: frontend/deps
 	cd web && bun run build:prod
-
-##audit: Run code quality checks and security audits
-.PHONY: audit
-audit: test
-	go mod tidy -diff
-	go mod verify
-	test -z "$(shell gofmt -l .)"
-	go vet ./...
-	go run honnef.co/go/tools/cmd/staticcheck@latest -checks=all,-ST1000,-U1000 ./...
-	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
-
-##test: Run all tests with race detection (DB tests need TEST_DATABASE_URL, see .env.example)
-.PHONY: test
-test:
-	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test -v -race -buildvcs ./...
 
 ##test/cover: Run tests with coverage report
 .PHONY: test/cover
@@ -189,18 +232,18 @@ run: build/dev
 ##run/live: Run with live reload using Air for development
 .PHONY: run/live
 run/live: frontend/build/dev
-	(cd web && bun run build:watch) & VITE_PID=$$!; go run github.com/air-verse/air@latest -c .air.toml; kill $$VITE_PID 2>/dev/null
+	(cd web && bun run build:watch) & VITE_PID=$$!; air -c .air.toml; kill $$VITE_PID 2>/dev/null
 
 ##run/livedebug: Run with live reload using Air, and debug with delve for development
 .PHONY: run/livedebug
 run/livedebug: frontend/build/dev
-	(cd web && bun run build:watch) & VITE_PID=$$!; go run github.com/air-verse/air@latest -c .air.toml \
+	(cd web && bun run build:watch) & VITE_PID=$$!; air -c .air.toml \
 		--build.full_bin "dlv exec $(BUILD_DIR)/rigel-ledger --listen=127.0.0.1:2345 --headless=true --api-version=2 --accept-multiclient --continue --log -- "; kill $$VITE_PID 2>/dev/null
 
-##sqlc: Regenerate internal/db from migrations/ and internal/db/queries/ (CI fails if this is stale)
+##sqlc: Regenerate internal/db from migrations/ and internal/db/queries/ (make lint fails if this is stale)
 .PHONY: sqlc
 sqlc:
-	go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
+	sqlc generate
 
 ##db/check-dump dump=<file>: Restore a production backup into a throwaway database, migrate it with this build, check it starts and its books' totals hold (#45)
 .PHONY: db/check-dump
@@ -208,14 +251,16 @@ db/check-dump:
 	@test -n "$(dump)" || (echo 'usage: make db/check-dump dump=<file>' && exit 2)
 	@TEST_DATABASE_URL="$(TEST_DATABASE_URL)" ./scripts/check-dump.sh $(dump)
 
-##db/reset: Drop every table in the dev database and re-apply migrations (destroys local data)
+##db/reset: Drop every table in the dev database and re-apply migrations (destroys local data) - make db/reset confirm=yes
 .PHONY: db/reset
 db/reset:
-	go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest \
+	@echo "drops every table in $(APP_DBNAME) on $(PG_HOST):$(PG_PORT), then re-applies migrations/"
+	@test "$(confirm)" = yes || { echo "rerun with confirm=yes"; exit 1; }
+	migrate \
 		-path ./migrations \
 		-database "postgres://$(DB_DSN)" \
 		drop -f
-	go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest \
+	migrate \
 		-path ./migrations \
 		-database "postgres://$(DB_DSN)" \
 		up
@@ -223,7 +268,7 @@ db/reset:
 ##swag: Generate swagger documentation
 .PHONY: swag
 swag:
-	go run github.com/swaggo/swag/cmd/swag@latest init -g internal/routes/router.go -o ./api
+	swag init -g internal/routes/router.go -o ./api
 	@# swag leaves swagger.json without a final newline, which the end-of-file
 	@# hook then adds, failing the commit once; add it here instead.
 	@for f in api/docs.go api/swagger.json api/swagger.yaml; do [ -z "$$(tail -c1 $$f)" ] || echo >> $$f; done
@@ -231,20 +276,19 @@ swag:
 ##git/analyze: Analyze the git repository using git-of-theseus
 .PHONY: git/analyze
 git/analyze:
-	@uv sync --dev
-	@.venv/bin/git-of-theseus-analyze --procs 10 --branch $(CURRENT_BRANCH) --outdir ./git-of-theseus ./
-	@.venv/bin/git-of-theseus-line-plot --outfile ./git-of-theseus/line_plot_author.png ./git-of-theseus/authors.json
-	@.venv/bin/git-of-theseus-line-plot --normalize --outfile ./git-of-theseus/line_plot_author_n.png ./git-of-theseus/authors.json
-	@.venv/bin/git-of-theseus-stack-plot --normalize --outfile ./git-of-theseus/stack_plot_author_n.png ./git-of-theseus/authors.json
-	@.venv/bin/git-of-theseus-survival-plot --outfile ./git-of-theseus/survival_plot.png ./git-of-theseus/survival.json
-	@.venv/bin/git-of-theseus-line-plot --outfile ./git-of-theseus/line_plot_ext.png ./git-of-theseus/exts.json
-	@.venv/bin/git-of-theseus-line-plot --normalize --outfile ./git-of-theseus/line_plot_ext_n.png ./git-of-theseus/exts.json
-	@.venv/bin/git-of-theseus-stack-plot --normalize --outfile ./git-of-theseus/stack_plot_ext_n.png ./git-of-theseus/exts.json
-	@.venv/bin/git-of-theseus-stack-plot --outfile ./git-of-theseus/stack_plot_ext.png ./git-of-theseus/exts.json
-	@.venv/bin/git-of-theseus-line-plot --outfile ./git-of-theseus/line_plot_cohorts.png ./git-of-theseus/cohorts.json
-	@.venv/bin/git-of-theseus-line-plot --normalize --outfile ./git-of-theseus/line_plot_cohorts_n.png ./git-of-theseus/cohorts.json
-	@.venv/bin/git-of-theseus-stack-plot --normalize --outfile ./git-of-theseus/stack_plot_cohorts_n.png ./git-of-theseus/cohorts.json
-	@.venv/bin/git-of-theseus-stack-plot --outfile ./git-of-theseus/stack_plot_cohorts.png ./git-of-theseus/cohorts.json
+	@uvx --from git-of-theseus==0.3.4 git-of-theseus-analyze --procs 10 --branch $(CURRENT_BRANCH) --outdir ./git-of-theseus ./
+	@uvx --from git-of-theseus==0.3.4 git-of-theseus-line-plot --outfile ./git-of-theseus/line_plot_author.png ./git-of-theseus/authors.json
+	@uvx --from git-of-theseus==0.3.4 git-of-theseus-line-plot --normalize --outfile ./git-of-theseus/line_plot_author_n.png ./git-of-theseus/authors.json
+	@uvx --from git-of-theseus==0.3.4 git-of-theseus-stack-plot --normalize --outfile ./git-of-theseus/stack_plot_author_n.png ./git-of-theseus/authors.json
+	@uvx --from git-of-theseus==0.3.4 git-of-theseus-survival-plot --outfile ./git-of-theseus/survival_plot.png ./git-of-theseus/survival.json
+	@uvx --from git-of-theseus==0.3.4 git-of-theseus-line-plot --outfile ./git-of-theseus/line_plot_ext.png ./git-of-theseus/exts.json
+	@uvx --from git-of-theseus==0.3.4 git-of-theseus-line-plot --normalize --outfile ./git-of-theseus/line_plot_ext_n.png ./git-of-theseus/exts.json
+	@uvx --from git-of-theseus==0.3.4 git-of-theseus-stack-plot --normalize --outfile ./git-of-theseus/stack_plot_ext_n.png ./git-of-theseus/exts.json
+	@uvx --from git-of-theseus==0.3.4 git-of-theseus-stack-plot --outfile ./git-of-theseus/stack_plot_ext.png ./git-of-theseus/exts.json
+	@uvx --from git-of-theseus==0.3.4 git-of-theseus-line-plot --outfile ./git-of-theseus/line_plot_cohorts.png ./git-of-theseus/cohorts.json
+	@uvx --from git-of-theseus==0.3.4 git-of-theseus-line-plot --normalize --outfile ./git-of-theseus/line_plot_cohorts_n.png ./git-of-theseus/cohorts.json
+	@uvx --from git-of-theseus==0.3.4 git-of-theseus-stack-plot --normalize --outfile ./git-of-theseus/stack_plot_cohorts_n.png ./git-of-theseus/cohorts.json
+	@uvx --from git-of-theseus==0.3.4 git-of-theseus-stack-plot --outfile ./git-of-theseus/stack_plot_cohorts.png ./git-of-theseus/cohorts.json
 
 ##migrations/new: create a new database migration (e.g. $ make migrations/new name=init_database)
 .PHONY: migrations/new
@@ -253,12 +297,12 @@ migrations/new:
 		echo "Error: Please specify a name. Usage: make migrations/new name=migration_name"; \
 		exit 1; \
 	fi
-	go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest create -seq -ext=.sql -dir=./migrations $(name)
+	migrate create -seq -ext=.sql -dir=./migrations $(name)
 
 ##migrations/version: show the current migration version
 .PHONY: migrations/version
 migrations/version:
-	go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest \
+	migrate \
 		-path ./migrations \
 		-database "postgres://$(DB_DSN)" \
 		version
@@ -266,18 +310,20 @@ migrations/version:
 ##migrations/up: apply all pending migrations
 .PHONY: migrations/up
 migrations/up:
-	go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest \
+	migrate \
 		-path ./migrations \
 		-database "postgres://$(DB_DSN)" \
 		up
 
-##migrations/down: revert the last migration
+##migrations/down: revert the last migration (destroys its data) - make migrations/down confirm=yes
 .PHONY: migrations/down
 migrations/down:
-	go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest \
+	@echo "reverts the newest migration in $(APP_DBNAME) on $(PG_HOST):$(PG_PORT)"
+	@test "$(confirm)" = yes || { echo "rerun with confirm=yes"; exit 1; }
+	migrate \
 		-path ./migrations \
 		-database "postgres://$(DB_DSN)" \
-		down
+		down 1
 
 ##migrations/goto: go to a specific migration (e.g. $ make migrations/goto version=1)
 .PHONY: migrations/goto
@@ -286,7 +332,7 @@ migrations/goto:
 		echo "Error: Please specify a version. Usage: make migrations/goto version=1"; \
 		exit 1; \
 	fi
-	go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest \
+	migrate \
 		-path ./migrations \
 		-database "postgres://$(DB_DSN)" \
 		goto $(version)

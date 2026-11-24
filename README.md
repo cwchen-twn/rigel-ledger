@@ -38,8 +38,11 @@ The target design (schema, multi-currency, IFRS reports, imports, deployment) is
 
 ## Getting started
 
+The only prerequisite is [mise](https://mise.jdx.dev): it installs the pinned Go, Bun, Node and tools from
+`mise.toml`.
+
 ```bash
-# Init the project using make
+# Install the pinned tools, the dependencies and the git hooks
 make init
 
 # Point .env at a PostgreSQL server (see .env.example), then create a user.
