@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { afterEach, beforeEach, describe, test } from 'node:test';
+import { afterEach, beforeEach, describe, mock, test } from 'node:test';
 import { einvoice, invoiceDay } from '../src/connectors/tw/einvoice.ts';
 import { type State, type SyncContext, SyncError } from '../src/connectors/types.ts';
 import { BARCODE, type FakeEInvoice, installFakeEInvoice } from './fake-einvoice.ts';
@@ -13,9 +13,16 @@ test('an invoice\'s day is Taiwan\'s, whatever form upstream gives', () => {
 describe('tw-einvoice against a pretend e-invoice API', () => {
   let api: FakeEInvoice;
   beforeEach(() => {
+    // The connector asks for the last two bimonthly periods before today, and the
+    // pretend invoices are dated 2026-08/09: pin today inside the Sep-Oct period,
+    // or the August one drops out once the calendar moves on (it did in November).
+    mock.timers.enable({ apis: ['Date'], now: new Date('2026-09-20T12:00:00+08:00') });
     api = installFakeEInvoice();
   });
-  afterEach(() => api.restore());
+  afterEach(() => {
+    api.restore();
+    mock.timers.reset();
+  });
 
   const run = (credentials: Record<string, string>, state: State) => {
     const saved: State[] = [];
