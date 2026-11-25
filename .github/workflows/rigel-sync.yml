@@ -1,7 +1,8 @@
 # The Node sync runner (integrations/rigel-sync): typecheck, node:test, and that vendor/ bundles are
 # what their vendored all-set-tw source gives. Node runs our TypeScript directly (type stripping), so
-# there is no build; Bun installs the dependencies and bundles vendor/. Node and Bun come from
-# mise.toml. Runs only when the runner changes. Mirrors .gitea/workflows/rigel-sync.yaml -- change both together.
+# there is no build; Bun installs the dependencies and bundles vendor/. Node, Bun and Chromium come
+# from rigel-ledger-ci (ci/Dockerfile), the image the ci job runs in. Runs only when the runner or the
+# image changes. Mirrors .gitea/workflows/rigel-sync.yaml -- change both together.
 
 name: rigel-sync
 
@@ -12,11 +13,13 @@ on:
       - "integrations/rigel-sync/**"
       - ".github/workflows/rigel-sync.yml"
       - mise.toml # Node and Bun
+      - "ci/**" # the image: Chromium, the CAPTCHA model
   pull_request:
     paths:
       - "integrations/rigel-sync/**"
       - ".github/workflows/rigel-sync.yml"
       - mise.toml # Node and Bun
+      - "ci/**" # the image: Chromium, the CAPTCHA model
   workflow_dispatch:
 
 permissions:
@@ -25,30 +28,19 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/cwchen-twn/rigel-ledger-ci:main
+    env:
+      # The image sets CHROME_PATH (Debian's chromium) and RIGEL_SYNC_OCR_MODEL (the CAPTCHA
+      # model, baked in); the job runs as root, which the launcher already runs without a sandbox.
+      RIGEL_SYNC_REQUIRE_CHROME: "1"
+      MISE_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
 
-      - name: Install the pinned tools
-        uses: jdx/mise-action@v5.2.10
-        with:
-          version: 2026.11.11 # mise itself, as on the machines
-          install_args: node bun # only what this job runs
-
-      - name: Set up Chrome
-        # The connector tests drive a pretend bank in a real browser.
-        id: chrome
-        uses: browser-actions/setup-chrome@v2.2.0
-        with:
-          install-dependencies: true
+      - name: Pinned tools
+        run: mise install node bun
 
       - name: make rigel-sync/check
-        env:
-          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
-          RIGEL_SYNC_REQUIRE_CHROME: "1"
-          # GitHub's Ubuntu 24.04 runner forbids the user namespaces Chrome's
-          # sandbox needs for a Chrome outside /opt/google ("No usable sandbox");
-          # Gitea's runs as root, where the shim already drops it. The pretend
-          # bank is all it opens here.
-          CHROME_ARGS: --no-sandbox
         run: make rigel-sync/check

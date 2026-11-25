@@ -1,6 +1,7 @@
 # CI: `make audit`, the gate, on every pull request and on main. Mirrors .gitea/workflows/ci.yaml --
-# change both together; the two forges must reach the same verdict (see that file for the triggers).
-# Gitea is the primary remote and push-mirrors here, so this runs on the mirrored push to main.
+# change both together; the two forges must reach the same verdict (see that file for the triggers and
+# the image). Gitea is the primary remote and push-mirrors here, so this runs on the mirrored push to main.
+# The one difference: the image comes from ghcr.io, and there is no cache volume for Go here.
 
 name: CI
 
@@ -28,37 +29,27 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        # hcloud runs PostgreSQL 18; test against the same major.
-        image: postgres:18
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+    container:
+      image: ghcr.io/cwchen-twn/rigel-ledger-ci:main
     env:
-      # THE ONE INTENTIONAL DIFFERENCE from .gitea/workflows/ci.yaml: here
-      # PostgreSQL is a service container reached through its mapped port;
-      # the Gitea runner's network has no service DNS, so that copy starts
-      # PostgreSQL inside the job. Both end up on localhost:5432.
+      # The PostgreSQL started below, inside this job container.
       TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
       # Fail instead of skipping if the database is unreachable.
       REQUIRE_DB_TESTS: "1"
+      MISE_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0 # gitleaks scans the whole history
 
-      - name: Install the pinned tools
-        uses: jdx/mise-action@v5.2.10
-        with:
-          version: 2026.11.11 # mise itself, as on the machines
+      - name: Pinned tools
+        run: mise install
+
+      - name: Start PostgreSQL 18
+        run: |
+          pg_ctlcluster 18 main start
+          su postgres -c "psql -qc \"ALTER USER postgres PASSWORD 'postgres'\""
 
       - name: make audit
         run: make audit

@@ -69,15 +69,18 @@ jobs:
           set -eu
           IMG="$REGISTRY/$IMAGE_PATH"
           SHA_TAG="sha-$(echo "$GITHUB_SHA" | cut -c1-12)"
-          # linux/amd64 only: the hcloud node is x86_64.
+          # linux/amd64 only: the hcloud node is x86_64. Only the :sha-<12> tag
+          # here: the runner does not force-pull, so a local :main is what every
+          # ci job runs in, and a PR's build must never take that name. Push
+          # adds :main, from main only.
           docker build \
             --platform linux/amd64 \
             -f ci/Dockerfile \
             --build-arg MISE_VERSION="$MISE_VERSION" \
             --secret id=gh_token,env=GH_PUBLIC_TOKEN \
-            -t "$IMG:main" -t "$IMG:$SHA_TAG" .
+            -t "$IMG:$SHA_TAG" .
           # what the image holds, in the log
-          docker run --rm -w /opt/ci "$IMG:main" sh -c 'mise --version; node --version; go version; psql --version; pre-commit --version; chromium --version; ls -l /opt/rigel-sync/models'
+          docker run --rm -w /opt/ci "$IMG:$SHA_TAG" sh -c 'mise --version; node --version; go version; psql --version; pre-commit --version; chromium --version; ls -l /opt/rigel-sync/models'
 
       - name: Push
         # main only: a dispatch on another branch builds but must not publish :main
@@ -90,5 +93,13 @@ jobs:
           echo "$REGISTRY_TOKEN" | docker login "$REGISTRY" -u "$REGISTRY_USER" --password-stdin
           IMG="$REGISTRY/$IMAGE_PATH"
           SHA_TAG="sha-$(echo "$GITHUB_SHA" | cut -c1-12)"
+          docker tag "$IMG:$SHA_TAG" "$IMG:main"
           for t in main "$SHA_TAG"; do docker push "$IMG:$t"; done
           echo "pushed $IMG: main $SHA_TAG"
+
+      - name: Remove the build's extra tag
+        # :main stays (pushed runs only): it is the image the ci and rigel-sync
+        # jobs run in, so keeping it saves them a ~4 GB pull, and docker-prune
+        # keeps it too. :sha-<12> goes, and with it a PR build's image.
+        if: always()
+        run: docker image rm "$REGISTRY/$IMAGE_PATH:sha-$(echo "$GITHUB_SHA" | cut -c1-12)" || true

@@ -103,3 +103,21 @@ jobs:
           docker build --platform linux/amd64 $ARGS integrations/rigel-sync
           for t in $TAGS; do docker push "$SYNC:$t"; done
           echo "pushed $SYNC: $TAGS"
+
+      - name: Remove the pushed images
+        # The runner's Docker data shares the node's root disk (catopia/hcloud#204):
+        # pushed images are in the registry, so they need not wait for the 6-hourly
+        # prune. A tag is removed only while it still names this run's build, so an
+        # overlapping run's fresh :latest is left alone.
+        if: always()
+        run: |
+          set -u
+          IMG="$REGISTRY/$IMAGE_PATH"
+          SHA_TAG="sha-$(echo "$GITHUB_SHA" | cut -c1-12)"
+          for repo in "$IMG" "$IMG-sync"; do
+            own="$(docker image inspect -f '{{.Id}}' "$repo:$SHA_TAG" 2>/dev/null)" || continue
+            for ref in $(docker image ls --format '{{.Repository}}:{{.Tag}}' "$repo"); do
+              [ "$(docker image inspect -f '{{.Id}}' "$ref" 2>/dev/null)" = "$own" ] && docker image rm "$ref" >/dev/null
+            done
+          done
+          docker image ls "$IMG*" || true

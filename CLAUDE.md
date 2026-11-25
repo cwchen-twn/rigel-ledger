@@ -265,17 +265,25 @@ Gitea (`git.chenantunez.com`, private) is the primary remote and push-mirrors ev
 repo. Gitea runs only `.gitea/workflows/`, GitHub runs only `.github/workflows/`, and **the two sets must stay
 behaviourally identical — change one, change the other in the same commit.**
 
-| Trigger | `ci` (`make audit` against PostgreSQL 18) | `rigel-sync` (`make rigel-sync/check`) | `image` | `release` (GoReleaser) |
-|---|---|---|---|---|
-| pull request | yes, unless docs-only | if `integrations/rigel-sync/**` or `mise.toml` changed | — | — |
-| push to `main` | yes, unless docs-only | same | `:sha-<12>`, `:latest` | — |
-| tag `vX.Y.Z` | — | — | `:vX.Y.Z`, `:sha-<12>` | binaries (linux/darwin × amd64/arm64) + checksums |
+| Trigger | `ci` (`make audit` against PostgreSQL 18) | `rigel-sync` (`make rigel-sync/check`) | `ci-image` | `image` | `release` (GoReleaser) |
+|---|---|---|---|---|---|
+| pull request | yes, unless docs-only | if `integrations/rigel-sync/**`, `ci/**` or `mise.toml` changed | build only, if `mise.toml`, `.pre-commit-config.yaml` or `ci/**` changed | — | — |
+| push to `main` | yes, unless docs-only | same | `:main`, `:sha-<12>`, same paths | `:sha-<12>`, `:latest` | — |
+| tag `vX.Y.Z` | — | — | — | `:vX.Y.Z`, `:sha-<12>` | binaries (linux/darwin × amd64/arm64) + checksums |
 
 - A PR branch push runs `ci` once (the `pull_request` event), not also as a `push`: the single runner used to run both,
   one after the other. Docs-only means every changed file matches `**/*.md`, `docs/**`, `LICENSE` or `.mailmap`;
   markdownlint still checks those in the pre-commit hook. There is no branch protection, so a skipped run blocks
   nothing.
-- CI runs nothing that isn't a make target: `jdx/mise-action` installs `mise.toml`'s tools, then `make audit`.
+- CI runs nothing that isn't a make target. `ci` and `rigel-sync` run in `rigel-ledger-ci:main` (`ci/Dockerfile`:
+  every `mise.toml` tool, pre-commit's hook environments, PostgreSQL 18, Chromium and the CAPTCHA model; no code),
+  from `git.chenantunez.com/cwchen-twn/rigel-ledger-ci` and `ghcr.io/cwchen-twn/rigel-ledger-ci`. Each job runs
+  `mise install` first (a no-op unless a PR bumped a pin before the image was rebuilt), starts the baked PostgreSQL on
+  `localhost:5432` (`ci`), then its make target. `make ci/image` builds the image locally.
+- On Gitea, `GOCACHE`/`GOMODCACHE` point at `/ci-cache`, the runner's `ci-go-cache` volume (catopia/hcloud#202),
+  so compiles are warm between runs; GitHub has no such volume. The runner does not force-pull: `ci-image` tags
+  `:main` only when it pushes from main, so a PR's build never replaces what the jobs run in. Image workflows remove
+  the tags they pushed (the runner's Docker data shares the node's disk, catopia/hcloud#204).
 
 - Images: `git.chenantunez.com/cwchen-twn/rigel-ledger` (Gitea) and `ghcr.io/cwchen-twn/rigel-ledger` (GitHub), built
   from the same `Dockerfile`, linux/amd64 only. The image carries `rigel-ledger` (entrypoint) and `rigel-ledger-cli`.
@@ -291,18 +299,15 @@ behaviourally identical — change one, change the other in the same commit.**
   (`cwchen-twn`), `REGISTRY_TOKEN` (package rw), `RELEASE_TOKEN` (repo write; mapped to `GITEA_TOKEN`, since Gitea
   forbids secret names starting `GITEA_`) and `GH_PUBLIC_TOKEN`. A repo secret of the same name would override them.
 - Gitea runner traps are inherited from hcloud (`hcloud/.gitea/CLAUDE.md`): checkout and the GoReleaser API use the
-  in-cluster Service `http://gitea-http.gitea.svc.cluster.local:3000`, `mise-action` runs with `cache: false` and
-  `github_token: ${{ secrets.GH_PUBLIC_TOKEN }}` (a no-scope github.com PAT, a user-level secret shared with Renovate; api.github.com
-  rejects the Gitea job token, and anonymous calls are capped at 60/h), and docker needs the buildx plugin.
+  in-cluster Service `http://gitea-http.gitea.svc.cluster.local:3000`; mise authenticates to api.github.com with
+  `GH_PUBLIC_TOKEN` (a no-scope github.com PAT, a user-level secret shared with Renovate; api.github.com rejects the
+  Gitea job token, and anonymous calls are capped at 60/h): `MISE_GITHUB_TOKEN` in the image jobs, `github_token`
+  with `cache: false` where `mise-action` remains (`release`); docker needs the buildx plugin.
 - Toolchain pins: `mise.toml` pins Go, Bun and Node for this repo (mise puts them on PATH). Go is also in `go.mod` +
   Dockerfile build stage; Bun in `web/package.json` `packageManager` + Dockerfile web stage; the lint and dev tools only
-  in
-  `mise.toml`. `make upgrade/go version=X.Y.Z` / `make upgrade/bun version=X.Y.Z` move a toolchain
-  everywhere at once, `make upgradeable` lists what is newer. Renovate (config in `renovate.json`) groups each set so
-  they move together.
-- How CI gets PostgreSQL 18 is the one intended difference between forges: GitHub uses a `services:` container; Gitea
-  installs it inside the job from PGDG, because hcloud's runner puts jobs on docker's default bridge (no service DNS).
-  Both use `localhost:5432`.
+  in `mise.toml`, which also drives the CI image (merging a pin bump rebuilds it). `make upgrade/go version=X.Y.Z` /
+  `make upgrade/bun version=X.Y.Z` move a toolchain everywhere at once, `make upgradeable` lists what is newer.
+  Renovate (config in `renovate.json`) groups each set so they move together.
 
 ## Deploying
 

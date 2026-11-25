@@ -1,18 +1,26 @@
 # CI: `make audit`, the gate, on every pull request and on main. Mirrors .github/workflows/ci.yml --
 # change both together; the two forges must reach the same verdict. CI runs nothing that isn't a make
-# target: the tools come from mise.toml (jdx/mise-action), so CI, the pre-push hook and a laptop run the
-# same versions.
+# target.
+#
+# The job runs in rigel-ledger-ci (ci/Dockerfile, rebuilt by ci-image.yaml whenever mise.toml,
+# .pre-commit-config.yaml or ci/ change on main): every mise.toml tool, pre-commit's hook environments,
+# PostgreSQL 18 and Chromium are already there. `mise install` still runs first: a no-op when the image
+# matches mise.toml, and just the difference when a PR bumps a pin before the image is rebuilt, so CI
+# always runs the pinned versions. Go's build and module caches live on the runner's ci-go-cache volume
+# (/ci-cache, catopia/hcloud#202): content-addressed, so sharing them between jobs and repos is safe.
 #
 # Triggers: push to main + pull_request, not every push: a PR branch push used to run CI twice (push and
-# pull_request), one after the other on the single runner, ~11 min each. Docs-only changes skip it
-# (paths-ignore); markdownlint still runs on them in the pre-commit hook. There is no branch protection,
-# so a skipped run blocks nothing. integrations/rigel-sync has its own path-filtered workflow.
+# pull_request), one after the other on the single runner. Docs-only changes skip it (paths-ignore);
+# markdownlint still runs on them in the pre-commit hook. There is no branch protection, so a skipped run
+# blocks nothing. integrations/rigel-sync has its own path-filtered workflow.
 #
 # Runner facts inherited from hcloud (see hcloud/.gitea/CLAUDE.md):
-#   * ubuntu-latest maps to node:22-bookworm on the act-runner. It has gcc, which `go test -race` needs.
 #   * Checkout goes through the in-cluster Service. The public name is behind
 #     Cloudflare, which has 403'd job-container fetches before.
-#   * There is no cache server, so mise downloads the tools on every run.
+#   * Job containers sit on docker's default bridge, which has no service DNS:
+#     hence PostgreSQL inside the job container rather than a `services:` one.
+#   * The runner does not force-pull: the local :main, kept by docker-prune,
+#     is what runs; ci-image.yaml retags it only from main.
 
 name: ci
 
@@ -37,12 +45,19 @@ on:
 jobs:
   audit:
     runs-on: ubuntu-latest
+    container:
+      image: git.chenantunez.com/cwchen-twn/rigel-ledger-ci:main
     env:
-      # PostgreSQL runs INSIDE this job container (step below), so it is on
-      # localhost -- the same URL the GitHub copy uses for its service container.
+      # The PostgreSQL started below, inside this job container.
       TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
       # Fail instead of skipping if the database is unreachable.
       REQUIRE_DB_TESTS: "1"
+      # Go's caches on the runner's volume; only this forge has it.
+      GOCACHE: /ci-cache/go-build
+      GOMODCACHE: /ci-cache/go-mod
+      # A no-scope github.com PAT (user/org-level secret): lifts api.github.com's anonymous 60/h limit
+      # for whatever `mise install` has to fetch; the Gitea job token is rejected there (401).
+      MISE_GITHUB_TOKEN: ${{ secrets.GH_PUBLIC_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
@@ -50,36 +65,13 @@ jobs:
           github-server-url: http://gitea-http.gitea.svc.cluster.local:3000
           fetch-depth: 0 # gitleaks scans the whole history
 
+      - name: Pinned tools
+        run: mise install
+
       - name: Start PostgreSQL 18
-        # THE ONE INTENTIONAL DIFFERENCE from .github/workflows/ci.yml, which
-        # uses a `services:` container. hcloud's runner puts job containers on
-        # docker's default bridge (containerNetwork: bridge, chosen for the MTU
-        # -- see hcloud/k3s/helm/act-runner), and the default bridge has no DNS:
-        # a service container started fine and was healthy, then every test
-        # failed with "lookup postgres ... no such host" (run 322). So the
-        # server runs in the job container instead, from the PGDG repo to get
-        # the same major as hcloud. Measured: ~60s including apt.
         run: |
-          set -eu
-          install -d /usr/share/postgresql-common/pgdg
-          curl -fsSL --retry 5 --retry-all-errors \
-            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
-            https://www.postgresql.org/media/keys/ACCC4CF8.asc
-          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "$VERSION_CODENAME")-pgdg main" \
-            > /etc/apt/sources.list.d/pgdg.list
-          apt-get update -qq
-          apt-get install -y -qq --no-install-recommends postgresql-18 >/dev/null
           pg_ctlcluster 18 main start
           su postgres -c "psql -qc \"ALTER USER postgres PASSWORD 'postgres'\""
-
-      - name: Install the pinned tools
-        uses: jdx/mise-action@v5.2.10
-        with:
-          version: 2026.11.11 # mise itself, as on the machines
-          cache: false
-          # GH_PUBLIC_TOKEN: a no-scope github.com PAT (user/org-level secret) that lifts api.github.com's
-          # anonymous 60/h limit; the default, the Gitea job token, is rejected there (401)
-          github_token: ${{ secrets.GH_PUBLIC_TOKEN }}
 
       - name: make audit
         # frontend build, lint (file hooks, markdownlint, gofmt, vet, staticcheck, sqlc diff), tests with
