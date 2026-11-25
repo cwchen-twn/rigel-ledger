@@ -34,13 +34,19 @@ jobs:
       # The image sets CHROME_PATH (Debian's chromium) and RIGEL_SYNC_OCR_MODEL (the CAPTCHA
       # model, baked in); the job runs as root, which the launcher already runs without a sandbox.
       RIGEL_SYNC_REQUIRE_CHROME: "1"
-      MISE_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
 
       - name: Pinned tools
-        run: mise install node bun
+        env:
+          # Lifts api.github.com's anonymous 60/h limit for whatever mise has to fetch. This step only:
+          # the later steps run the PR's own Makefile and scripts.
+          MISE_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # checkout's safe.directory does not outlive its step; git runs later (gitleaks, pre-commit)
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          mise install node bun
 
       - name: make rigel-sync/check
         run: make rigel-sync/check

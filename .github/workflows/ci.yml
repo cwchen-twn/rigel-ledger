@@ -36,7 +36,6 @@ jobs:
       TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
       # Fail instead of skipping if the database is unreachable.
       REQUIRE_DB_TESTS: "1"
-      MISE_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
@@ -44,7 +43,14 @@ jobs:
           fetch-depth: 0 # gitleaks scans the whole history
 
       - name: Pinned tools
-        run: mise install
+        env:
+          # Lifts api.github.com's anonymous 60/h limit for whatever mise has to fetch. This step only:
+          # the later steps run the PR's own Makefile and scripts.
+          MISE_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # checkout's safe.directory does not outlive its step; git runs later (gitleaks, pre-commit)
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          mise install
 
       - name: Start PostgreSQL 18
         run: |

@@ -282,8 +282,8 @@ behaviourally identical — change one, change the other in the same commit.**
   `localhost:5432` (`ci`), then its make target. `make ci/image` builds the image locally.
 - On Gitea, `GOCACHE`/`GOMODCACHE` point at `/ci-cache`, the runner's `ci-go-cache` volume (catopia/hcloud#202),
   so compiles are warm between runs; GitHub has no such volume. The runner does not force-pull: `ci-image` tags
-  `:main` only when it pushes from main, so a PR's build never replaces what the jobs run in. Image workflows remove
-  the tags they pushed (the runner's Docker data shares the node's disk, catopia/hcloud#204).
+  `:main` only when it pushes from main, so a PR's build never replaces what the jobs run in. The Gitea image workflows
+  remove the tags they pushed (the runner's Docker data shares the node's disk, catopia/hcloud#204).
 
 - Images: `git.chenantunez.com/cwchen-twn/rigel-ledger` (Gitea) and `ghcr.io/cwchen-twn/rigel-ledger` (GitHub), built
   from the same `Dockerfile`, linux/amd64 only. The image carries `rigel-ledger` (entrypoint) and `rigel-ledger-cli`.
