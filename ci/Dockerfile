@@ -7,7 +7,7 @@
 #
 # It holds tools only, no code and no data: the build context is mise.toml
 # and .pre-commit-config.yaml (ci/Dockerfile.dockerignore). Built by
-# .gitea/workflows/ci-image.yaml and .github/workflows/ci-image.yml whenever
+# .gitea/workflows/ci-image.yaml whenever
 # one of those changes on main, or locally with `make ci/image`. A job still
 # runs `mise install` first: a no-op when the image matches mise.toml, and
 # just the difference when a PR bumps a pin before the image is rebuilt.

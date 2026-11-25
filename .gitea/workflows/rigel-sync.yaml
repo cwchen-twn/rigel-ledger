@@ -2,7 +2,7 @@
 # what their vendored all-set-tw source gives. Node runs our TypeScript directly (type stripping), so
 # there is no build; Bun installs the dependencies and bundles vendor/. Node, Bun and Chromium come
 # from rigel-ledger-ci (ci/Dockerfile), the image the ci job runs in. Runs only when the runner or the
-# image changes. Mirrors .github/workflows/rigel-sync.yml -- change both together.
+# image changes. CI runs only on Gitea: the GitHub mirror has no copy.
 
 name: rigel-sync
 

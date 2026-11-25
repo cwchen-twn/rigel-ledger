@@ -1,7 +1,6 @@
 # Build rigel-ledger-ci, the image the `ci` job runs in (ci/Dockerfile: tools and
-# PostgreSQL, no code), and push it to Gitea's registry. Mirrors
-# .github/workflows/ci-image.yml (which pushes the same tags to ghcr.io) --
-# change both together.
+# PostgreSQL, no code), and push it to Gitea's registry. CI runs only on Gitea,
+# so there is no GitHub copy.
 #
 #   push to main touching what pins the tools -> :main, :sha-<12>
 #   pull request touching the same            -> build only, nothing pushed

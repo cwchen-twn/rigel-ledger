@@ -262,8 +262,9 @@ Copy `.env.example` to `.env`. Real environment variables always win over `.env`
 ## CI and releases
 
 Gitea (`git.chenantunez.com`, private) is the primary remote and push-mirrors every commit and tag to the public GitHub
-repo. Gitea runs only `.gitea/workflows/`, GitHub runs only `.github/workflows/`, and **the two sets must stay
-behaviourally identical — change one, change the other in the same commit.**
+repo. Gitea runs only `.gitea/workflows/`, GitHub runs only `.github/workflows/`. **CI (`ci`, `rigel-sync`, `ci-image`)
+runs only on Gitea** (the owner's call, 2026-11-25); GitHub only publishes: `image` and `release` exist on both, and
+those pairs must stay behaviourally identical — change one, change the other in the same commit.
 
 | Trigger | `ci` (`make audit` against PostgreSQL 18) | `rigel-sync` (`make rigel-sync/check`) | `ci-image` | `image` | `release` (GoReleaser) |
 |---|---|---|---|---|---|
@@ -277,11 +278,11 @@ behaviourally identical — change one, change the other in the same commit.**
   nothing.
 - CI runs nothing that isn't a make target. `ci` and `rigel-sync` run in `rigel-ledger-ci:main` (`ci/Dockerfile`:
   every `mise.toml` tool, pre-commit's hook environments, PostgreSQL 18, Chromium and the CAPTCHA model; no code),
-  from `git.chenantunez.com/cwchen-twn/rigel-ledger-ci` and `ghcr.io/cwchen-twn/rigel-ledger-ci`. Each job runs
+  from `git.chenantunez.com/cwchen-twn/rigel-ledger-ci`. Each job runs
   `mise install` first (a no-op unless a PR bumped a pin before the image was rebuilt), starts the baked PostgreSQL on
   `localhost:5432` (`ci`), then its make target. `make ci/image` builds the image locally.
-- On Gitea, `GOCACHE`/`GOMODCACHE` point at `/ci-cache`, the runner's `ci-go-cache` volume (catopia/hcloud#202),
-  so compiles are warm between runs; GitHub has no such volume. The runner does not force-pull: `ci-image` tags
+- `GOCACHE`/`GOMODCACHE` point at `/ci-cache`, the runner's `ci-go-cache` volume (catopia/hcloud#202), so compiles
+  are warm between runs. The runner does not force-pull: `ci-image` tags
   `:main` only when it pushes from main, so a PR's build never replaces what the jobs run in. The Gitea image workflows
   remove the tags they pushed (the runner's Docker data shares the node's disk, catopia/hcloud#204).
 

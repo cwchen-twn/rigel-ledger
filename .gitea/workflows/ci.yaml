@@ -1,6 +1,6 @@
-# CI: `make audit`, the gate, on every pull request and on main. Mirrors .github/workflows/ci.yml --
-# change both together; the two forges must reach the same verdict. CI runs nothing that isn't a make
-# target.
+# CI: `make audit`, the gate, on every pull request and on main. It runs only here: the public GitHub
+# mirror carries the code and publishes images and releases, but runs no CI (owner's call, 2026-11-25).
+# CI runs nothing that isn't a make target.
 #
 # The job runs in rigel-ledger-ci (ci/Dockerfile, rebuilt by ci-image.yaml whenever mise.toml,
 # .pre-commit-config.yaml or ci/ change on main): every mise.toml tool, pre-commit's hook environments,
