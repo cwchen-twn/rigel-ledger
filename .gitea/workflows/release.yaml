@@ -4,8 +4,11 @@
 #
 # RELEASE_TOKEN is a Gitea PAT with repository write. The env var GoReleaser
 # reads is GITEA_TOKEN, but Gitea refuses secret names starting with GITEA_.
-# The API goes to the in-cluster Service (gitea_urls in .goreleaser.yaml),
-# because job containers do not get the runner's hostAliases.
+# It runs on the `linux` pool, off the VPS (catopia/hcloud#212), so checkout and
+# the API (gitea_urls in .goreleaser.yaml) use the public name: the in-cluster
+# Service does not exist there. The uploads go through Cloudflare, whose 100MB
+# request-body cap is far above the ~12MB archives; should one outgrow it, this
+# job moves to registry-push with the in-cluster gitea_urls.
 
 name: release
 
@@ -16,12 +19,11 @@ on:
 
 jobs:
   goreleaser:
-    runs-on: ubuntu-latest
+    runs-on: linux
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
         with:
-          github-server-url: http://gitea-http.gitea.svc.cluster.local:3000
           fetch-depth: 0 # the changelog needs history and the previous tag
 
       - name: Install the pinned tools

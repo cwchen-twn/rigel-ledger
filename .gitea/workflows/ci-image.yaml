@@ -9,8 +9,9 @@
 # The `ci` job still runs `mise install` first, so a PR that bumps a pin passes
 # before this rebuilds the image; merging it rebuilds :main.
 #
-# Runner details are image.yaml's (in-cluster checkout URL, the docker CLI and
-# buildx plugin from Docker's apt repo, REGISTRY_* as user-level secrets).
+# Runner details are image.yaml's (registry-push, in-cluster checkout URL, the
+# docker CLI and buildx plugin from Docker's apt repo, REGISTRY_* as user-level
+# secrets). The `ci` job then pulls :main on the `linux` pool.
 
 name: ci-image
 
@@ -38,7 +39,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: registry-push
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1

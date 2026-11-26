@@ -272,7 +272,7 @@ those pairs must stay behaviourally identical — change one, change the other i
 | push to `main` | yes, unless docs-only | same | `:main`, `:sha-<12>`, same paths | `:sha-<12>`, `:latest` | — |
 | tag `vX.Y.Z` | — | — | — | `:vX.Y.Z`, `:sha-<12>` | binaries (linux/darwin × amd64/arm64) + checksums |
 
-- A PR branch push runs `ci` once (the `pull_request` event), not also as a `push`: the single runner used to run both,
+- A PR branch push runs `ci` once (the `pull_request` event), not also as a `push`: what was then a single runner ran both,
   one after the other. Docs-only means every changed file matches `**/*.md`, `docs/**`, `LICENSE` or `.mailmap`;
   markdownlint still checks those in the pre-commit hook. There is no branch protection, so a skipped run blocks
   nothing.
@@ -281,10 +281,13 @@ those pairs must stay behaviourally identical — change one, change the other i
   from `git.chenantunez.com/cwchen-twn/rigel-ledger-ci`. Each job runs
   `mise install` first (a no-op unless a PR bumped a pin before the image was rebuilt), starts the baked PostgreSQL on
   `localhost:5432` (`ci`), then its make target. `make ci/image` builds the image locally.
-- `GOCACHE`/`GOMODCACHE` point at `/ci-cache`, the runner's `ci-go-cache` volume (catopia/hcloud#202), so compiles
-  are warm between runs. The runner does not force-pull: `ci-image` tags
-  `:main` only when it pushes from main, so a PR's build never replaces what the jobs run in. The Gitea image workflows
-  remove the tags they pushed (the runner's Docker data shares the node's disk, catopia/hcloud#204).
+- Runners are picked by label (catopia/hcloud#212, #153): `ci`, `rigel-sync` and `release` run on `linux`, the pool
+  off the VPS; `image` and `ci-image` on `registry-push`, the VPS runner, the only one whose pushes get past
+  Cloudflare's 100 MB request-body cap. `ci-image` builds on the VPS and the pool pulls `:main` from the registry.
+- `GOCACHE`/`GOMODCACHE` point at `/ci-cache`, the pool runner's own `ci-go-cache` volume, so compiles are warm between
+  runs. `ci-image` tags `:main` only when it pushes from main, so a PR's build never replaces what the jobs run in.
+  The Gitea image workflows remove the tags they pushed (the VPS runner's Docker data shares the node's disk,
+  catopia/hcloud#204).
 
 - Images: `git.chenantunez.com/cwchen-twn/rigel-ledger` (Gitea) and `ghcr.io/cwchen-twn/rigel-ledger` (GitHub), built
   from the same `Dockerfile`, linux/amd64 only. The image carries `rigel-ledger` (entrypoint) and `rigel-ledger-cli`.
@@ -299,8 +302,10 @@ those pairs must stay behaviourally identical — change one, change the other i
 - Gitea secrets: none on this repo. The workflows read user-level secrets of cwchen-twn: `REGISTRY_USER`
   (`cwchen-twn`), `REGISTRY_TOKEN` (package rw), `RELEASE_TOKEN` (repo write; mapped to `GITEA_TOKEN`, since Gitea
   forbids secret names starting `GITEA_`) and `GH_PUBLIC_TOKEN`. A repo secret of the same name would override them.
-- Gitea runner traps are inherited from hcloud (`hcloud/.gitea/CLAUDE.md`): checkout and the GoReleaser API use the
-  in-cluster Service `http://gitea-http.gitea.svc.cluster.local:3000`; mise authenticates to api.github.com with
+- Gitea runner traps are inherited from hcloud (`hcloud/.gitea/CLAUDE.md`, `k3s/helm/act-runner/CLAUDE.md`): jobs on
+  `registry-push` check out through the in-cluster Service `http://gitea-http.gitea.svc.cluster.local:3000` (job
+  containers lack the runner pod's hostAliases); jobs on `linux` use the public name, since that Service does not
+  exist there (the GoReleaser API too, `gitea_urls`); mise authenticates to api.github.com with
   `GH_PUBLIC_TOKEN` (a no-scope github.com PAT, a user-level secret shared with Renovate; api.github.com rejects the
   Gitea job token, and anonymous calls are capped at 60/h): `MISE_GITHUB_TOKEN` in the image jobs, `github_token`
   with `cache: false` where `mise-action` remains (`release`); docker needs the buildx plugin.

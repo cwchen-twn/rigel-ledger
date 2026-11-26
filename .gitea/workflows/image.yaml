@@ -8,7 +8,8 @@
 #   tag vX.Y.Z    -> :vX.Y.Z, :sha-<12>   VERSION=X.Y.Z
 #
 # The recipe is hcloud's .gitea/workflows/musicbox.yaml, including why:
-#   * the push goes to git.chenantunez.com but never leaves the node -- the
+#   * runs-on: registry-push, the VPS runner, the only one that can push here:
+#     the push goes to git.chenantunez.com but never leaves the node -- the
 #     runner pod's hostAliases resolve it to 10.0.1.1, so Cloudflare's 100MB
 #     request cap does not apply; dockerd lives in that pod and inherits them
 #   * actions/checkout runs in a sibling job container WITHOUT those
@@ -32,7 +33,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: registry-push
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1

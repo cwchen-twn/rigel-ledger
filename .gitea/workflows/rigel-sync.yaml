@@ -24,7 +24,7 @@ on:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: linux # the pool; public checkout (see ci.yaml)
     container:
       image: git.chenantunez.com/cwchen-twn/rigel-ledger-ci:main
     env:
@@ -34,8 +34,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
-        with:
-          github-server-url: http://gitea-http.gitea.svc.cluster.local:3000
 
       - name: Pinned tools
         env:

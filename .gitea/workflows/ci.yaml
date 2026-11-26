@@ -6,21 +6,22 @@
 # .pre-commit-config.yaml or ci/ change on main): every mise.toml tool, pre-commit's hook environments,
 # PostgreSQL 18 and Chromium are already there. `mise install` still runs first: a no-op when the image
 # matches mise.toml, and just the difference when a PR bumps a pin before the image is rebuilt, so CI
-# always runs the pinned versions. Go's build and module caches live on the runner's ci-go-cache volume
-# (/ci-cache, catopia/hcloud#202): content-addressed, so sharing them between jobs and repos is safe.
+# always runs the pinned versions. Go's build and module caches live on the pool runner's own ci-go-cache
+# volume (/ci-cache): content-addressed, so sharing them between jobs and repos is safe.
 #
 # Triggers: push to main + pull_request, not every push: a PR branch push used to run CI twice (push and
-# pull_request), one after the other on the single runner. Docs-only changes skip it (paths-ignore);
+# pull_request), one after the other on what was then a single runner. Docs-only changes skip it (paths-ignore);
 # markdownlint still runs on them in the pre-commit hook. There is no branch protection, so a skipped run
 # blocks nothing. integrations/rigel-sync has its own path-filtered workflow.
 #
-# Runner facts inherited from hcloud (see hcloud/.gitea/CLAUDE.md):
-#   * Checkout goes through the in-cluster Service. The public name is behind
-#     Cloudflare, which has 403'd job-container fetches before.
+# Runner facts (labels: catopia/hcloud#212, hcloud k3s/helm/act-runner/CLAUDE.md):
+#   * `linux` is the runner pool (histesting), off the VPS. Checkout uses the
+#     public name: the in-cluster Service does not exist from there.
 #   * Job containers sit on docker's default bridge, which has no service DNS:
 #     hence PostgreSQL inside the job container rather than a `services:` one.
-#   * The runner does not force-pull: the local :main, kept by docker-prune,
-#     is what runs; ci-image.yaml retags it only from main.
+#   * ci-image.yaml builds :main on the VPS (registry-push); the pool pulls it
+#     through Cloudflare (only request bodies are capped). Pin drift is covered
+#     by `mise install` below either way.
 
 name: ci
 
@@ -44,7 +45,7 @@ on:
 
 jobs:
   audit:
-    runs-on: ubuntu-latest
+    runs-on: linux
     container:
       image: git.chenantunez.com/cwchen-twn/rigel-ledger-ci:main
     env:
@@ -52,14 +53,13 @@ jobs:
       TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
       # Fail instead of skipping if the database is unreachable.
       REQUIRE_DB_TESTS: "1"
-      # Go's caches on the runner's volume; only this forge has it.
+      # Go's caches on the pool runner's volume; only this forge has it.
       GOCACHE: /ci-cache/go-build
       GOMODCACHE: /ci-cache/go-mod
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
         with:
-          github-server-url: http://gitea-http.gitea.svc.cluster.local:3000
           fetch-depth: 0 # gitleaks scans the whole history
 
       - name: Pinned tools

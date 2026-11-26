@@ -80,11 +80,11 @@ changelog:
       - '^docs:'
       - '^chore\(deps\):'
 
-# Used only when GORELEASER_FORCE_TOKEN=gitea. Job containers on the act-runner
-# do not inherit the runner pod's hostAliases, so the public name would go out
-# through Cloudflare (challenged, 100MB cap); the in-cluster Service does not.
+# Used only when GORELEASER_FORCE_TOKEN=gitea. release.yaml runs on the `linux`
+# pool, where the in-cluster Service does not exist, so the API is the public
+# name, through Cloudflare (100MB request-body cap; the archives are ~12MB).
 gitea_urls:
-  api: http://gitea-http.gitea.svc.cluster.local:3000/api/v1
+  api: https://git.chenantunez.com/api/v1
   download: https://git.chenantunez.com
 
 release:
