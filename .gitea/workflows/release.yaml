@@ -22,15 +22,15 @@ jobs:
     runs-on: linux
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # the changelog needs history and the previous tag
 
       - name: Install the pinned tools
         # Go and Bun from mise.toml; .goreleaser.yaml's before hook builds the frontend with bun
-        uses: jdx/mise-action@v5.2.10
+        uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
         with:
-          version: 2026.11.11 # mise itself, as on the machines
+          version: 2026.11.14 # mise itself, as on the machines
           install_args: go bun # only what this job runs
           cache: false
           # GH_PUBLIC_TOKEN: a no-scope github.com PAT (user/org-level secret) that lifts api.github.com's
@@ -38,10 +38,10 @@ jobs:
           github_token: ${{ secrets.GH_PUBLIC_TOKEN }}
 
       - name: GoReleaser
-        uses: goreleaser/goreleaser-action@v7.3.0
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
           distribution: goreleaser
-          version: "~> v2"
+          version: "v2.20.3"
           args: release --clean
         env:
           GORELEASER_FORCE_TOKEN: gitea
